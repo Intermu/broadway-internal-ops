@@ -1,0 +1,12 @@
+{
+  "name": "broadway-ops-tools",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Broadway National internal ops tools - Azure Static Web App",
+  "scripts": {
+    "migrate": "node scripts/migrate-from-netlify.js"
+  },
+  "devDependencies": {
+    "@azure/storage-blob": "^12.17.0"
+  }
+}

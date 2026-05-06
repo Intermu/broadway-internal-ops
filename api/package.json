@@ -1,0 +1,9 @@
+{
+  "name": "broadway-ops-api",
+  "version": "1.0.0",
+  "description": "Azure Functions for Broadway National internal ops tools",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "@azure/storage-blob": "^12.17.0"
+  }
+}
