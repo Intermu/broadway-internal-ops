@@ -4,7 +4,9 @@
   "private": true,
   "description": "Broadway National internal ops tools - Azure Static Web App",
   "scripts": {
-    "migrate": "node scripts/migrate-from-netlify.js"
+    "migrate": "node scripts/migrate-from-netlify.js",
+    "build": "echo 'No build needed - static files only'",
+    "build:azure": "echo 'No build needed - static files only'"
   },
   "devDependencies": {
     "@azure/storage-blob": "^12.17.0"
