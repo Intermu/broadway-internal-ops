@@ -3,9 +3,22 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- Content Security Policy: applied via <meta> so it travels with saved snapshots
+     (SWA globalHeaders only protect the live-served file). 'unsafe-inline' for scripts
+     is required by the file's inline <script> blocks. connect-src 'self' shuts down
+     data exfiltration if XSS ever lands. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com 'unsafe-inline'; style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; base-uri 'self'; form-action 'none'; frame-ancestors 'none';">
 <title>Proposal Turnover Diagnostic — Broadway National</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<!-- Subresource Integrity: pin xlsx@0.18.5. The hash below is a PLACEHOLDER —
+     replace before deploying. Compute on a machine with cdnjs access:
+       curl -s https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js \
+         | openssl dgst -sha384 -binary | openssl base64 -A
+     With the placeholder in place the browser will refuse to load xlsx — that's
+     intentional, so a bad hash can't ship silently. -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"
+        integrity="sha384-REPLACE_WITH_REAL_HASH_BEFORE_DEPLOY"
+        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <style>
 :root{
   --green:#2ECC71;--green-dk:#1a5f3e;--green-darker:#0d3d26;--green-bg:#f0fdf4;
@@ -536,6 +549,15 @@ function updateCategoryCounts(){
 const fmt$ = n => '$'+Number(n).toLocaleString('en-US',{maximumFractionDigits:0});
 const fmt$0 = n => '$'+Number(n).toLocaleString('en-US',{maximumFractionDigits:0});
 const fmtN = (n,d=1) => Number(n).toFixed(d);
+// HTML-escape utility — wrap every Excel-derived value before innerHTML interpolation.
+// Excel cells, file names, error messages all flow through this. Numerics that have
+// already been through parseInt/parseFloat/toFixed/fmtN are safe without it.
+const escapeHtml = s => String(s == null ? '' : s)
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;')
+  .replace(/'/g, '&#39;');
 const median = arr => {
   if(!arr.length) return 0;
   const s = [...arr].sort((a,b)=>a-b);
@@ -810,7 +832,7 @@ function handleFile(file){
       try {
         const wb = XLSX.read(ev.target.result,{type:'binary',cellDates:true});
         if(!wb.SheetNames.includes('Work Order Report')){
-          info.innerHTML = `<span style="color:var(--red);">❌ Missing "Work Order Report" sheet. Found: ${wb.SheetNames.join(', ')}</span>`;
+          info.innerHTML = `<span style="color:var(--red);">❌ Missing "Work Order Report" sheet. Found: ${escapeHtml(wb.SheetNames.join(', '))}</span>`;
           overlay.classList.remove('active');
           return;
         }
@@ -829,7 +851,7 @@ function handleFile(file){
           LEGACY_GP = buildLegacyGPLookup(raw);
           LEGACY_SOURCE = file.name;
           const lookupSize = Object.keys(LEGACY_GP).length;
-          info.innerHTML = `<span style="color:var(--green-dk);">✅ Legacy file loaded: ${lookupSize} GP records from ${file.name}.${DATA && DATA.length ? ' Applying join...' : ' Now drop the new 2026 file to complete analysis.'}</span>`;
+          info.innerHTML = `<span style="color:var(--green-dk);">✅ Legacy file loaded: ${lookupSize} GP records from ${escapeHtml(file.name)}.${DATA && DATA.length ? ' Applying join...' : ' Now drop the new 2026 file to complete analysis.'}</span>`;
           overlay.classList.remove('active');
 
           // Push to shared Blobs store
@@ -856,7 +878,7 @@ function handleFile(file){
         // If a legacy file was loaded earlier, apply the join now
         if(LEGACY_GP){ applyLegacyGPJoin(); }
 
-        info.innerHTML = `<span style="color:var(--green-dk);">✅ Loaded ${count} jobs from ${file.name}${LEGACY_GP ? ' · GP joined from ' + LEGACY_SOURCE : ' · drop the legacy export for GP data'}</span>`;
+        info.innerHTML = `<span style="color:var(--green-dk);">✅ Loaded ${count} jobs from ${escapeHtml(file.name)}${LEGACY_GP ? ' · GP joined from ' + escapeHtml(LEGACY_SOURCE) : ' · drop the legacy export for GP data'}</span>`;
         overlay.classList.remove('active');
 
         // Push to shared Blobs store so Agent + Dashboard see the same data.
@@ -869,7 +891,7 @@ function handleFile(file){
           sourceFile: file.name,
         });
       } catch(err){
-        info.innerHTML = `<span style="color:var(--red);">❌ ${err.message}</span>`;
+        info.innerHTML = `<span style="color:var(--red);">❌ ${escapeHtml(err.message)}</span>`;
         overlay.classList.remove('active');
         console.error(err);
       }
@@ -1243,7 +1265,7 @@ function segTable(rows, keyLabel, sortBy='mean'){
           const cls = r.mean>21?'b-red':r.mean>14?'b-amber':r.mean>7?'b-blue':'b-green';
           const lbl = r.mean>21?'CRITICAL':r.mean>14?'OVER TARGET':r.mean>7?'WATCH':'ON TARGET';
           return `<tr>
-            <td class="name">${r.key}</td>
+            <td class="name">${escapeHtml(r.key)}</td>
             <td class="num">${r.n}</td>
             <td class="num">${fmtN(r.mean)} days</td>
             <td class="num">${fmtN(r.median,0)} days</td>
@@ -1404,7 +1426,7 @@ function renderCoordinators(){
                   : `<td class="num"><span style="color:var(--muted);">—</span></td><td class="num"><span style="color:var(--muted);">—</span></td><td class="num"><span style="color:var(--muted);">—</span></td>`)
               : '';
             return `<tr>
-              <td class="name">${r.name}</td>
+              <td class="name">${escapeHtml(r.name)}</td>
               <td class="num">${r.n}</td>
               <td class="num">${fmtN(r.mean)} days</td>
               <td class="num">${fmtN(r.median,0)} days</td>
@@ -1502,17 +1524,17 @@ function renderOffenders(){
                   : `<td class="num"><span style="color:var(--muted);">—</span></td><td class="num"><span style="color:var(--muted);">—</span></td>`)
               : '';
             return `<tr>
-              <td class="name" style="font-family:'DM Mono',monospace;font-size:11px;">${d.tracking}</td>
+              <td class="name" style="font-family:'DM Mono',monospace;font-size:11px;">${escapeHtml(d.tracking)}</td>
               <td><span class="cat-badge ${d.category}">${catLabel}</span></td>
-              <td>${d.coord}</td>
-              <td style="font-size:12px;">${d.trade}</td>
-              <td><span class="badge ${d.priority==='P1 Critical'?'b-red':d.priority==='P2 Next Day'?'b-amber':'b-blue'}">${(d.priority||'—').replace(' ','\u00A0')}</span></td>
+              <td>${escapeHtml(d.coord)}</td>
+              <td style="font-size:12px;">${escapeHtml(d.trade)}</td>
+              <td><span class="badge ${d.priority==='P1 Critical'?'b-red':d.priority==='P2 Next Day'?'b-amber':'b-blue'}">${escapeHtml((d.priority||'—').replace(' ','\u00A0'))}</span></td>
               <td class="num">${d.trips}</td>
               <td class="num">${d.days}</td>
               <td class="num"><strong>${d.ptd} days</strong></td>
               <td class="num">${targetCell}</td>
               <td class="num">${overCell}</td>
-              <td>${d.state}</td>
+              <td>${escapeHtml(d.state)}</td>
               <td class="num">${fmt$(d.nte || d.revenue)}</td>
               ${gpCells}
             </tr>`;
@@ -1846,7 +1868,7 @@ function renderLifecycle(){
             else if(r.medStage2 > r.medStage1 + 2) read = '<span class="badge b-red">SLOW TO PROPOSE</span>';
             else read = '<span class="badge b-green">BALANCED</span>';
             return `<tr>
-              <td class="name">${r.name}</td>
+              <td class="name">${escapeHtml(r.name)}</td>
               <td class="num">${r.n}</td>
               <td class="num">${fmtN(r.medStage1,1)} days</td>
               <td class="num">${fmtN(r.medStage2,1)} days</td>
@@ -1941,7 +1963,7 @@ function renderSubTrades(){
             const slowPctClass = r.slowPct > 60 ? 'b-red' : r.slowPct > 40 ? 'b-amber' : 'b-green';
             const gpCell = hasGP ? (r.gp != null ? `<td class="num">${fmt$(r.gp)}</td>` : `<td class="num"><span style="color:var(--muted);">—</span></td>`) : '';
             return `<tr>
-              <td class="name">${r.name}</td>
+              <td class="name">${escapeHtml(r.name)}</td>
               <td class="num">${r.n}</td>
               <td class="num">${fmtN(r.mean,1)} days</td>
               <td class="num">${fmtN(r.median,0)} days</td>
@@ -1966,8 +1988,8 @@ function renderSubTrades(){
         <tbody>
           ${hierRows.map(r => `
             <tr>
-              <td class="name" style="font-size:12px;">${r.cons}</td>
-              <td class="name">${r.sub}</td>
+              <td class="name" style="font-size:12px;">${escapeHtml(r.cons)}</td>
+              <td class="name">${escapeHtml(r.sub)}</td>
               <td class="num">${r.n}</td>
               <td class="num">${fmtN(r.mean,1)} days</td>
               <td class="num">${fmt$(r.nte)}</td>

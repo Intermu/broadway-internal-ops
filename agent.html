@@ -3,9 +3,28 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- Content Security Policy: applied via <meta> so it travels with any saved
+     download (the agent emits HTML emails). 'unsafe-inline' for scripts is needed
+     for the inline blocks; connect-src 'self' restricts the agent's network
+     calls to the SWA's own /api/* endpoints (which proxy Anthropic + the Umbrava
+     MCP). If a future change adds a direct external call, allowlist it here. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com 'unsafe-inline'; style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; base-uri 'self'; form-action 'none'; frame-ancestors 'none';">
 <title>Broadway National | Unified Ops Agent</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
+<!-- Subresource Integrity: pin xlsx@0.18.5 and exceljs@4.3.0. Both hashes below
+     are PLACEHOLDERS — replace before deploying. Compute on a machine with cdnjs
+     access:
+       curl -s https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js \
+         | openssl dgst -sha384 -binary | openssl base64 -A
+       curl -s https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js \
+         | openssl dgst -sha384 -binary | openssl base64 -A
+     With placeholders in place the browser will refuse to load these libraries —
+     that's intentional, so a bad hash can't ship silently. -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"
+        integrity="sha384-REPLACE_WITH_REAL_HASH_BEFORE_DEPLOY"
+        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"
+        integrity="sha384-REPLACE_WITH_REAL_HASH_BEFORE_DEPLOY"
+        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -883,7 +902,66 @@ function isQr(r){return typeof r==="object" && projectType(r)==="Q/R";}
 function fmtUsd(n){try{return"$"+parseFloat(n).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});}catch{return"$0.00";}}
 function sum(arr,col="Amount"){return arr.reduce((a,r)=>a+parseFloat(r[col]||0),0);}
 function avg(arr,col){return arr.length?arr.reduce((a,r)=>a+parseFloat(r[col]||0),0)/arr.length:0;}
-function log(msg){const el=document.getElementById("log");el.innerHTML+=`<div>${msg}</div>`;el.scrollTop=el.scrollHeight;}
+// HTML-escape utility — wrap every Excel-derived value before innerHTML interpolation.
+const escapeHtml = s => String(s == null ? '' : s)
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;')
+  .replace(/'/g, '&#39;');
+
+// Sanitizer for AI-generated email HTML. The Anthropic prompt instructs the
+// model to emit only <p> tags, but the model is not a security boundary and
+// the resulting email goes to a wider distribution. This sanitizer:
+//   1. Parses the input as HTML using a detached document (no script execution)
+//   2. Walks the tree, replacing any element NOT in the allowlist with its
+//      text-only content (so a malformed <p> still shows its words to the team)
+//   3. For <script>, <style>, and similar code-bearing tags, drops content too
+//      (we don't want CSS or JS source surviving as plain text either)
+//   4. Strips ALL attributes (no event handlers, no javascript: URLs, no
+//      style blocks that could exfiltrate via background-image:url(...))
+// If parsing fails or input is empty, falls back to escapeHtml so we always
+// emit safe content. Used when the model's output is interpolated into the
+// downloadable email HTML.
+function sanitizeAiHtml(input) {
+  if (!input) return '';
+  // Allowlist matches what the prompt requests + minimal text formatting.
+  const ALLOWED = new Set(['P', 'BR', 'STRONG', 'EM', 'B', 'I']);
+  // For these tags, drop the contents entirely — there's no scenario where
+  // a <script>...<\/script> body's text should appear as visible text.
+  const DROP_CONTENTS = new Set(['SCRIPT', 'STYLE', 'TEMPLATE', 'NOSCRIPT', 'IFRAME', 'OBJECT', 'EMBED']);
+  try {
+    const doc = new DOMParser().parseFromString('<div>' + String(input) + '</div>', 'text/html');
+    const root = doc.body.firstChild;
+    if (!root) return escapeHtml(input);
+    const walk = (node) => {
+      if (node.nodeType === 3) return escapeHtml(node.nodeValue); // text node
+      if (node.nodeType !== 1) return ''; // comments, etc.
+      const tag = node.tagName;
+      if (DROP_CONTENTS.has(tag)) return ''; // drop tag AND contents
+      const inner = Array.from(node.childNodes).map(walk).join('');
+      if (ALLOWED.has(tag)) {
+        return '<' + tag.toLowerCase() + '>' + inner + '</' + tag.toLowerCase() + '>';
+      }
+      return inner; // disallowed tag: keep contents (text), drop element + attrs
+    };
+    return Array.from(root.childNodes).map(walk).join('');
+  } catch (e) {
+    // Defensive: if anything goes wrong, fall through to plain-text escape.
+    return escapeHtml(input);
+  }
+}
+// log() formerly did `el.innerHTML += <div>${msg}</div>`. If msg ever contained
+// untrusted text (a coordinator name, a Job ID from Excel, an MCP error blob),
+// it would execute. Switched to a safe DOM API: createElement + textContent.
+function log(msg){
+  const el = document.getElementById("log");
+  if (!el) return;
+  const div = document.createElement("div");
+  div.textContent = String(msg);
+  el.appendChild(div);
+  el.scrollTop = el.scrollHeight;
+}
 function kpiStatus(val,goal,target,hb=true){if(hb){if(val>=goal)return"✅ MET GOAL";if(val>=target)return"⚠ AT TARGET";return"🔴 BELOW TARGET";}else{if(val<=goal)return"✅ MET GOAL";if(val<=target)return"⚠ AT TARGET";return"🔴 EXCEEDS TARGET";}}
 
 // ── Risk flag derivation ──────────────────────────────────────────────────────
@@ -1236,7 +1314,7 @@ function processData(raw,fname){
     </div>`;
 
   document.getElementById("stats-wrap").style.display="block";
-  document.getElementById("file-badge").innerHTML=`<span class="pill pill-green">${fname}</span>`;
+  document.getElementById("file-badge").innerHTML=`<span class="pill pill-green">${escapeHtml(fname)}</span>`;
   // Enable snapshot export now that data is loaded
   const snapBtn=document.getElementById("export-snap-btn");
   if(snapBtn){snapBtn.disabled=false;snapBtn.title="";}
@@ -2072,22 +2150,30 @@ function tbl(rows, cols) {
     const cells = cols.map(c => {
       let v = r[c] ?? "";
       let cellStyle = `padding:6px 10px;border-bottom:1px solid #edf0f4;font-size:11px;font-family:'Segoe UI',Arial,sans-serif;color:#1a1a1a;`;
+      // Track whether v is already a safe formatted string (Amount/Aged/Status Hrs
+      // get reassigned to fmtUsd/days/hours strings — those are derived from
+      // Number() and are safe). String-typed fields (Job ID, Status, FM, Notes,
+      // Coordinator, Location) need escapeHtml before interpolation.
+      let safeAlready = false;
 
       if (c === "Amount") {
         v = fmtUsd(v);
         cellStyle += "text-align:right;font-weight:600;";
+        safeAlready = true;
       } else if (c === "Aged") {
         const days = parseInt(v);
         v = days + "d";
         if (days > 60) cellStyle += "color:#c62828;font-weight:700;";
         else if (days > 30) cellStyle += "color:#d97706;font-weight:600;";
         else cellStyle += "color:#374151;";
+        safeAlready = true;
       } else if (c === "Status Hrs") {
         const hrs = parseFloat(v || 0);
         v = hrs.toFixed(1) + "h";
         if (hrs > 200) cellStyle += "color:#c62828;font-weight:700;";
         else if (hrs > 48) cellStyle += "color:#d97706;font-weight:600;";
         else cellStyle += "color:#2e7d32;font-weight:600;";
+        safeAlready = true;
       } else if (c === "Job ID") {
         cellStyle += "font-weight:700;font-family:'Courier New',monospace;color:#1a5f3e;font-size:11px;";
       } else if (c === "Notes" && String(v).length > 70) {
@@ -2098,7 +2184,7 @@ function tbl(rows, cols) {
       } else if (c === "FM") {
         cellStyle += "color:#6b7280;font-size:10px;";
       }
-      return `<td style='${cellStyle}'>${v}</td>`;
+      return `<td style='${cellStyle}'>${safeAlready ? v : escapeHtml(v)}</td>`;
     }).join("");
 
     const slaBadge = hasSla ? (slaOver
@@ -2202,7 +2288,7 @@ function buildEmail(d, introHtml) {
     const rowBg = i % 2 === 0 ? "#f8f9fb" : "#ffffff";
     const td = `padding:6px 10px;font-size:11px;font-family:'Segoe UI',Arial,sans-serif;border-bottom:1px solid #edf0f4;background:${rowBg};`;
     return `<tr>
-      <td style='${td}font-weight:600;color:#1a5f3e;'>${name}</td>
+      <td style='${td}font-weight:600;color:#1a5f3e;'>${escapeHtml(name)}</td>
       <td style='${td}text-align:right;'>${fmtUsd(rev)}</td>
       <td style='${td}text-align:right;'>${fmtUsd(gpd)}</td>
       <td style='${td}text-align:center;background:${gpBg};color:${gpFc};font-weight:700;'>${gpLabel}</td>
@@ -2241,7 +2327,7 @@ function buildEmail(d, introHtml) {
       <td style='${td}text-align:center;font-weight:700;font-size:14px;'>${grp.length}</td>
       <td style='${td}text-align:right;font-weight:600;'>${fmtUsd(sum(grp))}</td>
       <td style='${td}text-align:center;'>${avg(grp, "Aged").toFixed(0)}d</td>
-      <td style='${td}color:${fc};opacity:.9;font-size:10px;'>${coords}</td>
+      <td style='${td}color:${fc};opacity:.9;font-size:10px;'>${escapeHtml(coords)}</td>
     </tr>`;
   }).join("");
   const stalledSection = `<table style='border-collapse:collapse;width:100%;border:1px solid #e5e7eb;'><thead><tr>${stalledHdr}</tr></thead><tbody>${stalledBody}</tbody></table>`;
@@ -2358,11 +2444,15 @@ function buildEmail(d, introHtml) {
   if (valAll.length) openingLines.push(`<strong>${fmtUsd(sum(valAll))}</strong> in Validates (${valAll.length} jobs). Push these through to recognize revenue.`);
 
   // ── Bullets ────────────────────────────────────────────────────────────────
+  // All of the bullet strings below are interpolated raw into the email HTML
+  // (via blist() into <td>...</td>). Excel-derived fields (Job ID, Assigned To,
+  // Status, Notes) MUST be escaped — a malicious value would otherwise execute
+  // when the email is opened in any HTML-rendering client (Outlook web, Gmail).
   const psBullets = [], psSlaIds = new Set();
-  if (psSlaViol.length) { const w = psSlaViol.sort((a, b) => b["Status Hrs"] - a["Status Hrs"])[0]; psBullets.push(`🔴 <strong>${w["Job ID"]}</strong> (${w["Assigned To"]}) — <strong>${w["Status Hrs"].toFixed(0)}h</strong> in status, over 48-hr SLA. Schedule immediately.`); psSlaIds.add(w["Job ID"]); }
-  psSvc.filter(r => !psSlaIds.has(r["Job ID"]) && r["Aged"] > 30).slice(0, 2).forEach(r => psBullets.push(`📌 <strong>${r["Job ID"]}</strong> (${r["Assigned To"]}, ${fmtUsd(r["Amount"])}, ${r["Aged"]}d aged) — Lock a schedule date.`));
+  if (psSlaViol.length) { const w = psSlaViol.sort((a, b) => b["Status Hrs"] - a["Status Hrs"])[0]; psBullets.push(`🔴 <strong>${escapeHtml(w["Job ID"])}</strong> (${escapeHtml(w["Assigned To"])}) — <strong>${w["Status Hrs"].toFixed(0)}h</strong> in status, over 48-hr SLA. Schedule immediately.`); psSlaIds.add(w["Job ID"]); }
+  psSvc.filter(r => !psSlaIds.has(r["Job ID"]) && r["Aged"] > 30).slice(0, 2).forEach(r => psBullets.push(`📌 <strong>${escapeHtml(r["Job ID"])}</strong> (${escapeHtml(r["Assigned To"])}, ${fmtUsd(r["Amount"])}, ${r["Aged"]}d aged) — Lock a schedule date.`));
   const vprBullets = [];
-  if (vprSlaViol.length) { const w = vprSlaViol[0]; vprBullets.push(`🔴 <strong>${w["Job ID"]}</strong> (${w["Assigned To"]}) — <strong>${w["Status Hrs"].toFixed(0)}h</strong>, over 48-hr SLA. Submit quote or escalate now.`); }
+  if (vprSlaViol.length) { const w = vprSlaViol[0]; vprBullets.push(`🔴 <strong>${escapeHtml(w["Job ID"])}</strong> (${escapeHtml(w["Assigned To"])}) — <strong>${w["Status Hrs"].toFixed(0)}h</strong>, over 48-hr SLA. Submit quote or escalate now.`); }
   const matNeedBullets = matNeedMaterial.length ? [`🔴 ${matNeedMaterial.length} WOs need materials — confirm with vendor if materials have been purchased. If yes, move to Material Ordered.`] : [];
   const matOrdBullets = matOrdered.length ? [`📦 ${matOrdered.length} WOs have materials on order · <strong>${fmtUsd(sum(matOrdered))}</strong> — follow up on ETAs for anything past 5 days.`] : [];
   const matSupBullets = matPendingSupplier.length ? [`📦 ${matPendingSupplier.length} WOs pending BN supplier materials · <strong>${fmtUsd(sum(matPendingSupplier))}</strong>`] : [];
@@ -2370,7 +2460,7 @@ function buildEmail(d, introHtml) {
   const matFabBullets = matFabrication.length ? [`🔧 ${matFabrication.length} WOs in fabrication · <strong>${fmtUsd(sum(matFabrication))}</strong>`] : [];
   const propBullets = [];
   if (propAppr.length) propBullets.push(`✅ <strong>${propAppr.length} Proposal Approved</strong> (${fmtUsd(sum(propAppr))}). Move each to Scheduled or Materials today.`);
-  if (proposed.length) { const top = proposed.sort((a, b) => b["Amount"] - a["Amount"])[0]; propBullets.push(`📋 <strong>${proposed.length} Proposed</strong> (${fmtUsd(sum(proposed))}). Largest: ${top["Job ID"]} (${top["Assigned To"]}, ${fmtUsd(top["Amount"])}, ${top["Aged"]}d).`); }
+  if (proposed.length) { const top = proposed.sort((a, b) => b["Amount"] - a["Amount"])[0]; propBullets.push(`📋 <strong>${proposed.length} Proposed</strong> (${fmtUsd(sum(proposed))}). Largest: ${escapeHtml(top["Job ID"])} (${escapeHtml(top["Assigned To"])}, ${fmtUsd(top["Amount"])}, ${top["Aged"]}d).`); }
   const valBullets = [];
   const atfSub = valSvc.filter(r => r["Status"] === "ATF Submitted");
   const cout = valSvc.filter(r => r["Status"] === "Clocked Out: Complete");
@@ -2382,7 +2472,7 @@ function buildEmail(d, introHtml) {
     cipBullets.push(`🚨 <strong>${cipAll.length} Clocked Out: In Progress</strong> (${fmtUsd(sum(cipAll))}). No next step defined — immediate action required.`);
     const os = cipAll.filter(r => r["Status Hrs"] > 8); if (os.length) cipBullets.push(`🔴 <strong>${os.length} of those</strong> past 8-hr SLA.`);
     const bc = {}; cipAll.forEach(r => { bc[r["Assigned To"]] = (bc[r["Assigned To"]] || 0) + 1; });
-    cipBullets.push("By coordinator: " + Object.entries(bc).sort((a, b) => b[1] - a[1]).map(([c, n]) => `<strong>${c}</strong> (${n})`).join(", "));
+    cipBullets.push("By coordinator: " + Object.entries(bc).sort((a, b) => b[1] - a[1]).map(([c, n]) => `<strong>${escapeHtml(c)}</strong> (${n})`).join(", "));
   }
 
   // ── Stat strip ─────────────────────────────────────────────────────────────
@@ -2453,7 +2543,7 @@ function buildEmail(d, introHtml) {
       </tr></table>
     </div>
     <div style='padding:16px 24px 20px 24px;border-left:4px solid #2ECC71;margin:0 0 0 0;background:#1d5a3e;'>
-      <div style='font-size:13px;line-height:1.75;color:#d1f0e0;font-family:"Segoe UI",Arial,sans-serif;'>${introHtml}</div>
+      <div style='font-size:13px;line-height:1.75;color:#d1f0e0;font-family:"Segoe UI",Arial,sans-serif;'>${sanitizeAiHtml(introHtml)}</div>
     </div>
   </div>
 

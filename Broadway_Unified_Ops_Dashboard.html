@@ -3,9 +3,27 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- Content Security Policy: applied via <meta> so it travels with saved snapshots
+     (SWA globalHeaders only protect the live-served file). 'unsafe-inline' for scripts
+     is required because the file has inline <script> blocks; remove if you ever extract
+     scripts to external files. connect-src 'self' is the real win — it shuts down
+     data exfiltration if XSS ever lands. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com 'unsafe-inline'; style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; base-uri 'self'; form-action 'none'; frame-ancestors 'none';">
 <title>Broadway National | Unified Ops Dashboard</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%231A5F3E'/%3E%3Ctext x='16' y='22' font-family='system-ui,sans-serif' font-size='18' font-weight='800' fill='%23ffffff' text-anchor='middle'%3EP%3C/text%3E%3C/svg%3E">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<!-- Subresource Integrity: pin xlsx@0.18.5 so a cdnjs compromise can't ship
+     replacement code into authenticated Broadway sessions. The hash below is a
+     PLACEHOLDER — replace with the real SHA-384 before deploying. Compute on a
+     machine with cdnjs access:
+       curl -s https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js \
+         | openssl dgst -sha384 -binary | openssl base64 -A
+     If the placeholder is left in, the browser will refuse to load xlsx and the
+     dashboard's file-load will fail — that's intentional, so a bad hash can't
+     ship silently. Better still: vendor the library to /lib/ and serve from your
+     own origin behind Entra; SRI then becomes redundant. -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"
+        integrity="sha384-REPLACE_WITH_REAL_HASH_BEFORE_DEPLOY"
+        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -648,6 +666,22 @@ function debounce(fn, ms) {
 }
 
 // ── SECTION 2: UTILITIES / HELPERS ────────────────────────────────────────
+// HTML-escape utility. Use for EVERY interpolation of user-controlled data
+// (Excel cells, file names, error messages) into innerHTML. Numerics that have
+// already been through parseInt/parseFloat are safe without it, but wrapping
+// them costs ~nothing and protects against future code changes.
+//
+// Escapes the five HTML-significant chars plus single quote (needed for
+// attribute contexts using single quotes, and for any value interpolated
+// into an inline event handler like onclick="foo('${x}')"). Coerces null /
+// undefined to empty string so callers don't have to defensively guard.
+const escapeHtml = s => String(s == null ? '' : s)
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;')
+  .replace(/'/g, '&#39;');
+
 const fmt$ = n => '$'+Number(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
 const fmt$0 = n => '$'+Number(n).toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0});
 const pct = (n,d) => d>0 ? (n/d*100).toFixed(1)+'%' : '0%';
@@ -727,7 +761,8 @@ function statusBadge(s) {
   const cls = s.includes('Clocked Out')||s==='On-Site'?'b-green':
     s.includes('Proposal')||s==='Scheduled'?'b-blue':
     s.includes('Pending')||s.includes('Waiting')?'b-amber':'b-gray';
-  return `<span class="badge ${cls}">${s}</span>`;
+  // s comes from Excel "Status Category" — escape before injecting
+  return `<span class="badge ${cls}">${escapeHtml(s)}</span>`;
 }
 function toast(msg) {
   const t=document.getElementById('toast');
@@ -742,7 +777,7 @@ function jobTable(jobs, mode='', showCoord=true) {
   const coordOpts = [...new Set(jobs.map(j=>j.coordinator).filter(Boolean))].sort();
   const coordFilter = showCoord ? `<select data-tbl-id="tbl-${mode}" data-filter-type="coord">
       <option value="">All Coordinators</option>
-      ${coordOpts.map(c=>`<option>${c}</option>`).join('')}
+      ${coordOpts.map(c=>`<option>${escapeHtml(c)}</option>`).join('')}
     </select>` : '';
   // Source Priority filter — scoped to buckets actually present in this view
   const priOpts = [...new Set(jobs.map(j=>priorityBucket(j.priority)).filter(Boolean))]
@@ -797,9 +832,9 @@ function jobTable(jobs, mode='', showCoord=true) {
     const tradeData = (j.trades||'').toLowerCase();
     const vendorData = (j.vendors||'').toLowerCase();
     const searchBlob = (j.jobId+' '+j.fm+' '+j.notes+' '+j.location+' '+(j.lastReviewedBy||'')+' '+(j.trades||'')+' '+(j.vendors||'')).toLowerCase();
-    return `<tr data-risk="${j.risk||''}" data-coord="${j.coordinator||''}" data-status="${j.status||''}" data-priority2="${priBucket}" data-trade="${escapeHtml(tradeData)}" data-vendor="${escapeHtml(vendorData)}" data-search="${escapeHtml(searchBlob)}">
-      <td><span class="jid">${j.jobId}</span>${flagCell?'<div style="margin-top:3px;">'+flagCell+'</div>':''}</td>
-      ${showCoord ? `<td style="font-size:11px;">${j.coordinator}</td>` : ''}
+    return `<tr data-risk="${escapeHtml(j.risk||'')}" data-coord="${escapeHtml(j.coordinator||'')}" data-status="${escapeHtml(j.status||'')}" data-priority2="${escapeHtml(priBucket)}" data-trade="${escapeHtml(tradeData)}" data-vendor="${escapeHtml(vendorData)}" data-search="${escapeHtml(searchBlob)}">
+      <td><span class="jid">${escapeHtml(j.jobId)}</span>${flagCell?'<div style="margin-top:3px;">'+flagCell+'</div>':''}</td>
+      ${showCoord ? `<td style="font-size:11px;">${escapeHtml(j.coordinator)}</td>` : ''}
       <td>${statusBadge(j.status)}</td>
       <td><span class="age-pill ${ageCls(j.aged)}">${j.aged}d</span></td>
       <td class="amt">${j.amount>0?fmt$0(j.amount):'-'}</td>
@@ -808,8 +843,8 @@ function jobTable(jobs, mode='', showCoord=true) {
       <td class="tv-cell">${chipList(j.trades,3)}</td>
       <td class="tv-cell">${chipList(j.vendors,2)}</td>
       <td>${updatePill(j)}${j.lastReviewedBy?`<div style="margin-top:2px;font-size:9px;color:var(--muted);font-family:'DM Mono',monospace;">✎ ${escapeHtml(j.lastReviewedBy)}</div>`:''}</td>
-      <td style="font-size:11px;">${j.fm||'-'}</td>
-      <td style="font-size:11px;color:#64748b;">${j.location}</td>
+      <td style="font-size:11px;">${escapeHtml(j.fm||'-')}</td>
+      <td style="font-size:11px;color:#64748b;">${escapeHtml(j.location)}</td>
       <td style="font-size:10px;color:#475569;max-width:220px;">${j.notes?escapeHtml(j.notes).slice(0,180)+(j.notes.length>180?'…':''):'-'}</td>
     </tr>`;
   }).join('');
@@ -1024,7 +1059,7 @@ function initCounts() {
       const c = agg.coords[name];
       const sr = c.jobs.length>0?((c.jobs.length-c.violations)/c.jobs.length*100):0;
       const dot = sr>=80?'🟢':sr>=60?'🟡':'🔴';
-      return `<button class="nav-btn" data-view="coord-${i}">${dot} ${name} <span class="nb-count">${c.jobs.length}</span></button>`;
+      return `<button class="nav-btn" data-view="coord-${i}">${dot} ${escapeHtml(name)} <span class="nb-count">${c.jobs.length}</span></button>`;
     }).join('');
   }
 }
@@ -1086,8 +1121,9 @@ function renderOverview(mc, agg) {
     const o30 = c.jobs.filter(j=>j.aged>30).length;
     const amt = c.jobs.reduce((s,j)=>s+j.amount,0);
     const ytd = YTD_TABLE.find(r=>r.name===name);
+    const safeName = escapeHtml(name);
     return `<tr>
-      <td><button style="background:none;border:none;cursor:pointer;font-weight:700;color:#1a5f3e;font-size:11px;text-decoration:underline;font-family:'DM Mono',monospace;" data-nav-name="${name}">${name}</button></td>
+      <td><button style="background:none;border:none;cursor:pointer;font-weight:700;color:#1a5f3e;font-size:11px;text-decoration:underline;font-family:'DM Mono',monospace;" data-nav-name="${safeName}">${safeName}</button></td>
       <td style="font-family:'DM Mono',monospace;font-weight:700;font-size:11px;">${n}</td>
       <td><span class="badge ${parseInt(sr)>=80?'b-green':'b-red'}">${sr}%</span></td>
       <td style="font-family:'DM Mono',monospace;font-size:11px;">${c.violations}</td>
@@ -1095,7 +1131,7 @@ function renderOverview(mc, agg) {
       <td style="font-family:'DM Mono',monospace;font-size:11px;">${o30}</td>
       <td style="font-family:'DM Mono',monospace;font-size:11px;"><span class="age-pill ${ageCls(c.maxAge)}">${c.maxAge}d</span></td>
       <td style="font-family:'DM Mono',monospace;font-size:11px;">${fmt$0(amt)}</td>
-      ${ytd?`<td><span class="badge ${ytd.vsGoal.includes('✅')?'b-green':ytd.vsGoal.includes('⚠')?'b-amber':'b-red'}">${ytd.gpPct}</span></td>`:'<td>—</td>'}
+      ${ytd?`<td><span class="badge ${ytd.vsGoal.includes('✅')?'b-green':ytd.vsGoal.includes('⚠')?'b-amber':'b-red'}">${escapeHtml(ytd.gpPct)}</span></td>`:'<td>—</td>'}
     </tr>`;
   }).join('');
 
@@ -1235,7 +1271,7 @@ function renderCoord(mc, rawName, agg) {
   const amt=c.jobs.reduce((s,j)=>s+j.amount,0);
   const ytd=YTD_TABLE.find(r=>r.name===name);
   mc.innerHTML = `
-    <div class="page-title">${name}</div>
+    <div class="page-title">${escapeHtml(name)}</div>
     <div class="page-sub">${document.getElementById('reportDateLabel').textContent}</div>
     <div class="stat-grid sg-4" style="margin-bottom:14px;">
       <div class="stat-box"><div class="sb-num c-blue">${n}</div><div class="sb-lbl">Total Jobs</div><div class="sb-sub">${fmt$0(amt)} approved</div></div>
@@ -1246,8 +1282,8 @@ function renderCoord(mc, rawName, agg) {
     ${ytd?`<div class="stat-grid sg-4" style="margin-bottom:14px;">
       <div class="stat-box"><div class="sb-num c-blue">${fmt$0(ytd.revenue)}</div><div class="sb-lbl">YTD Revenue</div></div>
       <div class="stat-box"><div class="sb-num c-green">${fmt$0(ytd.gp)}</div><div class="sb-lbl">YTD GP $</div></div>
-      <div class="stat-box"><div class="sb-num ${parseFloat(ytd.gpPct)<33?'c-red':parseFloat(ytd.gpPct)<35?'c-amber':'c-green'}">${ytd.gpPct}</div><div class="sb-lbl">GP %</div><div class="sb-sub">Goal: 35%</div></div>
-      <div class="stat-box"><div class="sb-num ${parseFloat(ytd.propTurnover)>7?'c-red':'c-green'}">${ytd.propTurnover}</div><div class="sb-lbl">Proposal Turnover</div><div class="sb-sub">Goal: 5d · Min: 7d</div></div>
+      <div class="stat-box"><div class="sb-num ${parseFloat(ytd.gpPct)<33?'c-red':parseFloat(ytd.gpPct)<35?'c-amber':'c-green'}">${escapeHtml(ytd.gpPct)}</div><div class="sb-lbl">GP %</div><div class="sb-sub">Goal: 35%</div></div>
+      <div class="stat-box"><div class="sb-num ${parseFloat(ytd.propTurnover)>7?'c-red':'c-green'}">${escapeHtml(ytd.propTurnover)}</div><div class="sb-lbl">Proposal Turnover</div><div class="sb-sub">Goal: 5d · Min: 7d</div></div>
     </div>`:''}
     <div class="card">
       <div class="card-header"><h3>All Jobs (${n})</h3><span class="card-meta">${over30.length} over 30 days</span></div>
@@ -1265,8 +1301,14 @@ function renderCompareCoords(mc, agg) {
   const selected = (window._compareSelection && window._compareSelection.length) ? window._compareSelection : names.slice(0, Math.min(3, names.length));
   const checkboxes = names.map(n => {
     const checked = selected.includes(n) ? 'checked' : '';
+    const safeN = escapeHtml(n);
+    // For the JS-string context inside onchange="..." we must additionally escape backslash and single-quote.
+    // escapeHtml has already produced &#39; for single quotes, which is HTML-safe; the JS parser will see it
+    // as a literal quote-entity-decoded string when the attribute is parsed, so we don't get JS injection
+    // unless backslashes are present. Escape backslashes here.
+    const jsN = n.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
     return `<label style="display:inline-flex;align-items:center;gap:6px;background:#f8fafc;border:1px solid var(--border);border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer;">
-      <input type="checkbox" value="${n}" ${checked} onchange="toggleCompareCoord('${n.replace(/'/g,"\\'")}')" /> ${n}
+      <input type="checkbox" value="${safeN}" ${checked} onchange="toggleCompareCoord('${escapeHtml(jsN)}')" /> ${safeN}
     </label>`;
   }).join(' ');
 
@@ -1288,7 +1330,7 @@ function renderCompareCoords(mc, agg) {
     return `<tr><td style="font-size:11px;color:var(--muted);">${label}</td>${cells}</tr>`;
   };
 
-  const headerCells = stats.map(s => `<th style="text-align:right;color:#1a5f3e;font-size:11px;">${s.name}</th>`).join('');
+  const headerCells = stats.map(s => `<th style="text-align:right;color:#1a5f3e;font-size:11px;">${escapeHtml(s.name)}</th>`).join('');
   const tableRows = [
     metric('Total Jobs', s => s.c.jobs.length),
     metric('Approved $', s => s.amt, true),
@@ -1308,11 +1350,12 @@ function renderCompareCoords(mc, agg) {
 
   // Per-coord HIGH RISK lists
   const riskLists = stats.map(s => {
+    const safeName = escapeHtml(s.name);
     const hr = s.c.jobs.filter(j => j.risk === 'HIGH RISK').slice(0, 5);
-    if(!hr.length) return `<div class="card" style="flex:1;min-width:280px;"><div class="card-header"><h3 style="font-size:12px;">${s.name} — HIGH RISK</h3></div><div class="card-body" style="padding:14px;color:var(--muted);font-size:11px;">No HIGH RISK jobs.</div></div>`;
-    const rows = hr.map(j => `<tr><td style="font-family:'DM Mono',monospace;font-size:10px;">${j.jobId||'—'}</td><td style="font-size:10px;"><span class="age-pill ${ageCls(j.aged)}">${j.aged}d</span></td><td style="font-size:10px;">${j.amount>0?fmt$0(j.amount):'—'}</td></tr>`).join('');
+    if(!hr.length) return `<div class="card" style="flex:1;min-width:280px;"><div class="card-header"><h3 style="font-size:12px;">${safeName} — HIGH RISK</h3></div><div class="card-body" style="padding:14px;color:var(--muted);font-size:11px;">No HIGH RISK jobs.</div></div>`;
+    const rows = hr.map(j => `<tr><td style="font-family:'DM Mono',monospace;font-size:10px;">${escapeHtml(j.jobId||'—')}</td><td style="font-size:10px;"><span class="age-pill ${ageCls(j.aged)}">${j.aged}d</span></td><td style="font-size:10px;">${j.amount>0?fmt$0(j.amount):'—'}</td></tr>`).join('');
     const total = s.c.jobs.filter(j=>j.risk==='HIGH RISK').length;
-    return `<div class="card" style="flex:1;min-width:280px;"><div class="card-header"><h3 style="font-size:12px;">${s.name} — HIGH RISK (${total} total)</h3></div><div class="card-body" style="padding:0;"><table class="data-table"><thead><tr><th>Job ID</th><th>Age</th><th>$</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+    return `<div class="card" style="flex:1;min-width:280px;"><div class="card-header"><h3 style="font-size:12px;">${safeName} — HIGH RISK (${total} total)</h3></div><div class="card-body" style="padding:0;"><table class="data-table"><thead><tr><th>Job ID</th><th>Age</th><th>$</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
   }).join('');
 
   mc.innerHTML = `
@@ -1359,12 +1402,13 @@ function renderKPI(mc) {
     const isGood = (m.status||'').includes('ON TARGET')||(m.status||'').includes('MEETING');
     const cls = isBad?'kpi-row-bad':isGood?'kpi-row-good':'kpi-row-warn';
     const emoji = isBad?'🔴':isGood?'✅':'⚠';
+    const cleanStatus = (m.status||'').replace('🔴 ','').replace('⚠ ','').replace('✅ ','');
     return `<tr class="${cls}">
-      <td style="font-weight:700;font-size:12px;">${k}</td>
-      <td style="font-family:'DM Mono',monospace;font-size:11px;">${m.goal}</td>
-      <td style="font-family:'DM Mono',monospace;font-size:11px;">${m.target}</td>
-      <td style="font-family:'DM Mono',monospace;font-size:12px;font-weight:700;">${m.current}</td>
-      <td>${emoji} ${(m.status||'').replace('🔴 ','').replace('⚠ ','').replace('✅ ','')}</td>
+      <td style="font-weight:700;font-size:12px;">${escapeHtml(k)}</td>
+      <td style="font-family:'DM Mono',monospace;font-size:11px;">${escapeHtml(m.goal)}</td>
+      <td style="font-family:'DM Mono',monospace;font-size:11px;">${escapeHtml(m.target)}</td>
+      <td style="font-family:'DM Mono',monospace;font-size:12px;font-weight:700;">${escapeHtml(m.current)}</td>
+      <td>${emoji} ${escapeHtml(cleanStatus)}</td>
     </tr>`;
   }).join('');
 
@@ -1373,12 +1417,12 @@ function renderKPI(mc) {
     const isOk = r.vsGoal.includes('✅');
     const cls = isBad?'kpi-row-bad':isOk?'kpi-row-good':'kpi-row-warn';
     return `<tr class="${cls}">
-      <td style="font-weight:600;font-size:12px;">${r.name}</td>
+      <td style="font-weight:600;font-size:12px;">${escapeHtml(r.name)}</td>
       <td style="font-family:'DM Mono',monospace;font-size:11px;">${fmt$0(r.revenue)}</td>
       <td style="font-family:'DM Mono',monospace;font-size:11px;">${fmt$0(r.gp)}</td>
-      <td style="font-family:'DM Mono',monospace;font-size:12px;font-weight:700;">${r.gpPct}</td>
-      <td style="font-family:'DM Mono',monospace;font-size:11px;">${r.propTurnover}</td>
-      <td style="font-size:14px;">${r.vsGoal.split(' ')[0]}</td>
+      <td style="font-family:'DM Mono',monospace;font-size:12px;font-weight:700;">${escapeHtml(r.gpPct)}</td>
+      <td style="font-family:'DM Mono',monospace;font-size:11px;">${escapeHtml(r.propTurnover)}</td>
+      <td style="font-size:14px;">${escapeHtml(r.vsGoal.split(' ')[0])}</td>
     </tr>`;
   }).join('');
 
@@ -1498,7 +1542,7 @@ function renderEscalations(mc, agg) {
         return pa-pb || b.amount-a.amount;
       }).map(escCard).join('');
       return `<div class="esc-group">
-        <div class="esc-group-title">👤 ${name} <span class="badge b-gray">${group.length}</span> <span style="font-family:'DM Mono',monospace;color:var(--muted);font-weight:500;">${fmt$0(sum)}</span>${high?` <span class="pri-pill pri-high">${high} HIGH</span>`:''}</div>
+        <div class="esc-group-title">👤 ${escapeHtml(name)} <span class="badge b-gray">${group.length}</span> <span style="font-family:'DM Mono',monospace;color:var(--muted);font-weight:500;">${fmt$0(sum)}</span>${high?` <span class="pri-pill pri-high">${high} HIGH</span>`:''}</div>
         ${cards}
       </div>`;
     }).join('');
@@ -1529,7 +1573,7 @@ function escCard(j) {
   return `<div class="esc-card ${priClass}">
     <div class="esc-card-hdr">
       <div class="esc-card-hdr-l">
-        <span class="jid" style="font-size:13px;">${j.jobId}</span>
+        <span class="jid" style="font-size:13px;">${escapeHtml(j.jobId)}</span>
         ${priPill}
         ${sourcePriPill}
         ${statusBadge(j.status)}
@@ -1539,8 +1583,8 @@ function escCard(j) {
         ${j.amount>0?`<span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);font-weight:600;">${fmt$0(j.amount)}</span>`:''}
       </div>
       <div class="esc-card-meta">
-        ${j.coordinator||'—'}<br>
-        ${j.location||''}${j.state?' · '+j.state:''}
+        ${escapeHtml(j.coordinator||'—')}<br>
+        ${escapeHtml(j.location||'')}${j.state?' · '+escapeHtml(j.state):''}
       </div>
     </div>
     ${tradesLine}
@@ -1564,9 +1608,7 @@ function updatePill(j) {
   return `<span class="upd-pill upd-recent">${j.daysSinceUpdate===0?'Updated today':j.daysSinceUpdate+'d ago'}</span>`;
 }
 
-function escapeHtml(s) {
-  return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
+// escapeHtml moved to top of script (Section 2). Inlined definition removed.
 
 // ── STALE TRACKER VIEW ────────────────────────────────────────────────────
 function renderStaleTracker(mc, agg) {
@@ -1762,7 +1804,11 @@ function handleFile(file) {
       const longDate = reportDate.toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
       const shortDate = reportDate.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'2-digit',year:'numeric'});
       document.getElementById('slotCurr').className = 'upload-slot has-data';
-      document.getElementById('slotCurr').innerHTML=`<div class="us-label">✅ Loaded File</div><div class="us-file">${file.name}</div><div style="font-size:10px;color:var(--muted);">${shortDate} · ${JOBS.length} jobs</div><button class="us-swap" onclick="event.stopPropagation();document.getElementById('fileInput').click();" title="Swap to a different file">↻ Swap</button>`;
+      // file.name is user-controlled (the upload's filename) and gets baked into
+      // the saved snapshot via saveDashboard's slotCurr.innerHTML capture. Escape
+      // here so a maliciously named .xlsx ("<img onerror>.xlsx") cannot inject
+      // anything when the snapshot is opened by anyone in the org.
+      document.getElementById('slotCurr').innerHTML=`<div class="us-label">✅ Loaded File</div><div class="us-file">${escapeHtml(file.name)}</div><div style="font-size:10px;color:var(--muted);">${escapeHtml(shortDate)} · ${JOBS.length} jobs</div><button class="us-swap" onclick="event.stopPropagation();document.getElementById('fileInput').click();" title="Swap to a different file">↻ Swap</button>`;
       document.getElementById('reportDateLabel').textContent=longDate;
       // Update data mode badge to "real" (legacy hidden element kept for compat with saveDashboard)
       const badge = document.getElementById('dataModeBadge');
