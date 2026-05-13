@@ -14,7 +14,7 @@
   "routes": [
     {
       "route": "/api/*",
-      "allowedRoles": ["broadway-employee"]
+      "allowedRoles": ["broadway_employee"]
     },
     {
       "route": "/login",
@@ -26,7 +26,7 @@
     },
     {
       "route": "/*",
-      "allowedRoles": ["broadway-employee"]
+      "allowedRoles": ["broadway_employee"]
     }
   ],
   "responseOverrides": {
