@@ -12,23 +12,26 @@
     }
   },
   "routes": [
-    {
-      "route": "/api/*",
-      "allowedRoles": ["broadway_employee"]
-    },
-    {
-      "route": "/login",
-      "redirect": "/.auth/login/aad"
-    },
-    {
-      "route": "/logout",
-      "redirect": "/.auth/logout"
-    },
-    {
-      "route": "/*",
-      "allowedRoles": ["broadway_employee"]
-    }
-  ],
+  {
+    "route": "/api/*",
+    "allowedRoles": ["broadway_employee"]
+  },
+  {
+    "route": "/.auth/*"
+  },
+  {
+    "route": "/login",
+    "redirect": "/.auth/login/aad"
+  },
+  {
+    "route": "/logout",
+    "redirect": "/.auth/logout"
+  },
+  {
+    "route": "/*",
+    "allowedRoles": ["broadway_employee"]
+  }
+ ],
   "responseOverrides": {
     "401": {
       "redirect": "/.auth/login/aad",
