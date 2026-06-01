@@ -44,5 +44,9 @@
   },
   "mimeTypes": {
     ".json": "application/json"
+  },
+  "navigationFallback": {
+    "rewrite": "/index.html",
+    "exclude": ["/*.html", "/api/*", "/.auth/*"]
   }
 }

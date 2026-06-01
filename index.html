@@ -5,14 +5,22 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; base-uri 'self'; form-action 'none'; frame-ancestors 'self';">
 <title>Broadway National · Ops Suite</title>
-<meta http-equiv="refresh" content="0; url=./Broadway_Projects_Tracker.html">
 <style>
   html,body{height:100%;margin:0;font-family:'DM Sans',system-ui,sans-serif;background:#0d3d26;color:#d1fae5;display:flex;align-items:center;justify-content:center}
   a{color:#2ECC71}
 </style>
 </head>
 <body>
-  <p>Opening the Ops Suite&hellip; <a href="./Broadway_Projects_Tracker.html">Continue</a> if it doesn't load automatically.</p>
-  <script>location.replace('./Broadway_Projects_Tracker.html');</script>
+  <p id="m">Opening the Ops Suite&hellip; <a href="./Broadway_Projects_Tracker.html">Continue</a> if it doesn't load automatically.</p>
+  <script>
+    // Only bounce to the hub when we're the top-level page. If this page is
+    // loaded inside a frame (e.g. a tool path fell back to index), do NOT
+    // redirect — that would load the hub inside the hub and stack a header.
+    if (window.self === window.top) {
+      location.replace('./Broadway_Projects_Tracker.html');
+    } else {
+      document.getElementById('m').textContent = 'This tool could not be loaded at this path.';
+    }
+  </script>
 </body>
 </html>
