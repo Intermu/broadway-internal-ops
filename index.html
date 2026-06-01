@@ -699,12 +699,54 @@ code {
     transition-duration: 0.01ms !important;
   }
 }
+/* ── APP SHELL (sidebar + embedded tool iframes) ───────────────────────── */
+.app{display:flex;height:100vh;overflow:hidden}
+.sidebar{width:190px;flex-shrink:0;background:linear-gradient(180deg,#1a5f3e,#0d3d26);color:#fff;display:flex;flex-direction:column;gap:2px;padding:14px 10px;height:100%;overflow:auto}
+.sb-brand{font-weight:700;font-size:13px;letter-spacing:.5px;padding:4px 10px 12px;color:#bbf7d0}
+.sb-link{display:flex;align-items:center;gap:10px;color:#d1fae5;text-decoration:none;padding:9px 11px;border-radius:8px;font-size:13px;font-weight:600;transition:background .12s,color .12s}
+.sb-link:hover{background:rgba(255,255,255,.08);color:#fff}
+.sb-link.active{background:#2ECC71;color:#06281a}
+.sb-ico{font-size:14px;width:18px;text-align:center;flex-shrink:0}
+.sb-burger{display:none;background:none;border:0;color:#fff;font-size:18px;cursor:pointer;padding:4px 8px}
+.app-main{flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden}
+.view{flex:1;min-width:0}
+.view[hidden]{display:none}
+#view-home{overflow:auto}
+#view-tool{display:flex;flex-direction:column;overflow:hidden}
+.tool-topbar{display:flex;align-items:center;gap:10px;padding:8px 14px;background:#fafafa;border-bottom:1px solid var(--c-border);flex-shrink:0}
+.tt-title{font-weight:700;font-size:13px;color:var(--c-forest-dk)}
+.tt-spacer{flex:1}
+.tt-btn{font-size:12px;color:var(--c-forest);text-decoration:none;border:1px solid var(--c-border);border-radius:7px;padding:4px 10px;background:#fff;font-family:inherit;cursor:pointer}
+.tt-btn:hover{border-color:var(--c-forest)}
+.tool-frames{flex:1;min-width:0;position:relative;background:#fff}
+.tool-frames iframe{position:absolute;inset:0;width:100%;height:100%;border:0;display:none}
+.tool-frames iframe.active{display:block}
+.tool-frames .tf-loading{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--c-ink-soft,#64748b);font-size:13px}
+@media (max-width:760px){
+  .app{flex-direction:column;height:100vh}
+  .sidebar{width:100%;height:auto;flex-direction:row;flex-wrap:wrap;align-items:center;gap:4px;padding:8px 10px;position:sticky;top:0;z-index:60}
+  .sb-brand{width:auto;padding:4px 8px 4px 4px}
+  .sb-link{padding:7px 10px;font-size:12px}
+  .sb-link .sb-ico{display:none}
+}
 </style>
 </head>
 <body>
 
 <!-- Skip navigation for keyboard/screen reader users -->
 <a class="skip-link" href="#main-content">Skip to main content</a>
+
+<div class="app">
+  <nav class="sidebar" id="sidebar" aria-label="Suite navigation">
+    <div class="sb-brand">Ops Suite</div>
+    <a class="sb-link" href="#home" data-tool="home"><span class="sb-ico">&#9632;</span> Hub</a>
+    <a class="sb-link" href="#agent" data-tool="agent"><span class="sb-ico">&#129302;</span> Agent</a>
+    <a class="sb-link" href="#dashboard" data-tool="dashboard"><span class="sb-ico">&#128202;</span> Dashboard</a>
+    <a class="sb-link" href="#diagnostic" data-tool="diagnostic"><span class="sb-ico">&#128269;</span> Diagnostic</a>
+    <a class="sb-link" href="#tracker" data-tool="tracker"><span class="sb-ico">&#128203;</span> Tracker</a>
+  </nav>
+  <div class="app-main">
+    <div class="view" id="view-home">
 
 <header class="header" role="banner">
   <div class="header-logo">
@@ -727,7 +769,7 @@ code {
 
   <section class="intro" aria-label="Introduction">
     <h2>Where do you want to go?</h2>
-    <p>Three tools that build on each other &mdash; generate the workbook in stage&nbsp;1, operate the day from stage&nbsp;2, and diagnose patterns over time in stage&nbsp;3.</p>
+    <p>Three tools that build on each other &mdash; generate the workbook in stage&nbsp;1, operate the day from stage&nbsp;2, and diagnose patterns over time in stage&nbsp;3. Plus a standalone <strong>Projects Tracker</strong> for construction &amp; facility job tracking.</p>
   </section>
 
   <!-- Tool Cards -->
@@ -748,7 +790,7 @@ code {
         <p class="tc-desc">Drop your <code>WO_Audit_*.xlsx</code> and YTD financials. Builds the unified Excel workbook plus a tailored daily agenda email &mdash; ready to forward to your team.</p>
       </div>
       <div class="tc-foot">
-        <a class="tc-open" href="./agent.html" id="open-agent" aria-label="Open Unified Ops Agent">Open Agent &rarr;</a>
+        <a class="tc-open" href="#agent" data-tool="agent" id="open-agent" aria-label="Open Unified Ops Agent">Open Agent &rarr;</a>
         <button class="tc-copy" onclick="copyLink('agent.html','Agent')" aria-label="Copy link to Unified Ops Agent" title="Copy link">&#8856;</button>
       </div>
     </article>
@@ -768,7 +810,7 @@ code {
         <p class="tc-desc">Drop the workbook from the Agent. Renders Daily Ops Overview, Escalations, Stale Tracker, per-coordinator views, and YTD revenue. Save a baked-in copy to share with leadership.</p>
       </div>
       <div class="tc-foot">
-        <a class="tc-open" href="./Broadway_Unified_Ops_Dashboard.html" id="open-dashboard" aria-label="Open Unified Ops Dashboard">Open Dashboard &rarr;</a>
+        <a class="tc-open" href="#dashboard" data-tool="dashboard" id="open-dashboard" aria-label="Open Unified Ops Dashboard">Open Dashboard &rarr;</a>
         <button class="tc-copy" onclick="copyLink('Broadway_Unified_Ops_Dashboard.html','Dashboard')" aria-label="Copy link to Dashboard" title="Copy link">&#8856;</button>
       </div>
     </article>
@@ -788,8 +830,28 @@ code {
         <p class="tc-desc">Drop the Pilot Revenue spreadsheet. Analyzes proposal turnaround &mdash; by trips, priority, type, location, coordinator &mdash; for monthly reviews and policy decisions.</p>
       </div>
       <div class="tc-foot">
-        <a class="tc-open" href="./Pilot_Proposal_Diagnostic.html" id="open-diagnostic" aria-label="Open Proposal Turnover Diagnostic">Open Diagnostic &rarr;</a>
+        <a class="tc-open" href="#diagnostic" data-tool="diagnostic" id="open-diagnostic" aria-label="Open Proposal Turnover Diagnostic">Open Diagnostic &rarr;</a>
         <button class="tc-copy" onclick="copyLink('Pilot_Proposal_Diagnostic.html','Diagnostic')" aria-label="Copy link to Diagnostic" title="Copy link">&#8856;</button>
+      </div>
+    </article>
+
+    <!-- 4: Projects Tracker (standalone) -->
+    <article class="tool-card" id="card-tracker" aria-label="Projects Tracker">
+      <span class="recency-badge" id="rb-tracker" aria-hidden="true"></span>
+      <div class="tc-head">
+        <div class="tc-stage-row">
+          <span class="tc-stage-num" aria-hidden="true">4</span>
+          <span class="tc-stage-label">Track</span>
+        </div>
+        <div class="tc-title">Projects Tracker</div>
+        <div class="tc-role">Construction &amp; FM project board</div>
+      </div>
+      <div class="tc-body">
+        <p class="tc-desc">Standalone kanban board for construction and facility jobs &mdash; per-job schedule with critical path &amp; baseline, closeout, project controls (RFIs, submittals, change orders, permits, vendor &amp; supplier POs), a notes thread, and a daily Next-Touch view with supervisor-assigned tasks.</p>
+      </div>
+      <div class="tc-foot">
+        <a class="tc-open" href="#tracker" data-tool="tracker" id="open-tracker" aria-label="Open Projects Tracker">Open Tracker &rarr;</a>
+        <button class="tc-copy" onclick="copyLink('Broadway_Projects_Tracker.html','Tracker')" aria-label="Copy link to Projects Tracker" title="Copy link">&#8856;</button>
       </div>
     </article>
 
@@ -818,7 +880,7 @@ code {
           <div class="sc-label">WO snapshot</div>
           <div class="sc-value" id="sc-snapshot-val"><span class="sc-skel" aria-hidden="true"></span><span class="sr-only">Loading</span></div>
         </div>
-        <a class="sc-jump" href="./agent.html" aria-label="Go to Agent">Agent &rarr;</a>
+        <a class="sc-jump" href="#agent" aria-label="Go to Agent">Agent &rarr;</a>
       </div>
 
       <div class="status-card loading" id="sc-pilot" role="listitem">
@@ -827,7 +889,7 @@ code {
           <div class="sc-label">Pilot Revenue</div>
           <div class="sc-value" id="sc-pilot-val"><span class="sc-skel" aria-hidden="true"></span><span class="sr-only">Loading</span></div>
         </div>
-        <a class="sc-jump" href="./Pilot_Proposal_Diagnostic.html" aria-label="Go to Diagnostic">Diagnostic &rarr;</a>
+        <a class="sc-jump" href="#diagnostic" aria-label="Go to Diagnostic">Diagnostic &rarr;</a>
       </div>
 
       <div class="status-card loading" id="sc-workbook" role="listitem">
@@ -836,7 +898,7 @@ code {
           <div class="sc-label">Unified Workbook</div>
           <div class="sc-value" id="sc-workbook-val"><span class="sc-skel" aria-hidden="true"></span><span class="sr-only">Loading</span></div>
         </div>
-        <a class="sc-jump" href="./Broadway_Unified_Ops_Dashboard.html" aria-label="Go to Dashboard">Dashboard &rarr;</a>
+        <a class="sc-jump" href="#dashboard" aria-label="Go to Dashboard">Dashboard &rarr;</a>
       </div>
 
     </div>
@@ -853,6 +915,21 @@ code {
   <footer class="hub-foot" role="contentinfo">Broadway National &middot; Ops Suite</footer>
 
 </main><!-- /hub-wrap -->
+
+    </div><!-- /view-home -->
+
+    <div class="view" id="view-tool" hidden>
+      <div class="tool-topbar">
+        <span class="tt-title" id="tt-title">Tool</span>
+        <span class="tt-spacer"></span>
+        <a class="tt-btn" id="tt-newtab" href="#" target="_blank" rel="noopener" title="Open this tool in a full browser tab">&#8599; New tab</a>
+        <a class="tt-btn" href="#home" title="Back to the hub">&#8592; Hub</a>
+      </div>
+      <div class="tool-frames" id="tool-frames"></div>
+    </div><!-- /view-tool -->
+
+  </div><!-- /app-main -->
+</div><!-- /app -->
 
 <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
 
@@ -913,11 +990,13 @@ const RECENCY_KEYS = {
   agent:      'bn_opened_agent',
   dashboard:  'bn_opened_dashboard',
   diagnostic: 'bn_opened_diagnostic',
+  tracker:    'bn_opened_tracker',
 };
 const CARD_TO_FILE = {
   agent:      'agent.html',
   dashboard:  'Broadway_Unified_Ops_Dashboard.html',
   diagnostic: 'Pilot_Proposal_Diagnostic.html',
+  tracker:    'Broadway_Projects_Tracker.html',
 };
 
 function paintRecencyBadges() {
@@ -1027,13 +1106,14 @@ document.addEventListener('keydown', function (e) {
   if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
   if (e.metaKey || e.ctrlKey || e.altKey) return;
   const routes = {
-    '1': './agent.html',
-    '2': './Broadway_Unified_Ops_Dashboard.html',
-    '3': './Pilot_Proposal_Diagnostic.html',
+    '1': '#agent',
+    '2': '#dashboard',
+    '3': '#diagnostic',
+    '4': '#tracker',
   };
   if (routes[e.key]) {
     // Record open time
-    const fileMap = { '1': 'agent', '2': 'dashboard', '3': 'diagnostic' };
+    const fileMap = { '1': 'agent', '2': 'dashboard', '3': 'diagnostic', '4': 'tracker' };
     const toolKey = fileMap[e.key];
     try { localStorage.setItem(RECENCY_KEYS[toolKey], String(Date.now())); } catch (_) {}
     location.href = routes[e.key];
@@ -1045,6 +1125,43 @@ const srStyle = document.createElement('style');
 srStyle.textContent = '.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}';
 document.head.appendChild(srStyle);
 
+</script>
+<script>
+(function(){
+  "use strict";
+  var TOOLS = {
+    agent:      { file:"agent.html", label:"Unified Ops Agent" },
+    dashboard:  { file:"Broadway_Unified_Ops_Dashboard.html", label:"Unified Ops Dashboard" },
+    diagnostic: { file:"Pilot_Proposal_Diagnostic.html", label:"Proposal Turnover Diagnostic" },
+    tracker:    { file:"Broadway_Projects_Tracker.html", label:"Projects Tracker" }
+  };
+  var RECENCY = { agent:"bn_opened_agent", dashboard:"bn_opened_dashboard", diagnostic:"bn_opened_diagnostic", tracker:"bn_opened_tracker" };
+  var framesEl=document.getElementById("tool-frames"), viewHome=document.getElementById("view-home"),
+      viewTool=document.getElementById("view-tool"), ttTitle=document.getElementById("tt-title"),
+      ttNewTab=document.getElementById("tt-newtab"), frames={};
+  function ensureFrame(key){
+    if(frames[key]) return frames[key];
+    var f=document.createElement("iframe");
+    f.src=TOOLS[key].file; f.title=TOOLS[key].label; f.setAttribute("data-tool",key);
+    framesEl.appendChild(f); frames[key]=f; return f;
+  }
+  function setActiveNav(key){
+    var t=key||"home";
+    document.querySelectorAll(".sb-link").forEach(function(a){ a.classList.toggle("active", a.getAttribute("data-tool")===t); });
+  }
+  function showHome(){ viewTool.hidden=true; viewHome.hidden=false; setActiveNav("home"); document.title="Broadway National \u00b7 Ops Suite"; }
+  function showTool(key){
+    ensureFrame(key);
+    Object.keys(frames).forEach(function(k){ frames[k].classList.toggle("active", k===key); });
+    viewHome.hidden=true; viewTool.hidden=false;
+    ttTitle.textContent=TOOLS[key].label; ttNewTab.href=TOOLS[key].file;
+    setActiveNav(key); document.title=TOOLS[key].label+" \u00b7 Ops Suite";
+    try{ localStorage.setItem(RECENCY[key], String(Date.now())); }catch(_){}
+  }
+  function route(){ var h=(location.hash||"").replace(/^#/,""); if(TOOLS[h]) showTool(h); else showHome(); }
+  window.addEventListener("hashchange", route);
+  route();
+})();
 </script>
 </body>
 </html>
