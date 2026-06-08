@@ -717,10 +717,10 @@ html.embedded .hdr{display:none}
   <div class="hdr-right">
     <button class="btn btn-ghost" onclick="downloadTemplate()" title="Download Excel template">&#8595; Template</button>
     <label class="btn btn-b" style="cursor:pointer" title="Import Excel">&#8593; Import
-      <input type="file" id="dz-input" accept=".xlsx,.xls" style="display:none" onchange="processFile(this)">
+      <input type="file" id="dz-input" accept=".xlsx,.xlsm,.xls" style="display:none" onchange="processFile(this)">
     </label>
     <label class="btn btn-ghost" style="cursor:pointer" id="audit-sync-btn" title="Sync from WO audit (adds status hints to existing WOs only — never overrides your stages)">&#8645; Sync Audit
-      <input type="file" id="audit-input" accept=".xlsx,.xls,.csv" style="display:none" onchange="processAuditFile(this)">
+      <input type="file" id="audit-input" accept=".xlsx,.xlsm,.xls,.csv" style="display:none" onchange="processAuditFile(this)">
     </label>
     <button class="btn btn-ghost" onclick="exportExcel()">&#8595; Export</button>
     <button class="btn btn-g" onclick="openAdd()">+ New Job</button>
@@ -1652,8 +1652,8 @@ function processFile(inputEl){
 }
 
 function processDropFiles(files){
-  const f = files&&Array.from(files).find(f=>/\.(xlsx|xls)$/i.test(f.name));
-  if(!f){ toast('Drop an .xlsx file'); return; }
+  const f = files&&Array.from(files).find(f=>/\.(xlsx|xlsm|xls)$/i.test(f.name));
+  if(!f){ toast('Drop an .xlsx or .xlsm file'); return; }
   processFile({files:[f], value:''});
 }
 

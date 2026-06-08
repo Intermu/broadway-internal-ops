@@ -17,7 +17,7 @@
      With the placeholder in place the browser will refuse to load xlsx — that's
      intentional, so a bad hash can't ship silently. -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"
-        integrity="sha384-REPLACE_WITH_REAL_HASH_BEFORE_DEPLOY"
+        integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw"
         crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <style>
 :root{
@@ -324,7 +324,7 @@ body{font-family:'DM Sans',sans-serif;background:linear-gradient(135deg,#f0fdf4,
       <h2>Drop your Pilot Revenue spreadsheet here</h2>
       <p>The file must contain a tab named "Work Order Report"</p>
       <button class="upload-btn" onclick="document.getElementById('fileInput').click()">Choose File</button>
-      <input type="file" id="fileInput" accept=".xlsx,.xls" style="display:none;">
+      <input type="file" id="fileInput" accept=".xlsx,.xlsm,.xls" style="display:none;">
       <div class="file-info" id="fileInfo"></div>
       <div class="processing" id="processing">
         <div class="spinner"></div>

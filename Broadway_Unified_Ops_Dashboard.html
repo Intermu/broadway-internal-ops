@@ -22,7 +22,7 @@
      ship silently. Better still: vendor the library to /lib/ and serve from your
      own origin behind Entra; SRI then becomes redundant. -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"
-        integrity="sha384-REPLACE_WITH_REAL_HASH_BEFORE_DEPLOY"
+        integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw"
         crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
@@ -518,7 +518,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible{
       <span class="last-pill sample" id="lastLoadedPill">Awaiting upload</span>
     </div>
     <label class="drop-area" id="dropZone" for="fileInput">
-      <input type="file" id="fileInput" accept=".xlsx,.xls">
+      <input type="file" id="fileInput" accept=".xlsx,.xlsm,.xls">
       <!-- IDLE -->
       <div class="state-idle">
         <div class="drop-icon">📥</div>

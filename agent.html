@@ -20,10 +20,10 @@
      With placeholders in place the browser will refuse to load these libraries —
      that's intentional, so a bad hash can't ship silently. -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"
-        integrity="sha384-REPLACE_WITH_REAL_HASH_BEFORE_DEPLOY"
+        integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw"
         crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"
-        integrity="sha384-REPLACE_WITH_REAL_HASH_BEFORE_DEPLOY"
+        integrity="sha384-P7KKlGD3Ng66Ds7oTliLzTnol6DbK+k7PafNYXIBDQ4b5eFWtmqctplDVOxslglR"
         crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
@@ -368,7 +368,7 @@ a:focus-visible,button:focus-visible,[tabindex]:focus-visible{
         <div class="last-loaded" id="wo-last-loaded">Never loaded</div>
       </div>
       <label class="drop-area" id="drop" for="file-input">
-        <input type="file" id="file-input" accept=".xlsx,.xls">
+        <input type="file" id="file-input" accept=".xlsx,.xlsm,.xls">
         <!-- IDLE -->
         <div class="state-idle">
           <div class="drop-icon">📥</div>
@@ -414,7 +414,7 @@ a:focus-visible,button:focus-visible,[tabindex]:focus-visible{
         <div class="last-loaded" id="ytd-last-loaded">Never loaded</div>
       </div>
       <label class="drop-area" id="ytd-drop" for="ytd-file-input">
-        <input type="file" id="ytd-file-input" accept=".xlsx,.xls">
+        <input type="file" id="ytd-file-input" accept=".xlsx,.xlsm,.xls">
         <!-- IDLE -->
         <div class="state-idle">
           <div class="drop-icon">📥</div>
