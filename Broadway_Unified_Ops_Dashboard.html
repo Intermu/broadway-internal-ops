@@ -1297,6 +1297,7 @@ function renderOver30(mc, agg) {
       <div class="stat-box"><div class="sb-num c-amber">${approaching.length}</div><div class="sb-lbl">Approaching (20–30d)</div><div class="sb-sub">at risk next week</div></div>
       <div class="stat-box"><div class="sb-num c-red">${oldestAge}d</div><div class="sb-lbl">Oldest Job</div><div class="sb-sub">${oldestId}</div></div>
     </div>
+    <div id="o30TrendSlot"></div>
     <div class="card">
       <div class="card-header"><h3>By Coordinator</h3><span class="card-meta">${over30.length} over 30 · ${approaching.length} approaching</span></div>
       <div class="card-body" style="padding:0;">${coordTable}</div>
@@ -1306,6 +1307,7 @@ function renderOver30(mc, agg) {
       <div class="card-header"><h3><span class="age-pill ${ageCls(25)}">Approaching 30 (20–30 Days) — ${approaching.length} jobs · ${fmt$0(apprAmt)}</span></h3><span class="card-meta">Push these this week so they don't cross 30</span></div>
       <div class="card-body" style="padding:12px 16px 0;">${jobTable(approaching,'appr',true)}</div>
     </div>`;
+  renderOver30Trend();
 }
 
 // ── AGING DETAIL ──────────────────────────────────────────────────────────
@@ -1866,6 +1868,11 @@ function handleFile(file) {
       // Derive the report date from the workbook itself (sheet name carries
       // the audit date, e.g. "WO Audit 04.23.26"), then filename, else today.
       const reportDate = extractReportDate(sheetName, file.name);
+      // Machine-readable copies for the over-30 history system: snapshots key on
+      // the AUDIT date (not the day the tool is opened), and only real uploads save.
+      window._reportDate = reportDate;
+      window._realData = true;
+      window._o30History = null; // force trend re-fetch against fresh data
       const longDate = reportDate.toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
       const shortDate = reportDate.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'2-digit',year:'numeric'});
       document.getElementById('slotCurr').className = 'upload-slot has-data';
@@ -1882,6 +1889,7 @@ function handleFile(file) {
       setDashState('success', file.name, `${shortDate} · ${JOBS.length} jobs · loaded just now`);
       initCounts(); render(currentView);
       toast(`✅ Loaded ${JOBS.length} jobs from ${file.name}`);
+      saveOver30Snapshot(); // fire-and-forget: upsert this audit date into blob history
     } catch(err) {
       setDashState('error', "Couldn't read this workbook", err.message || "Unexpected error parsing the file");
       toast('❌ '+err.message);
@@ -2212,6 +2220,115 @@ refreshCrossToolBtn();
 const DATA_API = "/api/data-store";
 async function bnDataGet(key){
   try{const r=await fetch(`${DATA_API}?key=${encodeURIComponent(key)}`);if(!r.ok)throw 0;return await r.json();}catch(_){return null;}
+}
+
+// ── OVER-30 HISTORY (Azure Blob via /api/data-store, slot: over30-history) ──
+const O30_CLIENT = "pilot";
+async function bnClientGet(slot){
+  try{const r=await fetch(`${DATA_API}?key=${encodeURIComponent(slot)}&client=${O30_CLIENT}`);if(!r.ok)throw 0;return await r.json();}catch(_){return null;}
+}
+async function bnClientPost(slot,data,metadata){
+  try{const r=await fetch(`${DATA_API}?key=${encodeURIComponent(slot)}&client=${O30_CLIENT}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({data,metadata})});if(!r.ok)throw 0;return await r.json();}catch(_){return null;}
+}
+
+// Upsert a snapshot for the current audit date. Fire-and-forget from handleFile.
+// Only saves real uploaded data — sample/baked-in JOBS never pollute history.
+async function saveOver30Snapshot(){
+  if(!window._realData || !window._reportDate) return;
+  const dateStr = window._reportDate.toISOString().slice(0,10);
+  const over30 = JOBS.filter(j=>j.aged>30);
+  const appr = JOBS.filter(j=>j.aged>=20 && j.aged<=30);
+  const byCoord = {};
+  over30.forEach(j=>{
+    const c = byCoord[j.coordinator] || (byCoord[j.coordinator]={o30:0,amt:0,oldest:0});
+    c.o30++; c.amt+=j.amount; if(j.aged>c.oldest)c.oldest=j.aged;
+  });
+  const entry = {
+    dateStr, savedAt:new Date().toISOString(),
+    o30:{count:over30.length, amt:over30.reduce((s,j)=>s+j.amount,0), ids:over30.map(j=>j.jobId)},
+    appr:{count:appr.length, ids:appr.map(j=>j.jobId)},
+    byCoord
+  };
+  const res = await bnClientGet("over30-history");
+  const hist = (res && res.exists && res.data && Array.isArray(res.data.entries)) ? res.data : {entries:[]};
+  const i = hist.entries.findIndex(e=>e.dateStr===dateStr);
+  if(i>=0) hist.entries[i]=entry; else hist.entries.push(entry);
+  hist.entries.sort((a,b)=>a.dateStr<b.dateStr?-1:1);
+  if(hist.entries.length>60) hist.entries = hist.entries.slice(-60);
+  window._o30History = hist.entries;
+  const saved = await bnClientPost("over30-history", hist, {latest:dateStr, count:String(hist.entries.length)});
+  if(!saved) console.warn("Over-30 snapshot save failed — trend history not updated this load.");
+}
+
+// Pick the prior entry whose age (in days before curStr) is inside [minD,maxD],
+// closest to targetDays. Returns null if none qualifies.
+function _o30Pick(entries, curStr, targetDays, minD, maxD){
+  const cur = new Date(curStr+"T00:00:00Z").getTime();
+  let best=null, bestDiff=Infinity;
+  (entries||[]).forEach(e=>{
+    if(!e || !e.dateStr || e.dateStr>=curStr) return;
+    const d = (cur - new Date(e.dateStr+"T00:00:00Z").getTime())/86400000;
+    if(d<minD || d>maxD) return;
+    const diff = Math.abs(d-targetDays);
+    if(diff<bestDiff){ bestDiff=diff; best=e; }
+  });
+  return best;
+}
+
+function _o30Arrow(n){
+  if(n>0) return `<span class="c-red" style="font-weight:700;">\u25b2 +${n}</span>`;
+  if(n<0) return `<span class="c-green" style="font-weight:700;">\u25bc ${n}</span>`;
+  return `<span class="c-amber" style="font-weight:700;">\u2014 0</span>`;
+}
+
+// Build one comparison row (WoW or MoM) against a prior snapshot.
+function _o30TrendRow(label, prior, cur){
+  if(!prior) return `<div style="padding:10px 14px;font-size:12px;color:var(--muted);border-bottom:1px solid var(--border);"><strong style="color:var(--text);">${label}:</strong> no snapshot in range yet \u2014 history builds as weekly audits load.</div>`;
+  const priorIds = new Set(prior.o30.ids||[]);
+  const curIds = new Set(cur.ids);
+  let closed=0, crossed=0;
+  priorIds.forEach(id=>{ if(!curIds.has(id)) closed++; });
+  curIds.forEach(id=>{ if(!priorIds.has(id)) crossed++; });
+  const dCount = cur.count - prior.o30.count;
+  const dAmt = cur.amt - (prior.o30.amt||0);
+  const amtTxt = (dAmt>=0?'+':'\u2212')+fmt$0(Math.abs(dAmt));
+  return `<div style="display:flex;flex-wrap:wrap;gap:18px;align-items:center;padding:10px 14px;border-bottom:1px solid var(--border);font-size:12px;">
+    <strong style="min-width:150px;">${label} <span style="font-weight:400;color:var(--muted);">(vs ${prior.dateStr})</span></strong>
+    <span>Over-30: ${_o30Arrow(dCount)} <span style="color:var(--muted);">(${prior.o30.count} \u2192 ${cur.count})</span></span>
+    <span>$: <strong class="${dAmt>0?'c-red':dAmt<0?'c-green':'c-amber'}">${amtTxt}</strong></span>
+    <span class="c-green">\u2713 ${closed} closed out</span>
+    <span class="c-red">\u2192 ${crossed} newly crossed 30</span>
+  </div>`;
+}
+
+// Fetch history (cached after first load) and inject the trend card.
+async function renderOver30Trend(){
+  let slot = document.getElementById('o30TrendSlot');
+  if(!slot) return;
+  let entries = window._o30History;
+  if(!entries){
+    const res = await bnClientGet("over30-history");
+    entries = (res && res.exists && res.data && Array.isArray(res.data.entries)) ? res.data.entries : [];
+    window._o30History = entries;
+  }
+  slot = document.getElementById('o30TrendSlot'); // re-check: user may have navigated away mid-fetch
+  if(!slot) return;
+  const curOver30 = JOBS.filter(j=>j.aged>30);
+  const cur = {
+    dateStr: window._reportDate ? window._reportDate.toISOString().slice(0,10) : new Date().toISOString().slice(0,10),
+    count: curOver30.length,
+    amt: curOver30.reduce((s,j)=>s+j.amount,0),
+    ids: curOver30.map(j=>j.jobId)
+  };
+  const wow = _o30Pick(entries, cur.dateStr, 7, 4, 13);
+  const mom = _o30Pick(entries, cur.dateStr, 30, 21, 45);
+  slot.innerHTML = `<div class="card">
+    <div class="card-header"><h3>Trend</h3><span class="card-meta">${entries.length} snapshot${entries.length===1?'':'s'} on record \u00b7 saved automatically on each audit load</span></div>
+    <div class="card-body" style="padding:0;">
+      ${_o30TrendRow('Week over week', wow, cur)}
+      ${_o30TrendRow('Month over month', mom, cur)}
+    </div>
+  </div>`;
 }
 
 // Decode base64 string to a Blob, build a synthetic File, run through handleFile.
