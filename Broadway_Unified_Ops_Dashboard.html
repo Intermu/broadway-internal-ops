@@ -478,7 +478,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible{
   }
 }
 </style>
-<style>html.embedded .header{display:none}</style>
+<style>html.embedded .header,html.embedded .tool-mode-bar{display:none}</style>
 <script>if(window.self!==window.top)document.documentElement.classList.add('embedded');</script>
 </head>
 <body>
@@ -1990,7 +1990,10 @@ function saveDashboard() {
       '} initDateLabels();');
 
     const banner = '<div style="background:#fff3cd;border-bottom:1px solid #f0d87a;padding:6px 20px;font:12px/1.4 \'DM Sans\',sans-serif;color:#665a1a;text-align:center;">\ud83d\udcf8 Snapshot view \u2014 data baked in ' + new Date().toLocaleString() + '. To work with a new upload, open the original dashboard tool.</div>';
-    out = out.replace(/<body[^>]*>/, function(m){ return m + banner; });
+    // Inject the standard snapshot flag so live-only features (data-store
+    // fetches like the over-30 trend) can detect they're running in a saved copy.
+    const snapFlag = '<scr'+'ipt>window.BROADWAY_SNAPSHOT=true;</scr'+'ipt>';
+    out = out.replace(/<body[^>]*>/, function(m){ return m + snapFlag + banner; });
     out = out.replace('</head>',
       '<style>#dropZone,#saveDashBtn,.upload-panel-wrap,.tool-mode-bar{display:none!important}</style></head>');
 
@@ -2234,6 +2237,7 @@ async function bnClientPost(slot,data,metadata){
 // Upsert a snapshot for the current audit date. Fire-and-forget from handleFile.
 // Only saves real uploaded data — sample/baked-in JOBS never pollute history.
 async function saveOver30Snapshot(){
+  if(window.BROADWAY_SNAPSHOT) return; // saved copies never write history
   if(!window._realData || !window._reportDate) return;
   const dateStr = window._reportDate.toISOString().slice(0,10);
   const over30 = JOBS.filter(j=>j.aged>30);
@@ -2305,6 +2309,10 @@ function _o30TrendRow(label, prior, cur){
 async function renderOver30Trend(){
   let slot = document.getElementById('o30TrendSlot');
   if(!slot) return;
+  if(window.BROADWAY_SNAPSHOT){
+    slot.innerHTML = `<div class="card"><div class="card-body" style="padding:10px 14px;font-size:12px;color:var(--muted);">Trend comparison runs in the live dashboard only — saved snapshots can't reach the data store.</div></div>`;
+    return;
+  }
   let entries = window._o30History;
   if(!entries){
     const res = await bnClientGet("over30-history");
@@ -2340,7 +2348,8 @@ function base64ToFile(b64, filename){
   return new File([blob], filename, {type: blob.type});
 }
 
-// On page load, try to auto-load the Unified Workbook from Netlify Blobs.
+// On page load, try to auto-load the Unified Workbook from the Broadway data
+// store (Azure Blob via /api/data-store).
 // If found, run it through the same handleFile pipeline as a manual upload.
 (async function autoLoadWorkbook(){
   const result = await bnDataGet("workbook");
@@ -2352,7 +2361,7 @@ function base64ToFile(b64, filename){
     if(sub){
       const meta = result.metadata || {};
       const when = meta.generatedAt ? new Date(meta.generatedAt).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}) : "recently";
-      sub.innerHTML = `<span style="color:#16a34a;font-weight:600;">● Synced from Netlify</span> · generated ${when}`;
+      sub.innerHTML = `<span style="color:#16a34a;font-weight:600;">● Synced from data store</span> · generated ${when}`;
     }
     handleFile(file);
   }catch(err){

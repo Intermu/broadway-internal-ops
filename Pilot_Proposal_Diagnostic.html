@@ -41,7 +41,7 @@ body{font-family:'DM Sans',sans-serif;background:linear-gradient(135deg,#f0fdf4,
 .tool-mode-bar .hub-btn{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:5px;background:rgba(46,204,113,0.18);border:1px solid rgba(46,204,113,0.4);color:#d1f0e6;font-size:11px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;text-decoration:none;transition:background 0.15s;letter-spacing:0.4px;}
 .tool-mode-bar .hub-btn:hover{background:rgba(46,204,113,0.32);color:#fff;}
 
-/* SYNC BANNER — shown when data auto-loads from Netlify Blobs */
+/* SYNC BANNER — shown when data auto-loads from the Broadway data store (Azure Blob) */
 .sync-banner{background:linear-gradient(180deg,#f0fdf4,#ffffff);border:1px solid #c6f0da;border-radius:14px;padding:18px 22px;margin-bottom:18px;}
 .sync-banner .sb-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px;}
 .sync-banner .sb-title{display:inline-flex;align-items:center;gap:10px;font-size:14px;font-weight:600;color:var(--green-dk);}
@@ -246,7 +246,7 @@ body{font-family:'DM Sans',sans-serif;background:linear-gradient(135deg,#f0fdf4,
   .two-col,.three-col{grid-template-columns:1fr;}
 }
 </style>
-<style>html.embedded .header{display:none}</style>
+<style>html.embedded .header,html.embedded .tool-mode-bar{display:none}</style>
 <script>if(window.self!==window.top)document.documentElement.classList.add('embedded');</script>
 </head>
 <body>
@@ -307,7 +307,7 @@ body{font-family:'DM Sans',sans-serif;background:linear-gradient(135deg,#f0fdf4,
       <div class="sb-head">
         <div class="sb-title">
           <span class="sb-dot"></span>
-          <span>Pilot Revenue · synced from Netlify</span>
+          <span>Pilot Revenue · synced from data store</span>
         </div>
         <button type="button" class="sb-replace" onclick="document.getElementById('fileInput').click();">Replace file ↑</button>
       </div>
@@ -943,14 +943,14 @@ async function bnDataPost(key,data,metadata){
         proposed: proposedRows.length,
         measured: proposedRows.filter(j => j.measured).length,
         carvedOut: proposedRows.filter(j => !j.measured).length,
-        sourceFile: sourceFile || 'Synced from Netlify',
+        sourceFile: sourceFile || 'Synced from data store',
       };
       ACTIVE_CAT = 'all';
       applyCategoryFilter();
       document.querySelectorAll('.cat-btn').forEach(b => {
         b.classList.toggle('active', b.dataset.cat === 'all');
       });
-      updateFileStatus(sourceFile || "Synced from Netlify", proposedRows.length);
+      updateFileStatus(sourceFile || "Synced from data store", proposedRows.length);
       updateCategoryCounts();
       captureKPIsForDelta(proposedRows);
       renderAll();
@@ -960,7 +960,7 @@ async function bnDataPost(key,data,metadata){
       displayedRowCount = proposedRows.length + " proposed";
     } else if(Array.isArray(rawRows)){
       // Legacy path: full raw rows (from older Agent posts).
-      count = processRawRows(rawRows, sourceFile || "Synced from Netlify");
+      count = processRawRows(rawRows, sourceFile || "Synced from data store");
       if(LEGACY_GP) applyLegacyGPJoin();
       displayedRowCount = count + " proposed";
     } else {
