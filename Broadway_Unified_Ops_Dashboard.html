@@ -12,15 +12,15 @@
 <title>Broadway National | Unified Ops Dashboard</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%231A5F3E'/%3E%3Ctext x='16' y='22' font-family='system-ui,sans-serif' font-size='18' font-weight='800' fill='%23ffffff' text-anchor='middle'%3EP%3C/text%3E%3C/svg%3E">
 <!-- Subresource Integrity: pin xlsx@0.18.5 so a cdnjs compromise can't ship
-     replacement code into authenticated Broadway sessions. The hash below is a
-     PLACEHOLDER — replace with the real SHA-384 before deploying. Compute on a
-     machine with cdnjs access:
-       curl -s https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js \
+     replacement code into authenticated Broadway sessions. Hash VERIFIED against
+     the published xlsx@0.18.5 package (2026-06-10). If the version ever changes,
+     recompute:
+       curl -s https://cdnjs.cloudflare.com/ajax/libs/xlsx/<ver>/xlsx.full.min.js \
          | openssl dgst -sha384 -binary | openssl base64 -A
-     If the placeholder is left in, the browser will refuse to load xlsx and the
-     dashboard's file-load will fail — that's intentional, so a bad hash can't
-     ship silently. Better still: vendor the library to /lib/ and serve from your
-     own origin behind Entra; SRI then becomes redundant. -->
+     A wrong hash makes the browser refuse to load xlsx and file-load fails —
+     that's intentional, so a bad hash can't ship silently. Better still: vendor
+     the library to /lib/ and serve from your own origin behind Entra; SRI then
+     becomes redundant. -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"
         integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw"
         crossorigin="anonymous" referrerpolicy="no-referrer"></script>

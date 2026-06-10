@@ -10,12 +10,12 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com 'unsafe-inline'; style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; base-uri 'self'; form-action 'none'; frame-ancestors 'none';">
 <title>Proposal Turnover Diagnostic — Broadway National</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<!-- Subresource Integrity: pin xlsx@0.18.5. The hash below is a PLACEHOLDER —
-     replace before deploying. Compute on a machine with cdnjs access:
-       curl -s https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js \
+<!-- Subresource Integrity: pin xlsx@0.18.5. Hash VERIFIED against the published
+     xlsx@0.18.5 package (2026-06-10). If the version ever changes, recompute:
+       curl -s https://cdnjs.cloudflare.com/ajax/libs/xlsx/<ver>/xlsx.full.min.js \
          | openssl dgst -sha384 -binary | openssl base64 -A
-     With the placeholder in place the browser will refuse to load xlsx — that's
-     intentional, so a bad hash can't ship silently. -->
+     A wrong hash makes the browser refuse to load xlsx — that's intentional,
+     so a bad hash can't ship silently. -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"
         integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw"
         crossorigin="anonymous" referrerpolicy="no-referrer"></script>
