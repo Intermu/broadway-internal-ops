@@ -10,15 +10,13 @@
      MCP). If a future change adds a direct external call, allowlist it here. -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com 'unsafe-inline'; style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; base-uri 'self'; form-action 'none'; frame-ancestors 'none';">
 <title>Broadway National | Unified Ops Agent</title>
-<!-- Subresource Integrity: pin xlsx@0.18.5 and exceljs@4.3.0. Both hashes below
-     are PLACEHOLDERS — replace before deploying. Compute on a machine with cdnjs
-     access:
-       curl -s https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js \
-         | openssl dgst -sha384 -binary | openssl base64 -A
-       curl -s https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js \
-         | openssl dgst -sha384 -binary | openssl base64 -A
-     With placeholders in place the browser will refuse to load these libraries —
-     that's intentional, so a bad hash can't ship silently. -->
+<!-- Subresource Integrity: pin xlsx@0.18.5 and exceljs@4.3.0. Hashes below are
+     LIVE values, verified against the npm dist files (identical to cdnjs).
+     If either library version changes, recompute:
+       npm pack <pkg>@<version> → extract dist file →
+       openssl dgst -sha384 -binary <file> | openssl base64 -A
+     A wrong hash makes the browser silently refuse to load the library —
+     symptom is "XLSX is not defined" / "ExcelJS is not defined" at runtime. -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"
         integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw"
         crossorigin="anonymous" referrerpolicy="no-referrer"></script>
