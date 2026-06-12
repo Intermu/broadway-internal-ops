@@ -4318,14 +4318,19 @@ loadHolidays();
 render();
 
 /* ============================================================================
-   BWN LAUNCHER RECEIVER — Projects Job Board
-   Paste this at the VERY END of the big inline <script> in
-   Broadway_Projects_Tracker.html (after all function definitions, so
-   openAdd() exists). It is inert unless the page is opened with launcher
-   params, so normal use of the Job Board is completely unaffected.
+   BWN LAUNCHER RECEIVER v2 — Projects Job Board
+   Lives at the VERY END of the big inline <script> in
+   Broadway_Projects_Tracker.html. Inert unless launcher params are present.
 
-   Reads:  ?tracking=&wo=&client=&location=&status=&dne=&gpPct=
+   Reads:  ?tracking=&wo=&client=&location=&loc=&city=&state=&addr=&status=&dne=&gpPct=
    Does:   opens the Create Work Order form pre-filled from the Umbrava WO.
+
+   v2 fixes (field-tested 6/12):
+   - tracking arrives as raw header text ("Tracking # 1212705") -> digits only
+   - explicit city/state/loc/addr params win when the launcher provides them
+   - fallback: pulls "City, ST" from addr or location tail; Loc # from the
+     last digit-bearing token of the site label ("Flying J PFJ 0677" -> "0677")
+   - full site label preserved in the Scope context line so nothing is lost
    ========================================================================== */
 (function () {
   'use strict';
@@ -4338,6 +4343,10 @@ render();
     el.value = v;
     el.dispatchEvent(new Event('input', { bubbles: true }));
   }
+  function cityStateFrom(s) {
+    var m = (s || '').match(/([A-Za-z .'-]+?),\s*([A-Z]{2})(?:\s+\d{5}(?:-\d{4})?)?\s*$/);
+    return m ? { city: m[1].trim(), state: m[2] } : null;
+  }
 
   function run() {
     try {
@@ -4346,20 +4355,33 @@ render();
       set('f-wo', q.get('wo'));
       set('f-client', q.get('client'));
 
-      // Umbrava location strings look like "Pilot Travel Center #PFJ 0457".
-      // Keep the raw string in Loc #; pull a trailing "City, ST" if present.
-      var loc = q.get('location') || '';
+      // ---- Location -------------------------------------------------------
+      // Explicit params (launcher >= 1.2.1) win; otherwise derive from the
+      // site label, e.g. "Flying J PFJ 0677" -> Loc # "0677".
+      var site = q.get('location') || '';
+      var loc = q.get('loc') || '';
+      if (!loc && site) {
+        var toks = site.trim().split(/\s+/).filter(function (t) { return /\d/.test(t); });
+        loc = toks.length ? toks[toks.length - 1] : site;
+      }
       set('f-loc', loc);
-      var cs = loc.match(/([A-Za-z .'-]+),\s*([A-Z]{2})\s*$/);
-      if (cs) { set('f-city', cs[1].trim()); set('f-state', cs[2]); }
 
-      // No dedicated fields exist for these, so they land as a context line
-      // at the top of the description — visible, editable, nothing lost.
+      var city = q.get('city') || '', state = q.get('state') || '';
+      if (!city || !state) {
+        var cs = cityStateFrom(q.get('addr')) || cityStateFrom(site);
+        if (cs) { city = city || cs.city; state = state || cs.state; }
+      }
+      set('f-city', city);
+      set('f-state', state);
+
+      // ---- Context line in Scope of Work -----------------------------------
+      var trk = (q.get('tracking') || '').replace(/\D+/g, '') || q.get('tracking');
       var ctx = [];
-      if (q.get('tracking')) ctx.push('Umbrava Tracking #' + q.get('tracking'));
-      if (q.get('status'))   ctx.push('Status at import: ' + q.get('status'));
-      if (q.get('dne'))      ctx.push('Client DNE: $' + q.get('dne'));
-      if (q.get('gpPct'))    ctx.push('GP at import: ' + q.get('gpPct') + '%');
+      if (trk)              ctx.push('Umbrava Tracking #' + trk);
+      if (site)             ctx.push('Site: ' + site);
+      if (q.get('status'))  ctx.push('Status at import: ' + q.get('status'));
+      if (q.get('dne'))     ctx.push('Client DNE: $' + String(q.get('dne')).replace(/^\$+/, ''));
+      if (q.get('gpPct'))   ctx.push('GP at import: ' + q.get('gpPct') + '%');
       if (ctx.length) {
         var notes = document.getElementById('f-notes');
         if (notes) {
@@ -4368,7 +4390,7 @@ render();
         }
       }
 
-      console.info('[BWN RECEIVER] pre-filled Create Work Order from Umbrava context');
+      console.info('[BWN RECEIVER v2] pre-filled Create Work Order from Umbrava context');
     } catch (e) {
       console.warn('[BWN RECEIVER] pre-fill failed:', e);
     }
