@@ -67,7 +67,11 @@ async function writeBlob(container, name, data, metadata) {
   const flatMeta = {};
   for (const [k, v] of Object.entries(metadata || {})) {
     if (v === null || v === undefined) continue;
-    flatMeta[k] = typeof v === "string" ? v : String(v);
+    // Blob metadata is sent as HTTP headers and must be ASCII — non-ASCII
+    // chars (e.g. the en-dash in "Jan–May 2026") make the upload throw.
+    // Replace anything outside printable ASCII with a plain hyphen.
+    const s = typeof v === "string" ? v : String(v);
+    flatMeta[k] = s.replace(/[^\x20-\x7E]/g, "-");
   }
   await blob.upload(body, Buffer.byteLength(body), {
     blobHTTPHeaders: { blobContentType: "application/json" },

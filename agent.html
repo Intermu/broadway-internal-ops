@@ -329,7 +329,7 @@ a:focus-visible,button:focus-visible,[tabindex]:focus-visible{
         <button class="btn btn-sm" id="clear-snap-btn" style="background:#fef0ee;color:#8b1a1a;border:1px solid #f7c1c1;">Clear server snapshots</button>
       </div>
       <p style="font-size:10.5px;color:var(--muted);margin-top:8px;line-height:1.5;font-family:'DM Mono',monospace;letter-spacing:0.2px;">
-        Snapshots auto-save to Netlify — they persist across machines and browsers. These options exist for recovery: load a JSON backup if you've lost server data, or download today's snapshot as JSON for your own archive.
+        Snapshots auto-save to the data store — they persist across machines and browsers. These options exist for recovery: load a JSON backup if you've lost server data, or download today's snapshot as JSON for your own archive.
       </p>
     </div>
   </div>
@@ -508,7 +508,7 @@ a:focus-visible,button:focus-visible,[tabindex]:focus-visible{
   ytdFi.addEventListener("change",e=>{handleYtdFile(e.target.files[0]);e.target.value="";});
 })();
 
-// ── Broadway shared data store (Netlify Blobs) ───────────────────────────────
+// ── Broadway shared data store (Azure Blob via /api/data-store) ──────────────
 const DATA_API = "/api/data-store";
 
 async function bnDataGet(key){
@@ -557,7 +557,7 @@ function renderSnapState({today,previous,source}){
   const statusLine=document.getElementById("snap-status-line");
   if(today&&previous){
     setSnapBadge("ok","Auto-saved");
-    statusLine.textContent=`Auto-saved to ${source||"Netlify"} — comparison ready.`;
+    statusLine.textContent=`Auto-saved to ${source||"data store"} — comparison ready.`;
   }else if(today&&!previous){
     setSnapBadge("ok","Auto-saved");
     statusLine.textContent="Auto-saved. No previous snapshot yet — day-over-day will appear after tomorrow's upload.";
@@ -600,7 +600,7 @@ async function saveSnapshotToServer(snap){
     }else{
       try{const p=localStorage.getItem("bn_prev_snap");if(p)loadedPrevSnap=JSON.parse(p);}catch(e){}
     }
-    renderSnapState({today:server.today,previous:server.previous,source:"Netlify"});
+    renderSnapState({today:server.today,previous:server.previous,source:"data store"});
   }else{
     let prev=null,today=null;
     try{const p=localStorage.getItem("bn_prev_snap");if(p)prev=JSON.parse(p);}catch(e){}
@@ -634,7 +634,7 @@ async function saveSnapshotToServer(snap){
   }
   if(clearBtn){
     clearBtn.addEventListener("click",async ()=>{
-      if(!confirm("Clear server snapshots? This deletes today's and previous snapshots from Netlify. Browser cache will also be cleared. This cannot be undone."))return;
+      if(!confirm("Clear server snapshots? This deletes today's and previous snapshots from the data store. Browser cache will also be cleared. This cannot be undone."))return;
       try{await bnDataDelete("wo-snapshot-today");}catch(e){}
       loadedPrevSnap=null;
       localStorage.removeItem("bn_prev_snap");
@@ -794,7 +794,7 @@ function handleYtdFile(file){
       // Push to shared Blobs store so Diagnostic + Dashboard see the same data.
       // Pre-filter and pre-map the proposed-jobs subset (matches the shape the
       // Diagnostic builds internally). The full raw rows are NOT sent — that
-      // would routinely blow past Netlify Functions' 6 MB body limit on larger
+      // would routinely blow past the Function's request body limit on larger
       // YTD exports. Aggregated YTD (~1 KB) handles Dashboard YTD section.
       const proposedRows = rows.filter(r => {
         const p = String(r['Proposed?']||'').trim().toLowerCase();
@@ -838,7 +838,7 @@ function handleYtdFile(file){
         payloadBytes,
       }).then(res => {
         if(res && res.ok){
-          log(`☁ Pilot Revenue synced to Netlify (${payloadKb} KB · ${proposedRows.length} proposed of ${rows.length} rows). Diagnostic + Dashboard will now use this data.`);
+          log(`☁ Pilot Revenue synced to data store (${payloadKb} KB · ${proposedRows.length} proposed of ${rows.length} rows). Diagnostic + Dashboard will now use this data.`);
         } else {
           log(`⚠ Pilot Revenue saved locally — server sync failed (attempted ${payloadKb} KB). Check Network tab → data-store request for status code.`);
         }
@@ -1360,8 +1360,8 @@ function processData(raw,fname){
       if(newPrev&&(!prevSnap||newPrev.dateStr!==prevSnap.dateStr)){
         if(window._td){window._td.prevSnap=newPrev;}
       }
-      renderSnapState({today:todaySnap,previous:newPrev,source:"Netlify"});
-      log("📸 Snapshot saved to Netlify. "+(newPrev?`Previous: ${newPrev.dateStr}`:"No previous snapshot yet — will appear tomorrow."));
+      renderSnapState({today:todaySnap,previous:newPrev,source:"data store"});
+      log("📸 Snapshot saved to data store. "+(newPrev?`Previous: ${newPrev.dateStr}`:"No previous snapshot yet — will appear tomorrow."));
     }else{
       // Server failed — local fallback is already saved. Show warn state but keep going.
       renderSnapState({today:todaySnap,previous:prevSnap,source:"browser cache"});
@@ -1996,10 +1996,10 @@ async function generateExcel(){
         sizeBytes:buffer.byteLength,
         generatedAt:new Date().toISOString(),
       }).then(res=>{
-        if(res&&res.ok)log("☁ Workbook synced to Netlify — Dashboard will auto-load it.");
+        if(res&&res.ok)log("☁ Workbook synced to data store — Dashboard will auto-load it.");
         else log("⚠ Workbook saved locally only — server sync failed.");
       });
-    }catch(err){log("⚠ Could not sync workbook to Netlify: "+err.message);}
+    }catch(err){log("⚠ Could not sync workbook to data store: "+err.message);}
   }catch(err){log("❌ Excel error: "+err.message);console.error(err);}
   btn.disabled=false;btn.innerHTML="⬇ Download Unified Excel Workbook";
 }
@@ -2094,7 +2094,7 @@ Write a short morning intro for the daily ops email. 3 paragraphs max, using <p>
     }catch(err){
       log(`⚠️ Attempt ${i} failed: ${err.message}`);
       if(err.message.includes("timed out")&&i===1){
-        log("💡 Tip: Make sure you have deployed to Netlify and are accessing via the Netlify URL, not a local file.");
+        log("💡 Tip: Make sure you are accessing the deployed site URL, not a local file.");
       }
       if(i<3)await new Promise(r=>setTimeout(r,1500));
     }
