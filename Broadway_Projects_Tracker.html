@@ -4316,6 +4316,70 @@ loadStatMap();
 loadSchedTpls();
 loadHolidays();
 render();
+
+/* ============================================================================
+   BWN LAUNCHER RECEIVER — Projects Job Board
+   Paste this at the VERY END of the big inline <script> in
+   Broadway_Projects_Tracker.html (after all function definitions, so
+   openAdd() exists). It is inert unless the page is opened with launcher
+   params, so normal use of the Job Board is completely unaffected.
+
+   Reads:  ?tracking=&wo=&client=&location=&status=&dne=&gpPct=
+   Does:   opens the Create Work Order form pre-filled from the Umbrava WO.
+   ========================================================================== */
+(function () {
+  'use strict';
+  var q = new URLSearchParams(window.location.search);
+  if (!q.get('wo') && !q.get('tracking')) return;   // not a launcher handoff
+
+  function set(id, v) {
+    var el = document.getElementById(id);
+    if (!el || !v) return;
+    el.value = v;
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+
+  function run() {
+    try {
+      if (typeof openAdd === 'function') openAdd();
+
+      set('f-wo', q.get('wo'));
+      set('f-client', q.get('client'));
+
+      // Umbrava location strings look like "Pilot Travel Center #PFJ 0457".
+      // Keep the raw string in Loc #; pull a trailing "City, ST" if present.
+      var loc = q.get('location') || '';
+      set('f-loc', loc);
+      var cs = loc.match(/([A-Za-z .'-]+),\s*([A-Z]{2})\s*$/);
+      if (cs) { set('f-city', cs[1].trim()); set('f-state', cs[2]); }
+
+      // No dedicated fields exist for these, so they land as a context line
+      // at the top of the description — visible, editable, nothing lost.
+      var ctx = [];
+      if (q.get('tracking')) ctx.push('Umbrava Tracking #' + q.get('tracking'));
+      if (q.get('status'))   ctx.push('Status at import: ' + q.get('status'));
+      if (q.get('dne'))      ctx.push('Client DNE: $' + q.get('dne'));
+      if (q.get('gpPct'))    ctx.push('GP at import: ' + q.get('gpPct') + '%');
+      if (ctx.length) {
+        var notes = document.getElementById('f-notes');
+        if (notes) {
+          notes.value = ctx.join(' | ') + (notes.value ? '\n' + notes.value : '');
+          notes.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+      }
+
+      console.info('[BWN RECEIVER] pre-filled Create Work Order from Umbrava context');
+    } catch (e) {
+      console.warn('[BWN RECEIVER] pre-fill failed:', e);
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', run);
+  } else {
+    run();
+  }
+})();
 </script>
 </body>
 </html>
