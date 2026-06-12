@@ -1370,16 +1370,22 @@ function processData(raw,fname){
   });
 
   window._td={df,wifi,rf,svc,total,metSlaPct,over30,over30Pct,turningTmrw,atRiskWeek,valAll,matAll,matNeedMaterial,matOrdered,matPendingSupplier,matPendingClient,matFabrication,matNeedsReview,propPipe,cipAll,propTurnoverLive,highRisk,watch,ok,fname,prevSnap,todaySnap};
+
+  // Auto-build + sync the workbook to the data store so the Dashboard
+  // refreshes on upload alone — no Download click needed. Silent mode
+  // skips the file download and button UI; failures only log.
+  generateExcel({silent:true});
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
 // EXCEL GENERATION
 // ══════════════════════════════════════════════════════════════════════════════
-async function generateExcel(){
-  const d=window._td;if(!d){alert("Upload a file first.");return;}
+async function generateExcel(opts){
+  const silent=!!(opts&&opts.silent);
+  const d=window._td;if(!d){if(!silent)alert("Upload a file first.");return;}
   const btn=document.getElementById("xl-btn");
-  btn.disabled=true;btn.innerHTML='Building Excel… <span class="spinner"></span>';
-  log("Building unified workbook...");
+  if(!silent){btn.disabled=true;btn.innerHTML='Building Excel… <span class="spinner"></span>';}
+  log(silent?"Building unified workbook for Dashboard sync...":"Building unified workbook...");
   try{
     const wb=new ExcelJS.Workbook();wb.creator="Broadway National";wb.created=new Date();
     const{df,wifi,rf,svc,total,metSlaPct,over30,over30Pct,turningTmrw,atRiskWeek,
@@ -1978,13 +1984,15 @@ async function generateExcel(){
 
     // ── Download ─────────────────────────────────────────────────────────────
     const buffer=await wb.xlsx.writeBuffer();
-    const blob=new Blob([buffer],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
-    const url=URL.createObjectURL(blob);
-    const a=document.createElement('a');a.href=url;
     const wbFilename=`Broadway_Unified_Ops_${DAY_STR}_${DATE_STR.replace(/\//g,"-")}.xlsx`;
-    a.download=wbFilename;
-    a.click();URL.revokeObjectURL(url);
-    log(`✅ Workbook downloaded`);
+    if(!silent){
+      const blob=new Blob([buffer],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement('a');a.href=url;
+      a.download=wbFilename;
+      a.click();URL.revokeObjectURL(url);
+      log(`✅ Workbook downloaded`);
+    }
 
     // Also push the workbook to Blobs so the Dashboard can auto-load it.
     try{
@@ -2001,7 +2009,7 @@ async function generateExcel(){
       });
     }catch(err){log("⚠ Could not sync workbook to data store: "+err.message);}
   }catch(err){log("❌ Excel error: "+err.message);console.error(err);}
-  btn.disabled=false;btn.innerHTML="⬇ Download Unified Excel Workbook";
+  if(!silent){btn.disabled=false;btn.innerHTML="⬇ Download Unified Excel Workbook";}
 }
 
 document.getElementById("xl-btn").addEventListener("click",generateExcel);
