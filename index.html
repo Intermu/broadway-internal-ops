@@ -17,7 +17,7 @@
     // loaded inside a frame (e.g. a tool path fell back to index), do NOT
     // redirect — that would load the hub inside the hub and stack a header.
     if (window.self === window.top) {
-      location.replace('./Broadway_Projects_Tracker.html');
+      location.replace('./Broadway_Projects_Tracker.html' + location.search + location.hash);
     } else {
       document.getElementById('m').textContent = 'This tool could not be loaded at this path.';
     }
