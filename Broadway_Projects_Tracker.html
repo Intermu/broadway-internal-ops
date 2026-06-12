@@ -51,6 +51,16 @@ body{background:var(--bg);color:var(--t1);font-family:'DM Sans',sans-serif;heigh
 .btn-ghost{background:transparent;border:1px solid var(--b2);color:var(--t3)}.btn-ghost:hover{background:var(--card2);color:var(--t1)}
 .btn-red{background:#fee2e2;border:1px solid #fca5a5;color:var(--red)}.btn-red:hover{background:#fecaca}
 
+/* ── USER CHIP (signed-in identity from SWA /.auth/me) ── */
+.user-chip{position:relative}
+.user-chip-btn{width:30px;height:30px;border-radius:50%;border:none;cursor:pointer;background:var(--green-d);color:#fff;font-family:'DM Mono',monospace;font-size:11px;font-weight:700;letter-spacing:.5px;display:flex;align-items:center;justify-content:center;transition:filter .15s}
+.user-chip-btn:hover{filter:brightness(1.18)}
+.user-chip-menu{display:none;position:absolute;top:36px;right:0;background:#fff;border:1px solid var(--b1);border-radius:9px;box-shadow:0 6px 20px rgba(0,0,0,.12);padding:10px 14px;min-width:220px;z-index:300}
+.user-chip-menu.open{display:block}
+.user-chip-email{font-size:12px;font-weight:700;color:var(--t1);margin-bottom:8px;word-break:break-all}
+.user-chip-logout{display:inline-block;font-size:11px;font-weight:700;color:var(--red);text-decoration:none;border:1px solid #fca5a5;background:#fee2e2;border-radius:7px;padding:4px 10px}
+.user-chip-logout:hover{background:#fecaca}
+
 /* ── STATS BAR ── */
 .sbar{background:#fff;border-bottom:1px solid var(--b1);padding:5px 16px;display:flex;gap:16px;flex-shrink:0;overflow-x:auto;align-items:center}
 .filt-toggle{display:inline-flex;align-items:center;gap:6px;background:var(--green-l);border:1px solid #bbf7d0;color:var(--green-d);border-radius:7px;padding:3px 11px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;transition:all .12s;flex-shrink:0}
@@ -724,6 +734,13 @@ html.embedded .hdr{display:none}
     </label>
     <button class="btn btn-ghost" onclick="exportExcel()">&#8595; Export</button>
     <button class="btn btn-g" onclick="openAdd()">+ New Job</button>
+    <div class="user-chip" id="user-chip" style="display:none">
+      <button class="user-chip-btn" id="user-chip-btn" onclick="toggleUserMenu(event)" title="Signed in"></button>
+      <div class="user-chip-menu" id="user-chip-menu">
+        <div class="user-chip-email" id="user-chip-email"></div>
+        <a class="user-chip-logout" href="/.auth/logout?post_logout_redirect_uri=/">Logout</a>
+      </div>
+    </div>
   </div>
 
 </div>
@@ -2270,6 +2287,22 @@ function editStages(job){
 const EMBED_TOOLS = { agent:'agent.html', dashboard:'Broadway_Unified_Ops_Dashboard.html', diagnostic:'Pilot_Proposal_Diagnostic.html' };
 const _toolFrames = {};
 if(window.self!==window.top) document.documentElement.classList.add('embedded');
+
+// ── Signed-in user chip (SWA built-in /.auth/me) ──────────────────────────────
+function toggleUserMenu(e){e.stopPropagation();document.getElementById('user-chip-menu').classList.toggle('open');}
+document.addEventListener('click',()=>{const m=document.getElementById('user-chip-menu');if(m)m.classList.remove('open');});
+setTimeout(()=>{ // deferred so a snapshot override appended before </body> has run first
+  if(window.BROADWAY_SNAPSHOT) return;                       // saved copies: no live auth fetch
+  if(document.documentElement.classList.contains('embedded')) return; // framed: header hidden anyway
+  fetch('/.auth/me').then(r=>r.ok?r.json():null).then(d=>{
+    const p=d&&d.clientPrincipal; if(!p) return;             // local file / not logged in: stay hidden
+    const email=p.userDetails||'';
+    const initials=(email.split('@')[0]||'?').slice(0,2).toUpperCase();
+    document.getElementById('user-chip-btn').textContent=initials;
+    document.getElementById('user-chip-email').textContent=email;
+    document.getElementById('user-chip').style.display='inline-flex';
+  }).catch(()=>{});
+},0);
 function ensureToolFrame(key){
   if(_toolFrames[key]) return _toolFrames[key];
   const host=document.getElementById('tool-host');
