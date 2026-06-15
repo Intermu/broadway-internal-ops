@@ -1,5 +1,6 @@
 {
   "auth": {
+    "rolesSource": "/api/get-roles",
     "identityProviders": {
       "azureActiveDirectory": {
         "registration": {
@@ -12,11 +13,15 @@
   },
   "routes": [
   {
-    "route": "/api/*",
-    "allowedRoles": ["broadway_employee"]
+    "route": "/.auth/*"
   },
   {
-    "route": "/.auth/*"
+    "route": "/api/get-roles",
+    "allowedRoles": ["anonymous", "authenticated"]
+  },
+  {
+    "route": "/api/*",
+    "allowedRoles": ["broadway_employee"]
   },
   {
     "route": "/login",
@@ -25,6 +30,18 @@
   {
     "route": "/logout",
     "redirect": "/.auth/logout"
+  },
+  {
+    "route": "/Pilot_Proposal_Diagnostic.html",
+    "allowedRoles": ["ops_manager"]
+  },
+  {
+    "route": "/Broadway_Unified_Ops_Dashboard.html",
+    "allowedRoles": ["ops_manager"]
+  },
+  {
+    "route": "/PIPRoadmap*",
+    "allowedRoles": ["ops_manager"]
   },
   {
     "route": "/*",

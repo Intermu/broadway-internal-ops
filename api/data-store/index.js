@@ -16,6 +16,33 @@ const VALID_CLIENTS = ["pilot"];
 // without a 'client' param; once that count hits zero for ~24h, delete).
 const LEGACY_KEYS = ["pilot-revenue", "wo-snapshot-today", "wo-snapshot-previous", "workbook"];
 
+// ── Role gating ──────────────────────────────────────────────────────────
+// Slots holding financial data (GP / revenue) require Operations Manager (L4)
+// or above to READ. Everything else stays at the broadway_employee gate that
+// the SWA route config already enforces. Server-side because the front-end /
+// route checks are convenience only — this is the real boundary.
+const FINANCIAL_SLOTS = ["revenue", "pilot-revenue", "revenue-gp"];
+const ROLE_LEVELS = ["ops_coordinator", "lead_ops_coordinator", "ops_supervisor", "ops_manager", "dir_ops", "vp_ops"];
+const MIN_FINANCIAL_LEVEL = 4; // ops_manager
+
+function principalFromReq(req) {
+  try {
+    const h = req.headers && (req.headers["x-ms-client-principal"] || req.headers["X-MS-CLIENT-PRINCIPAL"]);
+    if (!h) return null;
+    return JSON.parse(Buffer.from(h, "base64").toString("utf-8"));
+  } catch (e) {
+    return null;
+  }
+}
+
+function roleLevelFromReq(req) {
+  const p = principalFromReq(req);
+  const roles = (p && p.userRoles) || [];
+  let max = 0;
+  ROLE_LEVELS.forEach((slug, i) => { if (roles.indexOf(slug) !== -1) max = Math.max(max, i + 1); });
+  return max;
+}
+
 let containerClientPromise = null;
 
 function getContainerClient() {
@@ -173,6 +200,14 @@ module.exports = async function (context, req) {
       return;
     }
     const { client, slot, name: targetName } = resolved;
+
+    // Financial slots: require Operations Manager (L4)+ to READ. Fail closed.
+    if (req.method === "GET" && FINANCIAL_SLOTS.includes(slot)) {
+      if (roleLevelFromReq(req) < MIN_FINANCIAL_LEVEL) {
+        context.res = { status: 403, headers: { "Content-Type": "application/json" }, body: { error: "Insufficient role for financial data" } };
+        return;
+      }
+    }
 
     if (req.method === "GET") {
       const result = await readBlob(container, targetName);
