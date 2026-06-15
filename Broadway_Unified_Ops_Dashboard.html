@@ -139,6 +139,20 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .tool-mode-bar .hub-btn:hover{background:rgba(46,204,113,0.32);color:#fff;}
 .tool-mode-bar .gear-btn{padding:4px 7px;border-radius:5px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);color:white;font-size:11px;cursor:pointer;font-family:inherit;}
 .tool-mode-bar .gear-btn:hover{background:rgba(255,255,255,0.18);}
+/* Global job search (Phase 1) */
+.gsearch{position:relative;}
+.gsearch input{background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.25);color:#fff;height:26px;padding:0 9px;border-radius:5px;font-size:11px;font-family:'DM Sans',sans-serif;width:180px;}
+.gsearch input::placeholder{color:rgba(255,255,255,0.6);}
+.gsearch input:focus{outline:none;border-color:#2ECC71;background:rgba(255,255,255,0.18);}
+.gsearch-results{position:absolute;top:32px;right:0;width:340px;max-height:360px;overflow-y:auto;background:#fff;border:1px solid var(--border);border-radius:8px;box-shadow:var(--shadow-md);z-index:200;display:none;}
+.gsearch-results.open{display:block;}
+.gs-item{display:block;width:100%;text-align:left;background:none;border:0;border-bottom:1px solid #f1f5f9;padding:8px 11px;cursor:pointer;font-family:'DM Sans',sans-serif;}
+.gs-item:hover{background:#f6f9f7;}
+.gs-item:last-child{border-bottom:0;}
+.gs-top{display:flex;align-items:center;justify-content:space-between;gap:8px;}
+.gs-id{font-family:'DM Mono',monospace;font-weight:700;font-size:12px;color:var(--green-dk);}
+.gs-meta{display:flex;align-items:center;gap:8px;font-size:10px;color:var(--muted);margin-top:3px;flex-wrap:wrap;}
+.gs-empty{padding:12px;font-size:11px;color:var(--muted);text-align:center;}
 
 /* ─── NEW UPLOAD PANEL DESIGN ─── */
 .upload-panel-wrap{padding:14px 28px 0;background:#f8fafc;}
@@ -511,6 +525,10 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible{
   <span class="brand">Broadway National</span>
   <span class="role-pill">STAGE 2 · DASHBOARD</span>
   <span class="filler"></span>
+  <span class="gsearch">
+    <input id="gsearch-input" type="text" placeholder="Find a job…" autocomplete="off" oninput="gsearch(this.value)" onfocus="gsearch(this.value)">
+    <div class="gsearch-results" id="gsearch-results"></div>
+  </span>
   <button class="gear-btn" id="pin-view-btn" onclick="togglePinView()" title="Open the Dashboard to this view by default">☆ Pin view</button>
   <button class="gear-btn" id="density-btn" onclick="toggleDensity()" title="Toggle table row density">⊟ Compact</button>
   <a class="cross-btn" href="./agent.html" title="Open the Agent">Agent ↗</a>
@@ -985,6 +1003,41 @@ function applyPinnedView(){
   }
   updatePinBtn();
 }
+// Global job search (Phase 1). Find any job by ID, location, coordinator, or FM
+// from any view; a result jumps to that coordinator's view (numeric index only,
+// so names with apostrophes/hyphens can't break the click handler).
+let _gsT;
+function gsearch(q){ clearTimeout(_gsT); _gsT=setTimeout(()=>_gsearchRun(q),150); }
+function _gsearchRun(q){
+  const box=document.getElementById('gsearch-results'); if(!box) return;
+  q=(q||'').trim().toLowerCase();
+  if(!q){ box.classList.remove('open'); box.innerHTML=''; return; }
+  const hits=JOBS.filter(j=>(
+    String(j.jobId||'').toLowerCase().includes(q) ||
+    String(j.location||'').toLowerCase().includes(q) ||
+    String(j.coordinator||'').toLowerCase().includes(q) ||
+    String(j.fm||'').toLowerCase().includes(q)
+  )).slice(0,8);
+  if(!hits.length){ box.innerHTML='<div class="gs-empty">No matching jobs</div>'; box.classList.add('open'); return; }
+  const order=window._coordOrder||[];
+  box.innerHTML=hits.map(j=>{
+    const idx=order.indexOf(j.coordinator);
+    const click = idx>=0 ? `onclick="gsearchOpenIdx(${idx})"` : '';
+    return `<button class="gs-item" ${click}>
+      <div class="gs-top"><span class="gs-id">${escapeHtml(j.jobId)}</span>${statusBadge(j.status)}</div>
+      <div class="gs-meta"><span class="age-pill ${ageCls(j.aged)}">${j.aged}d</span><span>${escapeHtml(j.coordinator||'\u2014')}</span><span>${escapeHtml(j.location||'')}</span><span>${fmt$0(j.amount||0)}</span></div>
+    </button>`;
+  }).join('');
+  box.classList.add('open');
+}
+function gsearchOpenIdx(idx){
+  const box=document.getElementById('gsearch-results'); if(box) box.classList.remove('open');
+  const inp=document.getElementById('gsearch-input'); if(inp) inp.value='';
+  const btn=document.querySelector('.nav-btn[data-view="coord-'+idx+'"]');
+  if(btn) nav('coord-'+idx, btn);
+}
+document.addEventListener('click', e=>{ if(!e.target.closest('.gsearch')){ const b=document.getElementById('gsearch-results'); if(b) b.classList.remove('open'); } });
+document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ const b=document.getElementById('gsearch-results'); if(b) b.classList.remove('open'); } });
 function toggleUploadBanner() {
   const banner = document.getElementById('uploadBanner');
   const btn = document.getElementById('toggleBannerBtn');
