@@ -60,7 +60,8 @@
     "Referrer-Policy": "strict-origin-when-cross-origin"
   },
   "mimeTypes": {
-    ".json": "application/json"
+    ".json": "application/json",
+    ".js": "text/javascript"
   },
   "navigationFallback": {
     "rewrite": "/index.html",
