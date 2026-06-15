@@ -314,6 +314,9 @@ table.paginated[data-page-size="100"] tbody tr:nth-child(n+101){display:none;}
 table.paginated[data-page-size="200"] tbody tr:nth-child(n+201){display:none;}
 table.paginated[data-page-size="9999"] tbody tr{display:table-row;}
 .data-table tbody td{padding:8px 9px;border-bottom:1px solid #f1f5f9;vertical-align:top;}
+/* Density toggle (Track B): compact compresses row height only; column widths unchanged */
+html.density-compact .data-table thead th{padding-top:3px;padding-bottom:3px;}
+html.density-compact .data-table tbody td{padding-top:3px;padding-bottom:3px;}
 .data-table tbody tr:hover{background:#fafffe;}
 .data-table tbody tr:last-child td{border-bottom:none;}
 .age-pill{font-family:'DM Mono',monospace;font-weight:700;font-size:10px;padding:2px 6px;border-radius:99px;}
@@ -508,6 +511,8 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible{
   <span class="brand">Broadway National</span>
   <span class="role-pill">STAGE 2 · DASHBOARD</span>
   <span class="filler"></span>
+  <button class="gear-btn" id="pin-view-btn" onclick="togglePinView()" title="Open the Dashboard to this view by default">☆ Pin view</button>
+  <button class="gear-btn" id="density-btn" onclick="toggleDensity()" title="Toggle table row density">⊟ Compact</button>
   <a class="cross-btn" href="./agent.html" title="Open the Agent">Agent ↗</a>
   <a class="cross-btn" href="./Pilot_Proposal_Diagnostic.html" title="Open the Diagnostic">Diagnostic ↗</a>
 </div>
@@ -772,6 +777,20 @@ function statusBadge(s) {
   // s comes from Excel "Status Category" — escape before injecting
   return `<span class="badge ${cls}">${escapeHtml(s)}</span>`;
 }
+// Table density toggle (Track B). Compact compresses row height; persists per user.
+function toggleDensity(){
+  const compact = document.documentElement.classList.toggle('density-compact');
+  const btn = document.getElementById('density-btn');
+  if(btn) btn.textContent = compact ? '⊞ Comfortable' : '⊟ Compact';
+  try{ localStorage.setItem('bn_density', compact?'compact':'comfortable'); }catch(_){}
+}
+try{
+  if(localStorage.getItem('bn_density')==='compact'){
+    document.documentElement.classList.add('density-compact');
+    const _setLbl=()=>{ const b=document.getElementById('density-btn'); if(b) b.textContent='⊞ Comfortable'; };
+    if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',_setLbl); else _setLbl();
+  }
+}catch(_){}
 function toast(msg) {
   const t=document.getElementById('toast');
   t.textContent=msg; t.classList.add('show');
@@ -928,6 +947,7 @@ function nav(view, btn) {
   if(btn) btn.classList.add('active');
   currentView = view;
   render(view);
+  updatePinBtn();
   // Re-apply persistent filters after render
   setTimeout(restoreFilters, 0);
   // Auto-close mobile sidebar on selection
@@ -939,6 +959,32 @@ function nav(view, btn) {
   }
 }
 
+// Pinned default view (Phase 1). Opens the Dashboard to a chosen view per user
+// (e.g. Maria → Over-30 Review). Persisted in localStorage; restored once on load.
+function _pinnedView(){ try{ return localStorage.getItem('bn_pinned_view'); }catch(_){ return null; } }
+function updatePinBtn(){
+  const b=document.getElementById('pin-view-btn'); if(!b) return;
+  const isPinned = _pinnedView()===currentView;
+  b.textContent = isPinned ? '★ Pinned' : '☆ Pin view';
+  b.title = isPinned ? 'This view opens by default — click to clear' : 'Open the Dashboard to this view by default';
+}
+function togglePinView(){
+  try{
+    if(_pinnedView()===currentView){ localStorage.removeItem('bn_pinned_view'); toast('Default view cleared'); }
+    else { localStorage.setItem('bn_pinned_view', currentView); toast('Pinned — Dashboard opens here next time'); }
+  }catch(_){}
+  updatePinBtn();
+}
+function applyPinnedView(){
+  if(window._pinnedApplied) return;
+  window._pinnedApplied = true;
+  const pinned=_pinnedView();
+  if(pinned && pinned!==currentView){
+    const btn=document.querySelector('.nav-btn[data-view="'+pinned+'"]');
+    if(btn) nav(pinned, btn); // stays on overview if the pinned view isn't present
+  }
+  updatePinBtn();
+}
 function toggleUploadBanner() {
   const banner = document.getElementById('uploadBanner');
   const btn = document.getElementById('toggleBannerBtn');
@@ -1895,6 +1941,7 @@ function handleFile(file) {
       // Drive the new upload panel UI: success state + auto-collapse to slim strip
       setDashState('success', file.name, `${shortDate} · ${JOBS.length} jobs · loaded just now`);
       initCounts(); render(currentView);
+      applyPinnedView();
       toast(`✅ Loaded ${JOBS.length} jobs from ${file.name}`);
       saveOver30Snapshot(); // fire-and-forget: upsert this audit date into blob history
     } catch(err) {
