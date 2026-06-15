@@ -33,15 +33,15 @@
   },
   {
     "route": "/Pilot_Proposal_Diagnostic.html",
-    "allowedRoles": ["ops_manager"]
+    "allowedRoles": ["broadway_employee"]
   },
   {
     "route": "/Broadway_Unified_Ops_Dashboard.html",
-    "allowedRoles": ["ops_manager"]
+    "allowedRoles": ["broadway_employee"]
   },
   {
     "route": "/PIPRoadmap*",
-    "allowedRoles": ["ops_manager"]
+    "allowedRoles": ["broadway_employee"]
   },
   {
     "route": "/*",
