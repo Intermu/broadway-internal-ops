@@ -1243,6 +1243,29 @@ function render(view) {
 // ── OVERVIEW ─────────────────────────────────────────────────────────────
 // Over-30 heat color by share of a coordinator's jobs aged >30 days
 function o30HeatColor(share){ return share>=0.30?'var(--red)':share>=0.15?'var(--amber)':'var(--green)'; }
+// Threshold flags (Phase 1). Shows a single attention banner on the overview
+// only when something is actually off. Thresholds default sensibly and can be
+// overridden via localStorage.bn_thresholds = {"slaMin":80,"over30PctMax":15}.
+function bnThresholds(){
+  let t={slaMin:80, over30PctMax:15};
+  try{ const s=JSON.parse(localStorage.getItem('bn_thresholds')||'{}'); if(s&&typeof s==='object') t={...t,...s}; }catch(_){}
+  return t;
+}
+function thresholdBanner(agg){
+  if(!window._realData || !agg.total) return ''; // never fire on empty/sample data
+  const t=bnThresholds();
+  const sla=parseFloat(agg.slaRate)||0;
+  const o30=agg.over30.length;
+  const o30Pct = agg.total>0 ? (o30/agg.total*100) : 0;
+  const flags=[]; let red=false;
+  if(sla < t.slaMin){ flags.push(`Met SLA <strong>${agg.slaRate}%</strong> is below the ${t.slaMin}% minimum`); red=true; }
+  if(o30Pct > t.over30PctMax){ flags.push(`Over-30 jobs are <strong>${o30Pct.toFixed(1)}%</strong> of the queue (${o30}), above the ${t.over30PctMax}% line`); }
+  if(!flags.length) return '';
+  const bg=red?'#fef2f2':'#fffbeb', bd=red?'#fecaca':'#fde68a', bl=red?'#dc2626':'#d97706', fg=red?'#7f1d1d':'#78350f', icon=red?'\ud83d\udd34':'\u26a0\ufe0f';
+  return `<div style="background:${bg};border:1px solid ${bd};border-left:4px solid ${bl};border-radius:6px;padding:9px 14px;margin-bottom:12px;font-size:11.5px;color:${fg};">
+      <strong>${icon} Needs attention:</strong> ${flags.join(' &nbsp;\u00b7&nbsp; ')}
+    </div>`;
+}
 function renderOverview(mc, agg) {
   const {total,totalAmt,hr,watch,ok,over30,slaRate,service,wifi,retrofit,coords} = agg;
   const over30Pct = total>0?(over30.length/total*100).toFixed(1):0;
@@ -1272,6 +1295,7 @@ function renderOverview(mc, agg) {
     <div class="page-title">Daily Ops Overview</div>
     <div class="page-sub">${document.getElementById('reportDateLabel').textContent} · ${total} active jobs</div>
 
+    ${thresholdBanner(agg)}
     <!-- Parse summary banner -->
     <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-left:4px solid #16a34a;border-radius:6px;padding:8px 14px;margin-bottom:12px;font-size:11px;color:#14532d;font-family:'DM Mono',monospace;">
       <strong>📋 Parse summary:</strong> Loaded <strong>${total}</strong> jobs · <strong>${fmt$0(totalAmt)}</strong> approved · HIGH RISK: <strong>${hr.length}</strong> · Over 30: <strong>${over30.length}</strong> (${over30Pct}%) · Service: <strong>${service.length}</strong> · WIFI: <strong>${wifi.length}</strong> · Retrofit: <strong>${retrofit.length}</strong> · ${Object.keys(coords).length} coordinators
