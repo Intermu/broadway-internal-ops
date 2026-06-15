@@ -5,10 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <!-- Content Security Policy: applied via <meta> so it travels with any saved
      download (the agent emits HTML emails). 'unsafe-inline' for scripts is needed
-     for the inline blocks; connect-src 'self' restricts the agent's network
+     for the inline blocks; 'unsafe-eval' is required by ExcelJS's browser bundle
+     (it uses new Function() during init); connect-src 'self' restricts the agent's network
      calls to the SWA's own /api/* endpoints (which proxy Anthropic + the Umbrava
      MCP). If a future change adds a direct external call, allowlist it here. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com 'unsafe-inline'; style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; base-uri 'self'; form-action 'none'; frame-ancestors 'self';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com 'unsafe-inline' 'unsafe-eval'; style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; base-uri 'self'; form-action 'none'; frame-ancestors 'self';">
 <title>Broadway National | Unified Ops Agent</title>
 <style>html.embedded .header,html.embedded .tool-mode-bar{display:none}</style>
 <script>if(window.self!==window.top)document.documentElement.classList.add('embedded');</script>
