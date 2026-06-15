@@ -64,6 +64,6 @@
   },
   "navigationFallback": {
     "rewrite": "/index.html",
-    "exclude": ["/*.html", "/api/*", "/.auth/*"]
+    "exclude": ["/*.html", "/*.js", "/api/*", "/.auth/*"]
   }
 }

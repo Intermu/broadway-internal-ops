@@ -12,19 +12,20 @@
 <title>Broadway National | Unified Ops Agent</title>
 <style>html.embedded .header,html.embedded .tool-mode-bar{display:none}</style>
 <script>if(window.self!==window.top)document.documentElement.classList.add('embedded');</script>
-<!-- Subresource Integrity: pin xlsx@0.18.5 and exceljs@4.3.0. Hashes below are
-     LIVE values, verified against the npm dist files (identical to cdnjs).
-     If either library version changes, recompute:
+<!-- Subresource Integrity: xlsx@0.18.5 stays on cdnjs (its build matches npm).
+     exceljs@4.3.0 is SELF-HOSTED at /exceljs-4.3.0.min.js because cdnjs serves a
+     different exceljs.min.js build than npm, so an npm-derived hash gets rejected
+     against the cdnjs copy (silent block → "ExcelJS is not defined"). The local
+     file IS the npm dist file, so the hash below matches. If either version
+     changes, recompute:
        npm pack <pkg>@<version> → extract dist file →
        openssl dgst -sha384 -binary <file> | openssl base64 -A
-     A wrong hash makes the browser silently refuse to load the library —
-     symptom is "XLSX is not defined" / "ExcelJS is not defined" at runtime. -->
+     A wrong hash makes the browser silently refuse to load the library. -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"
         integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw"
         crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"
-        integrity="sha384-P7KKlGD3Ng66Ds7oTliLzTnol6DbK+k7PafNYXIBDQ4b5eFWtmqctplDVOxslglR"
-        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script src="/exceljs-4.3.0.min.js"
+        integrity="sha384-P7KKlGD3Ng66Ds7oTliLzTnol6DbK+k7PafNYXIBDQ4b5eFWtmqctplDVOxslglR"></script>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 :root{
