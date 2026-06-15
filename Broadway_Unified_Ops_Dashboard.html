@@ -531,6 +531,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible{
   </span>
   <button class="gear-btn" id="pin-view-btn" onclick="togglePinView()" title="Open the Dashboard to this view by default">☆ Pin view</button>
   <button class="gear-btn" id="density-btn" onclick="toggleDensity()" title="Toggle table row density">⊟ Compact</button>
+  <button class="gear-btn" id="export-view-btn" onclick="exportView()" title="Download the current view's filtered table as Excel">⎘ Export</button>
   <a class="cross-btn" href="./agent.html" title="Open the Agent">Agent ↗</a>
   <a class="cross-btn" href="./Pilot_Proposal_Diagnostic.html" title="Open the Diagnostic">Diagnostic ↗</a>
 </div>
@@ -1038,6 +1039,28 @@ function gsearchOpenIdx(idx){
 }
 document.addEventListener('click', e=>{ if(!e.target.closest('.gsearch')){ const b=document.getElementById('gsearch-results'); if(b) b.classList.remove('open'); } });
 document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ const b=document.getElementById('gsearch-results'); if(b) b.classList.remove('open'); } });
+// Export the current view's filtered table to xlsx (Phase 1). Reads the largest
+// .data-table in #mainContent, visible rows only (filters applied; pagination cap
+// ignored so the full filtered set exports). Values exported as shown on screen.
+function exportView(){
+  const tables=[...document.querySelectorAll('#mainContent table.data-table')];
+  if(!tables.length){ toast('Nothing to export in this view'); return; }
+  const tbl=tables.reduce((a,b)=> (b.querySelectorAll('tbody tr').length > a.querySelectorAll('tbody tr').length ? b : a));
+  const headers=[...tbl.querySelectorAll('thead th')].map(th=>th.textContent.trim());
+  const rows=[...tbl.querySelectorAll('tbody tr')]
+    .filter(tr=>tr.style.display!=='none')
+    .map(tr=>[...tr.cells].map(td=>td.textContent.trim().replace(/\s+/g,' ')));
+  if(!rows.length){ toast('No rows to export (check filters)'); return; }
+  try{
+    const ws=XLSX.utils.aoa_to_sheet([headers, ...rows]);
+    const wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'View');
+    const d=window._reportDate ? window._reportDate.toISOString().slice(0,10) : new Date().toISOString().slice(0,10);
+    const safeView=(currentView||'view').replace(/[^a-z0-9_-]+/gi,'_');
+    XLSX.writeFile(wb, `Broadway_${safeView}_${d}.xlsx`);
+    toast(`Exported ${rows.length} row${rows.length===1?'':'s'} to Excel`);
+  }catch(err){ toast('Export failed: '+err.message); }
+}
 function toggleUploadBanner() {
   const banner = document.getElementById('uploadBanner');
   const btn = document.getElementById('toggleBannerBtn');
