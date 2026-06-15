@@ -301,6 +301,11 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .data-table th.sortable::after{content:'↕';position:absolute;right:6px;top:50%;transform:translateY(-50%);font-size:10px;opacity:0.4;}
 .data-table th.sortable.sort-asc::after{content:'↑';opacity:1;color:var(--green-dk);}
 .data-table th.sortable.sort-desc::after{content:'↓';opacity:1;color:var(--green-dk);}
+/* Over-30 inline heat (Track B): share of a coordinator's jobs aged >30 days */
+.o30-heat{display:inline-flex;align-items:center;gap:7px;}
+.o30-heat .o30-num{min-width:16px;text-align:right;}
+.o30-bar{width:44px;height:6px;border-radius:3px;background:#eef2f6;overflow:hidden;flex-shrink:0;}
+.o30-bar i{display:block;height:100%;border-radius:3px;transition:width .4s cubic-bezier(.2,.7,.3,1);}
 .pg-btn{background:#f1f5f9;border:1px solid var(--border);border-radius:3px;padding:2px 8px;font-size:10px;cursor:pointer;color:var(--muted);font-family:inherit;}
 .pg-btn:hover{border-color:var(--green);color:var(--green-dk);}
 .pg-btn.pg-active{background:var(--green-dk);color:#fff;border-color:var(--green-dk);}
@@ -1114,6 +1119,8 @@ function render(view) {
 }
 
 // ── OVERVIEW ─────────────────────────────────────────────────────────────
+// Over-30 heat color by share of a coordinator's jobs aged >30 days
+function o30HeatColor(share){ return share>=0.30?'var(--red)':share>=0.15?'var(--amber)':'var(--green)'; }
 function renderOverview(mc, agg) {
   const {total,totalAmt,hr,watch,ok,over30,slaRate,service,wifi,retrofit,coords} = agg;
   const over30Pct = total>0?(over30.length/total*100).toFixed(1):0;
@@ -1132,7 +1139,7 @@ function renderOverview(mc, agg) {
       <td><span class="badge ${parseInt(sr)>=80?'b-green':'b-red'}">${sr}%</span></td>
       <td style="font-family:'DM Mono',monospace;font-size:11px;">${c.violations}</td>
       <td style="font-family:'DM Mono',monospace;font-size:11px;">${c.highRisk}</td>
-      <td style="font-family:'DM Mono',monospace;font-size:11px;">${o30}</td>
+      <td style="font-family:'DM Mono',monospace;font-size:11px;"><span class="o30-heat"><span class="o30-num">${o30}</span><span class="o30-bar"><i style="width:${n>0?Math.min(100,Math.round(o30/n*100)):0}%;background:${o30HeatColor(n>0?o30/n:0)};"></i></span></span></td>
       <td style="font-family:'DM Mono',monospace;font-size:11px;"><span class="age-pill ${ageCls(c.maxAge)}">${c.maxAge}d</span></td>
       <td style="font-family:'DM Mono',monospace;font-size:11px;">${fmt$0(amt)}</td>
       ${ytd?`<td><span class="badge ${ytd.vsGoal.includes('✅')?'b-green':ytd.vsGoal.includes('⚠')?'b-amber':'b-red'}">${escapeHtml(ytd.gpPct)}</span></td>`:'<td>—</td>'}
@@ -2305,6 +2312,52 @@ function _o30TrendRow(label, prior, cur){
   </div>`;
 }
 
+// Over-30 trajectory sparkline (Track B). Reads window._o30History entries
+// (count of jobs aged >30 per audit), made current-inclusive. Color is resolved
+// from --green-dk at render time so it follows the theme (incl. future dark mode).
+function o30Sparkline(vals,w,h,color){
+  if(vals.length<2) return '';
+  const max=Math.max(...vals), min=Math.min(...vals), rng=(max-min)||1;
+  const step=w/(vals.length-1);
+  const pts=vals.map((v,i)=>[i*step, h-((v-min)/rng)*(h-6)-3]);
+  const line=pts.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' ');
+  const area=line+` L ${w} ${h} L 0 ${h} Z`;
+  const last=pts[pts.length-1];
+  const uid='o30sg'+Math.random().toString(36).slice(2,7);
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="display:block;width:100%">
+    <defs><linearGradient id="${uid}" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="${color}" stop-opacity="0.20"/>
+      <stop offset="100%" stop-color="${color}" stop-opacity="0"/></linearGradient></defs>
+    <path d="${area}" fill="url(#${uid})"/>
+    <path d="${line}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="${last[0].toFixed(1)}" cy="${last[1].toFixed(1)}" r="3" fill="${color}"/>
+  </svg>`;
+}
+function o30SparkBlock(entries, cur){
+  const series = (entries||[]).map(e=>({dateStr:e.dateStr, count:(e.o30&&e.o30.count)||0}));
+  if(series.length && series[series.length-1].dateStr===cur.dateStr) series[series.length-1].count=cur.count;
+  else series.push({dateStr:cur.dateStr, count:cur.count});
+  const vals = series.map(s=>s.count);
+  if(vals.length<2){
+    return `<div style="padding:10px 14px;font-size:12px;color:var(--muted);border-bottom:1px solid var(--border);"><strong style="color:var(--text);">Trajectory:</strong> need at least two audits to chart \u2014 builds as weekly audits load.</div>`;
+  }
+  const first=vals[0], last=vals[vals.length-1];
+  const dir = last>first ? 'c-red' : last<first ? 'c-green' : 'c-amber';
+  const dirTxt = last>first ? `\u25b2 up ${last-first}` : last<first ? `\u25bc down ${first-last}` : '\u2014 flat';
+  const color = (getComputedStyle(document.documentElement).getPropertyValue('--green-dk').trim()) || '#1a5f3e';
+  return `<div style="display:flex;align-items:center;gap:16px;padding:12px 14px;border-bottom:1px solid var(--border);">
+    <div style="min-width:130px;">
+      <div style="font-size:11px;font-weight:700;color:var(--text);">Over-30 trajectory</div>
+      <div style="font-size:10px;color:var(--muted);">last ${vals.length} audits</div>
+    </div>
+    <div style="flex:1;max-width:340px;">${o30Sparkline(vals,320,40,color)}</div>
+    <div style="text-align:right;font-family:'DM Mono',monospace;min-width:54px;">
+      <div style="font-size:16px;font-weight:700;">${last}</div>
+      <div style="font-size:10px;" class="${dir}">${dirTxt}</div>
+    </div>
+  </div>`;
+}
+
 // Fetch history (cached after first load) and inject the trend card.
 async function renderOver30Trend(){
   let slot = document.getElementById('o30TrendSlot');
@@ -2333,6 +2386,7 @@ async function renderOver30Trend(){
   slot.innerHTML = `<div class="card">
     <div class="card-header"><h3>Trend</h3><span class="card-meta">${entries.length} snapshot${entries.length===1?'':'s'} on record \u00b7 saved automatically on each audit load</span></div>
     <div class="card-body" style="padding:0;">
+      ${o30SparkBlock(entries, cur)}
       ${_o30TrendRow('Week over week', wow, cur)}
       ${_o30TrendRow('Month over month', mom, cur)}
     </div>
