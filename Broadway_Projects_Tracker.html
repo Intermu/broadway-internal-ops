@@ -752,7 +752,7 @@ html.embedded .hdr{display:none}
 <div class="body">
 
   <!-- SIDEBAR -->
-  <div class="sb-wrap">
+  <div class="sb-wrap" id="sb-wrap">
   <div class="sidebar collapsed" id="sidebar">
     <!-- FACETED FILTERS: pinned chips header + scrollable facet sections -->
     <div class="sb-facet-top" id="sb-facet-top"></div>
@@ -2315,7 +2315,8 @@ function setView(v){
   ['board','list','gantt','reports'].forEach(x=>document.getElementById('v'+x).classList.toggle('on',x===v));
   Object.keys(EMBED_TOOLS).forEach(k=>{ const el=document.getElementById('v'+k); if(el) el.classList.toggle('on',k===v); });
   const host=document.getElementById('tool-host'), sbar=document.getElementById('sbar'),
-        board=document.getElementById('board-area'), empty=document.getElementById('empty-state');
+        board=document.getElementById('board-area'), empty=document.getElementById('empty-state'),
+        swrap=document.getElementById('sb-wrap');
   if(isTool){
     ensureToolFrame(v);
     Object.keys(_toolFrames).forEach(k=>_toolFrames[k].classList.toggle('active',k===v));
@@ -2323,10 +2324,12 @@ function setView(v){
     if(board) board.style.display='none';
     if(empty) empty.style.display='none';
     if(sbar) sbar.style.display='none';
+    if(swrap) swrap.style.display='none';
     closePanel();
   } else {
     host.style.display='none';
     if(sbar) sbar.style.display='';
+    if(swrap) swrap.style.display='';
     renderContent();
   }
 }
