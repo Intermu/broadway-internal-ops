@@ -1492,6 +1492,41 @@ function renderO30Compare(){
   const openO30=JOBS.filter(j=>j.aged>30).length;
   const openTotal=JOBS.length;
   const openO30Pct=openTotal?(openO30/openTotal*100):0;
+  // Stage 2 breakdowns: by type and by coordinator (closed pace vs open over-30 load)
+  const _typeMeta=[['Service','service','Service'],['WiFi','wifi','WIFI'],['RF / Retrofit','rf','Retrofit'],['Q/R','qr','Q/R']];
+  const typeRows=_typeMeta.map(([label,cat,openKey])=>{
+    const ccAll=cj.filter(j=>j.category===cat);
+    const ccAge=ccAll.filter(j=>typeof j.ageToComplete==='number');
+    const cAvg=ccAge.length?Math.round(ccAge.reduce((s,j)=>s+j.ageToComplete,0)/ccAge.length):null;
+    const oo=JOBS.filter(j=>j.aged>30 && jobType(j)===openKey);
+    const oldest=oo.reduce((m,j)=>Math.max(m,j.aged),0);
+    return {label, cAvg, cCount:ccAll.length, oOpen:oo.length, oldest, carve:cat!=='service'};
+  }).filter(r=>r.cCount>0||r.oOpen>0);
+  const typeCard=`<div class="card"><div class="card-header"><h3>By Type</h3><span class="card-meta">closed pace vs open over-30 load</span></div>
+    <div class="card-body" style="padding:0;"><table class="data-table">
+    <thead><tr><th>Type</th><th>Closed avg days</th><th>Closed jobs</th><th>Open &gt;30</th><th>Oldest open</th></tr></thead>
+    <tbody>${typeRows.map(r=>`<tr>
+      <td style="font-weight:600;">${r.label}${r.carve?' <span style="font-size:9px;color:var(--muted);font-weight:400;">diff. cadence</span>':''}</td>
+      <td>${r.cAvg!=null?r.cAvg+'d':'\u2014'}</td>
+      <td>${r.cCount||'\u2014'}</td>
+      <td><strong class="${r.oOpen>10?'c-red':r.oOpen>5?'c-amber':'c-green'}">${r.oOpen}</strong></td>
+      <td>${r.oldest?`<span class="age-pill ${ageCls(r.oldest)}">${r.oldest}d</span>`:'\u2014'}</td>
+    </tr>`).join('')}</tbody></table></div></div>`;
+  const _openByCoord={};
+  JOBS.filter(j=>j.aged>30).forEach(j=>{ const c=_openByCoord[j.coordinator]||(_openByCoord[j.coordinator]={open:0,oldest:0}); c.open++; if(j.aged>c.oldest)c.oldest=j.aged; });
+  const _closedByCoord={};
+  withAge.forEach(j=>{ if(!j.coord)return; const c=_closedByCoord[j.coord]||(_closedByCoord[j.coord]={sum:0,nn:0}); c.sum+=j.ageToComplete; c.nn++; });
+  const coordRows=Object.keys(_openByCoord).map(name=>{ const o=_openByCoord[name]; const cb=_closedByCoord[name]; return {name, open:o.open, oldest:o.oldest, cAvg:cb?Math.round(cb.sum/cb.nn):null, cN:cb?cb.nn:0}; }).sort((a,b)=>b.open-a.open);
+  const coordCard=coordRows.length?`<div class="card"><div class="card-header"><h3>By Coordinator</h3><span class="card-meta">open over-30 owners vs their closed pace</span></div>
+    <div class="card-body" style="padding:0;"><table class="data-table">
+    <thead><tr><th>Coordinator</th><th>Open &gt;30</th><th>Oldest open</th><th>Closed avg days</th><th>Closed jobs</th></tr></thead>
+    <tbody>${coordRows.map(r=>`<tr>
+      <td style="font-weight:600;">${escapeHtml(r.name)}</td>
+      <td><strong class="${r.open>10?'c-red':r.open>5?'c-amber':'c-green'}">${r.open}</strong></td>
+      <td>${r.oldest?`<span class="age-pill ${ageCls(r.oldest)}">${r.oldest}d</span>`:'\u2014'}</td>
+      <td>${r.cAvg!=null?r.cAvg+'d':'\u2014'}</td>
+      <td>${r.cN||'\u2014'}</td>
+    </tr>`).join('')}</tbody></table></div></div>`:'';
   slot.innerHTML = `<div class="card">
     <div class="card-header"><h3>Open vs Closed \u2014 Days to Complete</h3><span class="card-meta">${cj.length} completed jobs${window._closedSource?` \u00b7 ${escapeHtml(window._closedSource)}`:''}<button class="ghost-btn no-print" style="margin-left:8px;" onclick="document.getElementById('closedFileInput2').click();">\u21bb Replace</button><input type="file" id="closedFileInput2" accept=".xlsx,.xls" style="display:none;" onchange="if(this.files.length)handleClosedFile(this.files[0]);"></span></div>
     <div class="card-body" style="padding:14px 16px;">
@@ -1503,7 +1538,9 @@ function renderO30Compare(){
       </div>
       <div style="font-size:11px;color:var(--muted);">Of jobs that have completed, the average took <strong>${avg} days</strong> and the slowest 10% took more than <strong>${p90} days</strong>. The current open queue is running <strong>${openO30Pct.toFixed(0)}%</strong> over 30 days vs <strong>${over30ClosedPct.toFixed(0)}%</strong> of completed work that needed more than 30 days to finish.</div>
     </div>
-  </div>`;
+  </div>
+  ${typeCard}
+  ${coordCard}`;
 }
 
 function renderOver30(mc, agg) {
