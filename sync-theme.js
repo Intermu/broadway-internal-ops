@@ -11,8 +11,8 @@ const fs = require("fs");
 const SRC = "bn-theme.css";
 const TARGETS = [
   "Broadway_Unified_Ops_Dashboard.html",
+  "Pilot_Proposal_Diagnostic.html",
   // add tools here as they opt in (must already contain the BN-THEME sentinels):
-  // "Pilot_Proposal_Diagnostic.html",
   // "agent.html",
 ];
 const DRY = process.argv.slice(2).some(a => a === "--dry-run" || a === "--dry" || a === "-n");
