@@ -153,6 +153,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .gs-id{font-family:'DM Mono',monospace;font-weight:700;font-size:12px;color:var(--green-dk);}
 .gs-meta{display:flex;align-items:center;gap:8px;font-size:10px;color:var(--muted);margin-top:3px;flex-wrap:wrap;}
 .gs-empty{padding:12px;font-size:11px;color:var(--muted);text-align:center;}
+.gs-item.gs-sel{background:#eef6f1;}
 
 /* ─── NEW UPLOAD PANEL DESIGN ─── */
 .upload-panel-wrap{padding:14px 28px 0;background:#f8fafc;}
@@ -790,9 +791,9 @@ function chipList(s, maxShow) {
 }
 
 function riskBadge(r) {
-  if(r==='HIGH RISK') return '<span class="badge b-red">HIGH RISK</span>';
-  if(r==='WATCH') return '<span class="badge b-amber">WATCH</span>';
-  return '<span class="badge b-green">OK</span>';
+  if(r==='HIGH RISK') return '<span class="badge b-red" title="High risk — aged and/or breaching its SLA target; needs attention now">HIGH RISK</span>';
+  if(r==='WATCH') return '<span class="badge b-amber" title="Watch — at risk of slipping; monitor closely">WATCH</span>';
+  return '<span class="badge b-green" title="On track — within targets">OK</span>';
 }
 function statusBadge(s) {
   const cls = s.includes('Clocked Out')||s==='On-Site'?'b-green':
@@ -1044,6 +1045,26 @@ function gsearchOpenIdx(idx){
 }
 document.addEventListener('click', e=>{ if(!e.target.closest('.gsearch')){ const b=document.getElementById('gsearch-results'); if(b) b.classList.remove('open'); } });
 document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ const b=document.getElementById('gsearch-results'); if(b) b.classList.remove('open'); } });
+// Keyboard nav (Phase 1): "/" focuses global search; arrows + Enter work the results.
+document.addEventListener('keydown', e=>{
+  if(e.key==='/' && !/^(INPUT|TEXTAREA|SELECT)$/.test((e.target&&e.target.tagName)||'')){
+    const inp=document.getElementById('gsearch-input');
+    if(inp){ e.preventDefault(); inp.focus(); }
+    return;
+  }
+  const box=document.getElementById('gsearch-results');
+  if(!box || !box.classList.contains('open')) return;
+  const items=[...box.querySelectorAll('.gs-item')];
+  if(!items.length) return;
+  let idx=items.findIndex(it=>it.classList.contains('gs-sel'));
+  if(e.key==='ArrowDown'){ e.preventDefault(); idx=(idx+1)%items.length; }
+  else if(e.key==='ArrowUp'){ e.preventDefault(); idx=(idx-1+items.length)%items.length; }
+  else if(e.key==='Enter'){ if(idx>=0){ e.preventDefault(); items[idx].click(); } return; }
+  else return;
+  items.forEach(it=>it.classList.remove('gs-sel'));
+  items[idx].classList.add('gs-sel');
+  items[idx].scrollIntoView({block:'nearest'});
+});
 // Export the current view's filtered table to xlsx (Phase 1). Reads the largest
 // .data-table in #mainContent, visible rows only (filters applied; pagination cap
 // ignored so the full filtered set exports). Values exported as shown on screen.
@@ -1312,6 +1333,15 @@ function renderOverview(mc, agg) {
       <div class="stat-box"><div class="sb-num ${over30.length>0?'c-red':'c-green'}">${over30.length}</div><div class="sb-lbl">Over 30 Days</div><div class="sb-sub">${over30Pct}% of queue</div></div>
       <div class="stat-box"><div class="sb-num c-red">${hr.length}</div><div class="sb-lbl">HIGH RISK</div><div class="sb-sub">${fmt$0(hr.reduce((s,j)=>s+j.amount,0))}</div></div>
       <div class="stat-box"><div class="sb-num c-blue">${wifi.length}</div><div class="sb-lbl">WIFI Jobs</div><div class="sb-sub">${retrofit.length} Retrofit · ${service.length} Service</div></div>
+    </div>
+
+    <div style="font-size:10.5px;color:var(--muted);margin:-6px 0 16px;line-height:1.8;">
+      <strong style="color:var(--text);">What these mean:</strong>
+      <strong>Met SLA</strong> = share of jobs within their status time target (Goal 90%, Min 80%) ·
+      <strong class="c-red">HIGH RISK</strong> = aged and/or breaching its SLA ·
+      <strong class="c-amber">WATCH</strong> = at risk of slipping ·
+      <strong>Over 30</strong> = open jobs aged more than 30 days since creation ·
+      <strong>Stale</strong> = no note in 7+ days
     </div>
 
     <div class="stat-grid sg-3" style="margin-bottom:16px;">
