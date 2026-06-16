@@ -989,12 +989,13 @@ function handleFile(file){
         overlay.classList.remove('active');
 
         // Push to shared Blobs store so Agent + Dashboard see the same data.
-        bnDataPost("pilot-revenue", {
-          proposedRows: DATA.map(({category, ...j}) => j),
+        bnClientPost("revenue", {
+          rows: raw,
           sourceFile: file.name,
+          month: new Date().toISOString().slice(0,7),
         }, {
-          rowCount: raw.length,
-          proposedCount: DATA.length,
+          count: String(raw.length),
+          proposedCount: String(DATA.length),
           sourceFile: file.name,
         });
       } catch(err){
@@ -1015,70 +1016,38 @@ async function bnDataGet(key){
 async function bnDataPost(key,data,metadata){
   try{const r=await fetch(`${DATA_API}?key=${encodeURIComponent(key)}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({data,metadata:metadata||{}})});if(!r.ok)throw 0;return await r.json();}catch(_){return null;}
 }
+// Client-namespaced variants (modern path): clients/pilot/<slot>.
+const PILOT_CLIENT = "pilot";
+async function bnClientGet(slot){
+  try{const r=await fetch(`${DATA_API}?key=${encodeURIComponent(slot)}&client=${PILOT_CLIENT}`);if(!r.ok)throw 0;return await r.json();}catch(_){return null;}
+}
+async function bnClientPost(slot,data,metadata){
+  try{const r=await fetch(`${DATA_API}?key=${encodeURIComponent(slot)}&client=${PILOT_CLIENT}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({data,metadata:metadata||{}})});if(!r.ok)throw 0;return await r.json();}catch(_){return null;}
+}
 
-// On page load, try to auto-load Pilot Revenue from the shared store.
-// Loads both the new file (pilot-revenue) AND the legacy GP lookup
-// (pilot-revenue-legacy) in parallel, then joins them.
-(async function autoLoadPilotRevenue(){
-  const [result, legacyResult] = await Promise.all([
-    bnDataGet("pilot-revenue"),
-    bnDataGet("pilot-revenue-legacy"),
-  ]);
-
-  // Stash legacy GP first if available — when DATA loads, the join will fire.
-  if(legacyResult && legacyResult.exists && legacyResult.data && legacyResult.data.gpLookup){
-    LEGACY_GP = legacyResult.data.gpLookup;
-    LEGACY_SOURCE = legacyResult.data.sourceFile || 'Legacy Pilot Revenue';
-  }
-
+// On page load, auto-load the shared monthly revenue file (client=pilot,
+// slot 'revenue') — the same raw Work Order Report rows the Dashboard persists —
+// and run them through the normal parse pipeline so the Diagnostic shows the
+// latest data on open without re-uploading.
+(async function autoLoadRevenue(){
+  const result = await bnClientGet("revenue");
   if(!result || !result.exists || !result.data) return;
-
-  const { proposedRows, rawRows, sourceFile } = result.data;
+  const rows = Array.isArray(result.data.rows) ? result.data.rows
+             : Array.isArray(result.data.rawRows) ? result.data.rawRows : null;
+  if(!rows || !rows.length) return;
   const meta = result.metadata || {};
-
+  const sourceFile = result.data.sourceFile || "Synced from data store";
   try{
-    let count, displayedRowCount;
-    if(Array.isArray(proposedRows)){
-      // New path: data already filtered + mapped by the Agent.
-      proposedRows.forEach(j => { j.category = classifyJob(j); j.measured = isMeasured(j.category); });
-      DATA = proposedRows;
-      // Stash ingest stats for banner (the Agent doesn't post these but we
-      // can reconstruct them from the proposed rows themselves).
-      window._INGEST_STATS = {
-        proposed: proposedRows.length,
-        measured: proposedRows.filter(j => j.measured).length,
-        carvedOut: proposedRows.filter(j => !j.measured).length,
-        sourceFile: sourceFile || 'Synced from data store',
-      };
-      ACTIVE_CAT = 'all';
-      applyCategoryFilter();
-      document.querySelectorAll('.cat-btn').forEach(b => {
-        b.classList.toggle('active', b.dataset.cat === 'all');
-      });
-      updateFileStatus(sourceFile || "Synced from data store", proposedRows.length);
-      updateCategoryCounts();
-      captureKPIsForDelta(proposedRows);
-      renderAll();
-      // Now apply legacy GP join if we have it
-      if(LEGACY_GP) applyLegacyGPJoin();
-      count = proposedRows.length;
-      displayedRowCount = proposedRows.length + " proposed";
-    } else if(Array.isArray(rawRows)){
-      // Legacy path: full raw rows (from older Agent posts).
-      count = processRawRows(rawRows, sourceFile || "Synced from data store");
-      if(LEGACY_GP) applyLegacyGPJoin();
-      displayedRowCount = count + " proposed";
-    } else {
-      return;
-    }
-
+    const count = processRawRows(rows, sourceFile);
+    if(LEGACY_GP) applyLegacyGPJoin();
     const banner = document.getElementById("sync-banner");
-    document.getElementById("sb-source").textContent = sourceFile || "Pilot Revenue";
-    document.getElementById("sb-period").textContent = meta.period || displayedRowCount;
-    document.getElementById("sb-count").textContent = count + " proposed";
-    banner.style.display = "block";
-
-    document.getElementById("dropzone").style.display = "none";
+    if(banner){
+      const sbS=document.getElementById("sb-source"); if(sbS) sbS.textContent = sourceFile;
+      const sbP=document.getElementById("sb-period"); if(sbP) sbP.textContent = meta.period || (count + " proposed");
+      const sbC=document.getElementById("sb-count");  if(sbC) sbC.textContent = count + " proposed";
+      banner.style.display = "block";
+    }
+    const dz=document.getElementById("dropzone"); if(dz) dz.style.display = "none";
   }catch(err){
     console.warn("Auto-load failed:", err);
   }

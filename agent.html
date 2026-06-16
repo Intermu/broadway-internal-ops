@@ -537,6 +537,15 @@ async function bnDataDelete(key){
   try{await fetch(`${DATA_API}?key=${encodeURIComponent(key)}`,{method:"DELETE"});return true;}catch(_){return false;}
 }
 
+// Client-namespaced variants (modern path): clients/pilot/<slot>.
+const PILOT_CLIENT = "pilot";
+async function bnClientGet(slot){
+  try{const r=await fetch(`${DATA_API}?key=${encodeURIComponent(slot)}&client=${PILOT_CLIENT}`);if(!r.ok)throw 0;return await r.json();}catch(_){return null;}
+}
+async function bnClientPost(slot,data,metadata){
+  try{const r=await fetch(`${DATA_API}?key=${encodeURIComponent(slot)}&client=${PILOT_CLIENT}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({data,metadata:metadata||{}})});if(!r.ok)throw 0;return await r.json();}catch(_){return null;}
+}
+
 // ── Snapshot UI helpers ───────────────────────────────────────────────────────
 function setSnapBadge(state, text){
   const badge=document.getElementById("snap-badge");
@@ -659,6 +668,50 @@ async function saveSnapshotToServer(snap){
     });
   }
 })();
+
+// Aggregate raw Work Order Report rows into the YTD coords/total/period shape
+// the report + XLSX export consume. Shared by the upload handler and the
+// data-store auto-load. Returns null if the required columns are missing.
+function aggregateYtd(rows){
+  if(!rows || !rows.length) return null;
+  const keyMap={}; Object.keys(rows[0]).forEach(k=>{ keyMap[String(k).trim().toLowerCase()]=k; });
+  const col=(...cands)=>{ for(const c of cands){ const hit=keyMap[c.toLowerCase()]; if(hit) return hit; } return null; };
+  const kAssigned=col('Assigned To','Coordinator');
+  const kRev=col('Inv Revenue','Invoice Revenue','Revenue');
+  const kGp=col('GP '+String.fromCharCode(36),'GP'+String.fromCharCode(36),'Gross Profit');
+  const kPropDays=col('Proposal Turnover Days','Prop Turnover Days','Turnover Days');
+  const kInvDate=col('Inv Date','Invoice Date');
+  if(!kAssigned || !kRev || !kGp) return null;
+  const buckets=new Map();
+  let totRev=0,totGp=0,totProp=0,totPropN=0,woCount=0,minDate=null,maxDate=null;
+  for(const r of rows){
+    const name=String(r[kAssigned]||'').trim(); if(!name) continue;
+    const rev=parseFloat(r[kRev])||0, gp=parseFloat(r[kGp])||0;
+    const ptRaw=kPropDays?r[kPropDays]:null;
+    const hasPt=ptRaw!=='' && ptRaw!==null && ptRaw!==undefined && !isNaN(parseFloat(ptRaw));
+    const pt=hasPt?parseFloat(ptRaw):null;
+    if(!buckets.has(name)) buckets.set(name,{rev:0,gp:0,ptSum:0,ptN:0,n:0});
+    const b=buckets.get(name); b.rev+=rev; b.gp+=gp; if(hasPt){ b.ptSum+=pt; b.ptN++; } b.n++;
+    totRev+=rev; totGp+=gp; if(hasPt){ totProp+=pt; totPropN++; } woCount++;
+    if(kInvDate && r[kInvDate] instanceof Date){ if(!minDate||r[kInvDate]<minDate)minDate=r[kInvDate]; if(!maxDate||r[kInvDate]>maxDate)maxDate=r[kInvDate]; }
+  }
+  const coords=[...buckets.entries()].map(([name,b])=>[
+    name, parseFloat(b.rev.toFixed(2)), parseFloat(b.gp.toFixed(2)),
+    b.rev>0?parseFloat((b.gp/b.rev*100).toFixed(2)):0,
+    b.ptN>0?parseFloat((b.ptSum/b.ptN).toFixed(2)):0
+  ]).sort((a,b)=>b[1]-a[1]);
+  const total={ rev:parseFloat(totRev.toFixed(2)), gpd:parseFloat(totGp.toFixed(2)),
+    gpp:totRev>0?parseFloat((totGp/totRev*100).toFixed(2)):0,
+    pt:totPropN>0?parseFloat((totProp/totPropN).toFixed(2)):0 };
+  const mS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  let period='YTD';
+  if(minDate && maxDate){
+    period = (minDate.getFullYear()===maxDate.getFullYear())
+      ? `${mS[minDate.getMonth()]}–${mS[maxDate.getMonth()]} ${maxDate.getFullYear()}`
+      : `${mS[minDate.getMonth()]} ${minDate.getFullYear()}–${mS[maxDate.getMonth()]} ${maxDate.getFullYear()}`;
+  }
+  return {coords, total, period, woCount};
+}
 
 function handleYtdFile(file){
   if(!file)return;
@@ -793,54 +846,23 @@ function handleYtdFile(file){
       // Persist to localStorage — becomes the new fallback
       localStorage.setItem("bn_ytd_data",JSON.stringify({coords,total,period:periodLabel,savedDate}));
 
-      // Push to shared Blobs store so Diagnostic + Dashboard see the same data.
-      // Pre-filter and pre-map the proposed-jobs subset (matches the shape the
-      // Diagnostic builds internally). The full raw rows are NOT sent — that
-      // would routinely blow past the Function's request body limit on larger
-      // YTD exports. Aggregated YTD (~1 KB) handles Dashboard YTD section.
-      const proposedRows = rows.filter(r => {
-        const p = String(r['Proposed?']||'').trim().toLowerCase();
-        const ptd = parseFloat(r['Proposal Turnover Days']);
-        return p === 'yes' && !isNaN(ptd);
-      }).map(r => ({
-        tracking: r['Tracking #'],
-        job: r['Job #'],
-        days: parseInt(r['# Days'])||0,
-        trips: parseInt(r['# Trips'])||0,
-        woType: String(r['W/O Type']||'').trim(),
-        priority: String(r['Priority']||'').trim(),
-        trade: String(r['Trade']||'').trim(),
-        sysTrade: String(r['System Trade']||'').trim(),
-        state: String(r['State']||'').trim(),
-        loc: r['Loc #'],
-        invDate: r['Inv Date'],
-        revenue: parseFloat(r['Inv Revenue'])||0,
-        gp: parseFloat(r['GP $'])||0,
-        gpPct: parseFloat(r['GP %'])||0,
-        coord: String(r['Assigned To']||'').trim(),
-        maxSla: parseInt(r['Max SLA'])||0,
-        metSla: String(r['Met SLA?']||'').trim(),
-        ptd: parseFloat(r['Proposal Turnover Days']),
-      }));
-
-      const payload = {
-        proposedRows,
-        ytd: {coords, total, period: periodLabel},
-        sourceFile: file.name,
-      };
+      // Push the raw Work Order Report rows to the shared store (client=pilot,
+      // slot 'revenue') so the Dashboard + Diagnostic load the exact same data.
+      // The Agent's own aggregated YTD rides along for a fast re-load.
+      const month = new Date().toISOString().slice(0,7);
+      const payload = { rows, ytd: {coords, total, period: periodLabel}, sourceFile: file.name, month };
       const payloadBytes = new Blob([JSON.stringify(payload)]).size;
       const payloadKb = (payloadBytes/1024).toFixed(1);
 
-      bnDataPost("pilot-revenue", payload, {
+      bnClientPost("revenue", payload, {
         period: periodLabel,
-        rowCount: rows.length,
-        proposedCount: proposedRows.length,
-        coordCount: coords.length,
+        count: String(rows.length),
+        coordCount: String(coords.length),
         sourceFile: file.name,
-        payloadBytes,
+        month,
       }).then(res => {
         if(res && res.ok){
-          log(`☁ Pilot Revenue synced to data store (${payloadKb} KB · ${proposedRows.length} proposed of ${rows.length} rows). Diagnostic + Dashboard will now use this data.`);
+          log(`☁ Pilot Revenue synced to data store (${payloadKb} KB · ${rows.length} rows). Dashboard + Diagnostic will use this data.`);
         } else {
           log(`⚠ Pilot Revenue saved locally — server sync failed (attempted ${payloadKb} KB). Check Network tab → data-store request for status code.`);
         }
@@ -862,6 +884,30 @@ function handleYtdFile(file){
   reader.onerror=()=>showError('ytd',"Couldn't read this file","The file couldn't be opened. Try downloading it again.");
   reader.readAsArrayBuffer(file);
 }
+
+// Pull the shared monthly revenue file (client=pilot, slot 'revenue') so data
+// uploaded from the Dashboard or Diagnostic shows here too. Prefer the
+// pre-aggregated ytd; otherwise aggregate the raw rows locally. Runs after the
+// helpers + aggregateYtd are defined; overrides the localStorage fallback.
+(async function autoLoadSharedRevenue(){
+  try{
+    const res = await bnClientGet("revenue");
+    if(!res || !res.exists || !res.data) return;
+    let coords, total, period;
+    if(res.data.ytd && Array.isArray(res.data.ytd.coords)){
+      ({coords, total, period} = res.data.ytd);
+    } else {
+      const rows = Array.isArray(res.data.rows) ? res.data.rows
+                 : Array.isArray(res.data.rawRows) ? res.data.rawRows : null;
+      const agg = rows ? aggregateYtd(rows) : null;
+      if(agg){ coords = agg.coords; total = agg.total; period = agg.period; }
+    }
+    if(!coords) return;
+    window._ytdCoordData = coords; window._ytdTotal = total; window._ytdPeriod = period;
+    const badge = document.getElementById("ytd-badge");
+    if(badge){ badge.textContent = `✅ ${period} data loaded (synced from data store)`; badge.style.color = "#2e7d32"; }
+  }catch(_){}
+})();
 
 const TODAY=new Date();
 const TODAY_STR=TODAY.toLocaleDateString("en-US",{weekday:"long",month:"2-digit",day:"2-digit",year:"numeric"}).replace(",","");

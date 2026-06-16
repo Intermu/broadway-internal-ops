@@ -1518,22 +1518,47 @@ function _cclass(s){ s=String(s||'').trim();
 function parseClosedRevenue(raw){
   const out=[];
   (raw||[]).forEach(r=>{
-    const completed=_cdate(r['Job Completed Canceled Date']);
-    if(!completed) return; // only completed/closed jobs count
-    const created=_cdate(r['Job Created Date']);
+    // 2026 Pilot Revenue export uses "Completion Date"/"Created Date"; older
+    // audit-style exports used "Job Completed Canceled Date"/"Job Created Date".
+    // Alias both so the parser survives schema drift.
+    const completed=_cdate(r['Completion Date']!=null?r['Completion Date']:r['Job Completed Canceled Date']);
+    if(!completed) return; // only completed/invoiced jobs count
+    const created=_cdate(r['Created Date']!=null?r['Created Date']:r['Job Created Date']);
     let age = created ? Math.round((completed-created)/86400000) : null;
     if(age!=null && age<0) age=null;
-    const sourceJobNum=String(r['Source Job #']||'').trim();
-    const trade=String(r['Consolidated Trade']||r['Trade']||'').trim();
+    const sourceJobNum=String(r['Source Job #']||r['Job #']||r['Tracking #']||'').trim();
+    const trade=String(r['Consolidated Trade']||r['Trade']||r['System Trade']||'').trim();
     const coord=String(r['Assigned To']||'').trim();
-    const amount=_cmoney(r['Inv Revenue'])||_cmoney(r['Total NTE']);
+    const amount=_cmoney(r['Inv Revenue'])||_cmoney(r['Vendor Total NTE'])||_cmoney(r['Total NTE']);
+    const gp=_cmoney(r['GP '+String.fromCharCode(36)]); // GP dollar-sign column
+    const ptd=parseFloat(r['Proposal Turnover Days']);
     const p2c=parseFloat(r['Proposed to Completed Days']);
-    out.push({sourceJobNum, trade, coord, amount,
+    out.push({sourceJobNum, trade, coord, amount, gp,
       category:_cclass(sourceJobNum||trade),
       ageToComplete:age,
+      proposalTurnover: isNaN(ptd)?null:ptd,
       proposedToCompleted: isNaN(p2c)?null:p2c});
   });
   return out;
+}
+// Roll parsed revenue jobs up to a per-coordinator YTD table matching the
+// YTD_TABLE contract (gpPct/propTurnover are strings; vsGoal drives row color).
+function deriveCoordYtd(jobs){
+  const m={};
+  (jobs||[]).forEach(j=>{
+    const n=String(j.coord||'').trim(); if(!n) return;
+    const e=m[n]||(m[n]={name:n,revenue:0,gp:0,_tt:0,_tn:0});
+    e.revenue+=(+j.amount||0);
+    e.gp+=(+j.gp||0);
+    if(typeof j.proposalTurnover==='number'){ e._tt+=j.proposalTurnover; e._tn++; }
+  });
+  return Object.keys(m).map(k=>{
+    const e=m[k]; const pct=e.revenue?(e.gp/e.revenue*100):0;
+    return {name:e.name, revenue:e.revenue, gp:e.gp,
+      gpPct:pct.toFixed(1)+'%',
+      propTurnover:e._tn?(e._tt/e._tn).toFixed(1):'',
+      vsGoal: pct>=35?'✅' : pct<33?'🔴' : ''};
+  }).sort((a,b)=>b.revenue-a.revenue);
 }
 function handleClosedFile(file){
   const st=document.getElementById('closedStatus');
@@ -1547,11 +1572,15 @@ function handleClosedFile(file){
       const jobs=parseClosedRevenue(raw);
       if(!jobs.length){ if(st) st.innerHTML='<span class="c-red">No completed jobs found in that file.</span>'; toast('No completed jobs found'); return; }
       window._closedJobs=jobs; window._closedSource=file.name;
+      const ytd=deriveCoordYtd(jobs);
+      if(ytd.length){ YTD_TABLE=ytd; window._ytdFromRevenue=true; }
+      const month=new Date().toISOString().slice(0,7);
       if(!window.BROADWAY_SNAPSHOT){
-        bnClientPost('closed-revenue', {jobs, sourceFile:file.name, savedAt:new Date().toISOString()}, {count:String(jobs.length), sourceFile:file.name});
+        bnClientPost('revenue', {rows: raw, sourceFile:file.name, month, savedAt:new Date().toISOString()}, {count:String(jobs.length), sourceFile:file.name, month});
       }
+      if(st) st.innerHTML='<span class="c-green">Loaded '+jobs.length+' jobs - '+ytd.length+' coordinators</span>';
       toast(`Loaded ${jobs.length} completed jobs`);
-      renderO30Compare();
+      render(currentView);
     }catch(err){ if(st) st.innerHTML='<span class="c-red">Could not read that file.</span>'; toast('Closed file read failed: '+err.message); }
   };
   reader.readAsBinaryString(file);
@@ -1559,10 +1588,14 @@ function handleClosedFile(file){
 async function autoLoadClosed(){
   if(window.BROADWAY_SNAPSHOT||window._closedTried) return;
   window._closedTried=true;
-  const res=await bnClientGet('closed-revenue');
-  if(res&&res.exists&&res.data&&Array.isArray(res.data.jobs)&&res.data.jobs.length){
-    window._closedJobs=res.data.jobs; window._closedSource=res.data.sourceFile||'';
-    if(currentView==='over30-review') renderO30Compare();
+  const res=await bnClientGet('revenue');
+  if(!(res&&res.exists&&res.data)) return;
+  const rows=Array.isArray(res.data.rows)?res.data.rows:(Array.isArray(res.data.rawRows)?res.data.rawRows:null);
+  const jobs=rows?parseClosedRevenue(rows):(Array.isArray(res.data.jobs)?res.data.jobs:null);
+  if(jobs&&jobs.length){
+    window._closedJobs=jobs; window._closedSource=res.data.sourceFile||'';
+    const ytd=deriveCoordYtd(jobs); if(ytd.length){ YTD_TABLE=ytd; window._ytdFromRevenue=true; }
+    render(currentView);
   }
 }
 function renderO30Compare(){
@@ -2259,7 +2292,7 @@ function handleFile(file) {
           if(inYtd&&row[0]&&String(row[0]).trim()!=='Coordinator')
             newYtd.push({name:String(row[0]).trim(),revenue:parseFloat(row[1])||0,gp:parseFloat(row[2])||0,gpPct:String(row[3]||'').trim(),propTurnover:String(row[4]||'').trim(),vsGoal:String(row[5]||'').trim()});
         });
-        if(newYtd.length) YTD_TABLE=newYtd;
+        if(newYtd.length && !window._ytdFromRevenue) YTD_TABLE=newYtd;
       }
       // Derive the report date from the workbook itself (sheet name carries
       // the audit date, e.g. "WO Audit 04.23.26"), then filename, else today.
@@ -2812,6 +2845,10 @@ function base64ToFile(b64, filename){
     console.warn("Workbook auto-load failed:", err);
   }
 })();
+
+// Auto-load the persisted monthly revenue file (slot: revenue) so coordinator
+// YTD and the over-30 benchmark appear on open without re-uploading.
+autoLoadClosed();
 
 // ── SECTION 8: INIT ──────────────────────────────────────────────────────
 // Default the header date to today. handleFile() will overwrite with the

@@ -21,7 +21,11 @@ const LEGACY_KEYS = ["pilot-revenue", "wo-snapshot-today", "wo-snapshot-previous
 // or above to READ. Everything else stays at the broadway_employee gate that
 // the SWA route config already enforces. Server-side because the front-end /
 // route checks are convenience only — this is the real boundary.
-const FINANCIAL_SLOTS = ["revenue", "pilot-revenue", "revenue-gp"];
+// NOTE: "revenue" is intentionally NOT in this list -- coordinators are meant
+// to read the monthly revenue numbers (approved by Mike, 2026-06), so it stays
+// at the broadway_employee gate. The legacy "pilot-revenue" flat key and the
+// "revenue-gp" GP lookup remain Operations Manager (L4)+ only.
+const FINANCIAL_SLOTS = ["pilot-revenue", "revenue-gp"];
 const ROLE_LEVELS = ["ops_coordinator", "lead_ops_coordinator", "ops_supervisor", "ops_manager", "dir_ops", "vp_ops"];
 const MIN_FINANCIAL_LEVEL = 4; // ops_manager
 
