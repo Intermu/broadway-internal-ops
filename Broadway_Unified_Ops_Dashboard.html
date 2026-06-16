@@ -365,10 +365,15 @@ html.density-compact .data-table tbody td{padding-top:3px;padding-bottom:3px;}
 .tier-30{background:#f1f5f9;color:#64748b;}
 @media(max-width:900px){.layout{grid-template-columns:1fr;}.sg-4,.sg-5{grid-template-columns:repeat(2,1fr);}.sidebar{position:fixed;top:0;left:0;bottom:0;width:240px;z-index:100;transform:translateX(-100%);transition:transform .25s;box-shadow:2px 0 12px rgba(0,0,0,0.2);}.sidebar.open{transform:translateX(0);}.mobile-menu-btn{display:inline-flex !important;}.mobile-menu-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:99;}.mobile-menu-overlay.open{display:block;}}
 .mobile-menu-btn{display:none;align-items:center;justify-content:center;background:var(--green-dk);color:#fff;border:0;border-radius:6px;padding:6px 12px;font-size:13px;font-weight:700;cursor:pointer;margin-right:10px;}
+.print-header{display:none;}
 @media print{
   @page{size:letter;margin:0.5in;}
   body{background:white !important;}
-  .sidebar,.header,.upload-banner,.tool-mode-bar,.upload-panel-wrap,.filter-bar,.toast,.pagination-bar,.mobile-menu-btn,.mobile-menu-overlay,.us-swap,.toggle-banner-btn{display:none!important;}
+  .sidebar,.header,.upload-banner,.tool-mode-bar,.upload-panel-wrap,.filter-bar,.toast,.pagination-bar,.mobile-menu-btn,.mobile-menu-overlay,.us-swap,.toggle-banner-btn,.no-print,.screen-title{display:none!important;}
+  *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}
+  .print-header{display:flex!important;align-items:center;justify-content:space-between;gap:12px;background:#1a5f3e;color:#fff;padding:12px 16px;border-radius:6px;margin-bottom:14px;}
+  .print-header .ph-brand{font-family:'DM Sans',sans-serif;font-weight:800;font-size:15px;letter-spacing:0.5px;}
+  .print-header .ph-title{font-family:'DM Sans',sans-serif;font-size:12px;text-align:right;}
   .layout{grid-template-columns:1fr;}
   .main{padding:8px;}
   .card,.stat-box{break-inside:avoid;border:1px solid #ddd;}
@@ -1442,8 +1447,10 @@ function renderOver30(mc, agg) {
   }).join('');
 
   mc.innerHTML = `
-    <div class="page-title">Over-30 Weekly Review</div>
-    <div class="page-sub">${document.getElementById('reportDateLabel').textContent} · jobs aged by days since creation</div>
+    <div class="print-header"><span class="ph-brand">BROADWAY NATIONAL</span><span class="ph-title">Over-30 Weekly Review · ${document.getElementById('reportDateLabel').textContent}</span></div>
+    <div class="page-title screen-title">Over-30 Weekly Review</div>
+    <div class="page-sub screen-title">${document.getElementById('reportDateLabel').textContent} · jobs aged by days since creation</div>
+    <button class="no-print" onclick="window.print()" style="margin-bottom:12px;padding:6px 12px;border:1px solid var(--border);border-radius:6px;background:#fff;color:var(--green-dk);font-size:11px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;">🖨 Print / Save PDF</button>
     <div class="stat-grid sg-4" style="margin-bottom:14px;">
       <div class="stat-box"><div class="sb-num c-red">${over30.length}</div><div class="sb-lbl">Over 30 Days</div><div class="sb-sub">${fmt$0(o30Amt)} exposure</div></div>
       <div class="stat-box"><div class="sb-num c-blue">${fmt$0(o30Amt)}</div><div class="sb-lbl">Over-30 $ Exposure</div><div class="sb-sub">approved value</div></div>
