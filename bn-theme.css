@@ -1,0 +1,115 @@
+/* =============================================================================
+   BROADWAY NATIONAL -- canonical theme layer (design tokens, light + dark).
+   SINGLE SOURCE OF TRUTH. Edit here, then run:  node sync-theme.js
+   It rewrites the block between the BN-THEME:START / BN-THEME:END sentinels
+   in each tool that opts in. Inline-by-design so snapshot exports stay
+   self-contained (no runtime <link>). Projects Tracker is intentionally excluded.
+   ============================================================================= */
+/* BN-THEME:START | Canonical theme synced from bn-theme.css. Do not edit between the sentinels; edit bn-theme.css and run: node sync-theme.js */
+:root{
+  /* ── COLOR TOKENS ──────────────────────────────────────── */
+  --color-bg:            #f0f4f8;
+  --color-surface:       #ffffff;
+  --color-surface-alt:   #f8fafc;
+  --color-surface-faint: #fafffe;
+  --color-text:          #1e293b;
+  --color-text-muted:    #64748b;
+  --color-text-ghost:    #94a3b8;
+  --color-border:        #e2e8f0;
+  --color-border-strong: #cbd5e1;
+  --color-primary:       #1a5f3e;
+  --color-primary-strong:#0d3d26;
+  --color-primary-faint: #f0fdf4;
+  --color-primary-mid:   #c6f0da;
+  --color-accent:        #2ECC71;
+  --color-success:       #2ECC71;
+  --color-success-bg:    #f0fdf4;
+  --color-success-border:#c6f0da;
+  --color-success-text:  #1a5f3e;
+  --color-warning:       #f39c12;
+  --color-warning-bg:    #fff8e6;
+  --color-warning-border:#f0d87a;
+  --color-warning-text:  #7d5a00;
+  --color-danger:        #e74c3c;
+  --color-danger-bg:     #fef0ee;
+  --color-danger-border: #f7c9c9;
+  --color-danger-text:   #8b1a1a;
+  --color-info:          #3498db;
+  --color-info-bg:       #eaf4fd;
+  --color-info-border:   #bbd7f0;
+  --color-info-text:     #1a5699;
+  /* ── ADDED TOKENS (Phase 0.1, value-preserving) ───────── */
+  --color-surface-sunken:#f1f5f9;
+  --color-text-soft:     #475569;
+  --color-danger-bg-alt: #fde8e8;
+  --color-warning-bg-alt:#fff3cd;
+  --color-success-mid:   #d1f0e6;
+  /* ── ROLE TOKENS (Phase 0.2: split dual-use colors for theming) ── */
+  --color-on-accent:     #ffffff;
+  --color-brand-ink:     #1a5f3e;
+  --color-sidebar:       #1e293b;
+  /* ── LEGACY ALIASES (kept for backward compat) ─────────── */
+  --green:     #2ECC71;
+  --green-dk:  #1a5f3e;
+  --green-bg:  #f0fdf4;
+  --amber:     #f39c12;
+  --amber-bg:  #fff8e6;
+  --red:       #e74c3c;
+  --red-bg:    #fef0ee;
+  --blue:      #3498db;
+  --blue-bg:   #eaf4fd;
+  --border:    #e2e8f0;
+  --text:      #1e293b;
+  --muted:     #64748b;
+  --bg:        #f0f4f8;
+  /* ── SPACING (8-pt grid) ────────────────────────────────── */
+  --space-1: 4px;  --space-2: 8px;  --space-3: 12px; --space-4: 16px;
+  --space-5: 20px; --space-6: 24px; --space-7: 28px; --space-8: 32px;
+  /* ── RADII ──────────────────────────────────────────────── */
+  --radius-sm: 4px; --radius-md: 7px; --radius-lg: 10px;
+  --radius-xl: 14px; --radius-pill: 99px;
+  /* ── SHADOWS ────────────────────────────────────────────── */
+  --shadow-sm: 0 1px 3px rgba(0,0,0,.06),0 1px 2px rgba(0,0,0,.08);
+  --shadow-md: 0 4px 14px rgba(0,0,0,.10),0 2px 4px rgba(0,0,0,.08);
+  /* ── TYPOGRAPHY ─────────────────────────────────────────── */
+  --font-sans: 'DM Sans',system-ui,-apple-system,sans-serif;
+  --font-mono: 'DM Mono','Cascadia Code',ui-monospace,monospace;
+  /* ── TRANSITIONS ────────────────────────────────────────── */
+  --transition-fast: 0.12s ease;
+  --transition-base: 0.20s ease;
+}
+/* ══ DARK THEME (Phase 0.2) — screen-only, so print falls back to the light :root tokens (no print-reset needed) ══ */
+@media screen{
+html[data-theme="dark"]{
+  --color-bg:#0f141b; --color-surface:#1a2230; --color-surface-alt:#222d3c; --color-surface-faint:#1e2734; --color-surface-sunken:#161f2b;
+  --color-text:#e6ebf2; --color-text-soft:#aab6c6; --color-text-muted:#8c99ab; --color-text-ghost:#7d8a9b;
+  --color-border:#2b3747; --color-border-strong:#3b4858;
+  --color-sidebar:#10161e; --color-brand-ink:#4ade80;
+  --color-success-bg:#13251b; --color-success-border:#235f40; --color-success-mid:#16321f; --color-success-text:#4ade80;
+  --color-warning-bg:#2a2310; --color-warning-bg-alt:#332a13; --color-warning-border:#5a4716; --color-warning-text:#fbbf24;
+  --color-danger-bg:#2a1715; --color-danger-bg-alt:#331a1a; --color-danger-border:#6a2b2b; --color-danger-text:#f87171;
+  --color-info-bg:#11212f; --color-info-border:#264a6a; --color-info-text:#60a5fa;
+  --text:#e6ebf2; --muted:#8c99ab; --bg:#0f141b; --green-bg:#13251b;
+  color-scheme:dark;
+}
+/* Long-tail element dark overrides (Phase 0.2.1) — token-based so the @media print reset keeps them light */
+html[data-theme="dark"] .data-mode-badge.real{background:var(--color-success-bg);color:var(--color-success-text);border-color:var(--color-success-border);}
+html[data-theme="dark"] .data-mode-badge.sample{background:var(--color-warning-bg);color:var(--color-warning-text);border-color:var(--color-warning-border);}
+html[data-theme="dark"] .upload-panel .last-pill.recent{background:var(--color-success-bg);color:var(--color-success-text);}
+html[data-theme="dark"] .upload-panel .last-pill.sample{background:var(--color-warning-bg);color:var(--color-warning-text);}
+html[data-theme="dark"] .upload-slot.has-data{background:var(--color-success-bg);border-color:var(--color-success-border);}
+html[data-theme="dark"] .upload-panel .panel-head{background:var(--color-success-bg);}
+html[data-theme="dark"] .gs-item:hover{background:var(--color-surface-alt);}
+html[data-theme="dark"] .gs-item.gs-sel{background:var(--color-success-bg);}
+html[data-theme="dark"] .data-table th.sortable:hover{background:var(--color-surface-alt);}
+html[data-theme="dark"] .slim-strip .ghost-btn:hover{background:var(--color-success-mid);}
+html[data-theme="dark"] .tv-chip{background:var(--color-surface-sunken);color:var(--color-text-soft);}
+html[data-theme="dark"] .reviewer-pill{background:var(--color-surface-sunken);border-color:var(--color-border-strong);}
+html[data-theme="dark"] .o30-bar{background:var(--color-border);}
+html[data-theme="dark"] .upload-panel .spinner{border-color:var(--color-warning-bg);}
+html[data-theme="dark"] .mgmt-edit.edited{background:var(--color-warning-bg);}
+html[data-theme="dark"] .filter-chip{background:var(--color-success-bg);}
+html[data-theme="dark"] .pri2-p4,html[data-theme="dark"] .pri2-blue{border-color:var(--color-border-strong);}
+html[data-theme="dark"] .pri2-other{border-color:var(--color-success-border);}
+}
+/* BN-THEME:END */

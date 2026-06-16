@@ -26,6 +26,7 @@
         crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
+/* BN-THEME:START | Canonical theme synced from bn-theme.css. Do not edit between the sentinels; edit bn-theme.css and run: node sync-theme.js */
 :root{
   /* ── COLOR TOKENS ──────────────────────────────────────── */
   --color-bg:            #f0f4f8;
@@ -98,7 +99,8 @@
   --transition-fast: 0.12s ease;
   --transition-base: 0.20s ease;
 }
-/* ══ DARK THEME (Phase 0.2) — overrides neutrals + semantics; brand greens stay fixed ══ */
+/* ══ DARK THEME (Phase 0.2) — screen-only, so print falls back to the light :root tokens (no print-reset needed) ══ */
+@media screen{
 html[data-theme="dark"]{
   --color-bg:#0f141b; --color-surface:#1a2230; --color-surface-alt:#222d3c; --color-surface-faint:#1e2734; --color-surface-sunken:#161f2b;
   --color-text:#e6ebf2; --color-text-soft:#aab6c6; --color-text-muted:#8c99ab; --color-text-ghost:#7d8a9b;
@@ -130,6 +132,8 @@ html[data-theme="dark"] .mgmt-edit.edited{background:var(--color-warning-bg);}
 html[data-theme="dark"] .filter-chip{background:var(--color-success-bg);}
 html[data-theme="dark"] .pri2-p4,html[data-theme="dark"] .pri2-blue{border-color:var(--color-border-strong);}
 html[data-theme="dark"] .pri2-other{border-color:var(--color-success-border);}
+}
+/* BN-THEME:END */
 *{margin:0;padding:0;box-sizing:border-box;}
 body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;}
 /* HEADER */
@@ -411,17 +415,6 @@ html.density-compact .data-table tbody td{padding-top:3px;padding-bottom:3px;}
 .print-header{display:none;}
 @media print{
   @page{size:letter;margin:0.5in;}
-  /* Always print light, even if dark mode is active (Phase 0.2) */
-  html[data-theme="dark"]{
-    --color-bg:#f0f4f8; --color-surface:#fff; --color-surface-alt:#f8fafc; --color-surface-faint:#fafffe; --color-surface-sunken:#f1f5f9;
-    --color-text:#1e293b; --color-text-soft:#475569; --color-text-muted:#64748b; --color-text-ghost:#94a3b8;
-    --color-border:#e2e8f0; --color-border-strong:#cbd5e1; --color-brand-ink:#1a5f3e; --color-sidebar:#1e293b;
-    --color-success-bg:#f0fdf4; --color-success-border:#c6f0da; --color-success-mid:#d1f0e6; --color-success-text:#1a5f3e;
-    --color-warning-bg:#fff8e6; --color-warning-bg-alt:#fff3cd; --color-warning-border:#f0d87a; --color-warning-text:#7d5a00;
-    --color-danger-bg:#fef0ee; --color-danger-bg-alt:#fde8e8; --color-danger-border:#f7c9c9; --color-danger-text:#8b1a1a;
-    --color-info-bg:#eaf4fd; --color-info-border:#bbd7f0; --color-info-text:#1a5699;
-    --text:#1e293b; --muted:#64748b; --bg:#f0f4f8; --green-bg:#f0fdf4;
-  }
   body{background:var(--color-surface) !important;}
   .sidebar,.header,.upload-banner,.tool-mode-bar,.upload-panel-wrap,.filter-bar,.toast,.pagination-bar,.mobile-menu-btn,.mobile-menu-overlay,.us-swap,.toggle-banner-btn,.no-print,.screen-title{display:none!important;}
   *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}
