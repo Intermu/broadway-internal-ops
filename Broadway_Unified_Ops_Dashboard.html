@@ -1406,6 +1406,106 @@ function renderFiltered(mc, title, mode, filterFn, showCoord) {
 }
 
 // ── OVER-30 WEEKLY REVIEW ───────────────────────────────────────────────────
+// ── OPEN vs CLOSED (completed/invoiced export) ─────────────────────────────
+// Pulls in the 2026 Pilot Revenue export (same file the Proposal Diagnostic
+// consumes) to benchmark open over-30s against how long jobs actually take to
+// finish. Self-contained parser; stores JSON-safe records in window._closedJobs.
+window._closedJobs = window._closedJobs || [];
+function _cmoney(v){ if(v==null||v==='')return 0; if(typeof v==='number')return v; const n=parseFloat(String(v).replace(/[$,\s]/g,'')); return isNaN(n)?0:n; }
+function _cdate(v){ if(!v)return null; if(v instanceof Date)return isNaN(v)?null:v; return parseDateToken(v); }
+function _cclass(s){ s=String(s||'').trim();
+  if(/^WI[\s-]*FI/i.test(s)||/^WI\s/i.test(s))return 'wifi';
+  if(/^RF\b/i.test(s))return 'rf';
+  if(/^Q\/?R\b/i.test(s))return 'qr';
+  return 'service';
+}
+function parseClosedRevenue(raw){
+  const out=[];
+  (raw||[]).forEach(r=>{
+    const completed=_cdate(r['Job Completed Canceled Date']);
+    if(!completed) return; // only completed/closed jobs count
+    const created=_cdate(r['Job Created Date']);
+    let age = created ? Math.round((completed-created)/86400000) : null;
+    if(age!=null && age<0) age=null;
+    const sourceJobNum=String(r['Source Job #']||'').trim();
+    const trade=String(r['Consolidated Trade']||r['Trade']||'').trim();
+    const coord=String(r['Assigned To']||'').trim();
+    const amount=_cmoney(r['Inv Revenue'])||_cmoney(r['Total NTE']);
+    const p2c=parseFloat(r['Proposed to Completed Days']);
+    out.push({sourceJobNum, trade, coord, amount,
+      category:_cclass(sourceJobNum||trade),
+      ageToComplete:age,
+      proposedToCompleted: isNaN(p2c)?null:p2c});
+  });
+  return out;
+}
+function handleClosedFile(file){
+  const st=document.getElementById('closedStatus');
+  if(st) st.textContent=`Reading ${file.name}\u2026`;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{
+      const wb=XLSX.read(e.target.result,{type:'binary',cellDates:true});
+      const sheet=wb.SheetNames.find(n=>n==='Work Order Report')||wb.SheetNames[0];
+      const raw=XLSX.utils.sheet_to_json(wb.Sheets[sheet],{defval:null});
+      const jobs=parseClosedRevenue(raw);
+      if(!jobs.length){ if(st) st.innerHTML='<span class="c-red">No completed jobs found in that file.</span>'; toast('No completed jobs found'); return; }
+      window._closedJobs=jobs; window._closedSource=file.name;
+      if(!window.BROADWAY_SNAPSHOT){
+        bnClientPost('closed-revenue', {jobs, sourceFile:file.name, savedAt:new Date().toISOString()}, {count:String(jobs.length), sourceFile:file.name});
+      }
+      toast(`Loaded ${jobs.length} completed jobs`);
+      renderO30Compare();
+    }catch(err){ if(st) st.innerHTML='<span class="c-red">Could not read that file.</span>'; toast('Closed file read failed: '+err.message); }
+  };
+  reader.readAsBinaryString(file);
+}
+async function autoLoadClosed(){
+  if(window.BROADWAY_SNAPSHOT||window._closedTried) return;
+  window._closedTried=true;
+  const res=await bnClientGet('closed-revenue');
+  if(res&&res.exists&&res.data&&Array.isArray(res.data.jobs)&&res.data.jobs.length){
+    window._closedJobs=res.data.jobs; window._closedSource=res.data.sourceFile||'';
+    if(currentView==='over30-review') renderO30Compare();
+  }
+}
+function renderO30Compare(){
+  const slot=document.getElementById('o30CompareSlot'); if(!slot) return;
+  const cj=window._closedJobs||[];
+  if(!cj.length){
+    slot.innerHTML = `<div class="card no-print"><div class="card-body" style="padding:14px 16px;">
+      <div style="font-size:12px;color:var(--text);font-weight:600;margin-bottom:4px;">Open vs Closed comparison</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:10px;">Load the completed/invoiced export (2026 Pilot Revenue) to benchmark these open over-30s against how long jobs actually take to finish.</div>
+      <input type="file" id="closedFileInput" accept=".xlsx,.xls" style="display:none;" onchange="if(this.files.length)handleClosedFile(this.files[0]);">
+      <button class="browse-btn" onclick="document.getElementById('closedFileInput').click();">\uff0b Load completed/invoiced export</button>
+      <span id="closedStatus" style="font-size:11px;color:var(--muted);margin-left:10px;"></span>
+    </div></div>`;
+    return;
+  }
+  const withAge=cj.filter(j=>typeof j.ageToComplete==='number' && j.ageToComplete>=0);
+  const n=withAge.length;
+  const avg=n?Math.round(withAge.reduce((s,j)=>s+j.ageToComplete,0)/n):0;
+  const sorted=withAge.map(j=>j.ageToComplete).sort((a,b)=>a-b);
+  const p90=n?sorted[Math.floor(0.9*(n-1))]:0;
+  const over30Closed=withAge.filter(j=>j.ageToComplete>30).length;
+  const over30ClosedPct=n?(over30Closed/n*100):0;
+  const openO30=JOBS.filter(j=>j.aged>30).length;
+  const openTotal=JOBS.length;
+  const openO30Pct=openTotal?(openO30/openTotal*100):0;
+  slot.innerHTML = `<div class="card">
+    <div class="card-header"><h3>Open vs Closed \u2014 Days to Complete</h3><span class="card-meta">${cj.length} completed jobs${window._closedSource?` \u00b7 ${escapeHtml(window._closedSource)}`:''}<button class="ghost-btn no-print" style="margin-left:8px;" onclick="document.getElementById('closedFileInput2').click();">\u21bb Replace</button><input type="file" id="closedFileInput2" accept=".xlsx,.xls" style="display:none;" onchange="if(this.files.length)handleClosedFile(this.files[0]);"></span></div>
+    <div class="card-body" style="padding:14px 16px;">
+      <div class="stat-grid sg-4" style="margin-bottom:8px;">
+        <div class="stat-box"><div class="sb-num c-blue">${avg}d</div><div class="sb-lbl">Avg days to complete</div><div class="sb-sub">${n} closed jobs</div></div>
+        <div class="stat-box"><div class="sb-num c-amber">${p90}d</div><div class="sb-lbl">Slowest 10%</div><div class="sb-sub">took longer than this</div></div>
+        <div class="stat-box"><div class="sb-num c-blue">${over30ClosedPct.toFixed(0)}%</div><div class="sb-lbl">Closed: took &gt;30d</div><div class="sb-sub">historically</div></div>
+        <div class="stat-box"><div class="sb-num ${openO30Pct>over30ClosedPct?'c-red':'c-green'}">${openO30Pct.toFixed(0)}%</div><div class="sb-lbl">Open: currently &gt;30d</div><div class="sb-sub">${openO30} of ${openTotal}</div></div>
+      </div>
+      <div style="font-size:11px;color:var(--muted);">Of jobs that have completed, the average took <strong>${avg} days</strong> and the slowest 10% took more than <strong>${p90} days</strong>. The current open queue is running <strong>${openO30Pct.toFixed(0)}%</strong> over 30 days vs <strong>${over30ClosedPct.toFixed(0)}%</strong> of completed work that needed more than 30 days to finish.</div>
+    </div>
+  </div>`;
+}
+
 function renderOver30(mc, agg) {
   const over30 = JOBS.filter(j=>j.aged>30);
   const approaching = JOBS.filter(j=>j.aged>=20 && j.aged<=30);
@@ -1458,6 +1558,7 @@ function renderOver30(mc, agg) {
       <div class="stat-box"><div class="sb-num c-red">${oldestAge}d</div><div class="sb-lbl">Oldest Job</div><div class="sb-sub">${oldestId}</div></div>
     </div>
     <div id="o30TrendSlot"></div>
+    <div id="o30CompareSlot"></div>
     <div class="card">
       <div class="card-header"><h3>By Coordinator</h3><span class="card-meta">${over30.length} over 30 · ${approaching.length} approaching</span></div>
       <div class="card-body" style="padding:0;">${coordTable}</div>
@@ -1468,6 +1569,8 @@ function renderOver30(mc, agg) {
       <div class="card-body" style="padding:12px 16px 0;">${jobTable(approaching,'appr',true)}</div>
     </div>`;
   renderOver30Trend();
+  renderO30Compare();
+  autoLoadClosed();
 }
 
 // ── AGING DETAIL ──────────────────────────────────────────────────────────
