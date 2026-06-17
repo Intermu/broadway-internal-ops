@@ -268,6 +268,26 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .jm-notes{font-size:12px;color:var(--text);line-height:1.55;white-space:pre-wrap;background:var(--color-surface-alt);border:1px solid var(--border);border-radius:8px;padding:10px 12px;max-height:260px;overflow-y:auto;}
 .data-table tbody tr.job-row{cursor:pointer;}
 .data-table tbody tr.job-row:hover{background:var(--color-surface-alt);}
+/* WO Audit Note (durable per-Job-ID note) */
+.jn-block{margin-top:14px;border-top:1px solid var(--border);padding-top:12px;}
+.jn-head{display:flex;align-items:center;justify-content:space-between;}
+.jn-hint{font-size:9px;font-weight:400;color:var(--muted);text-transform:none;letter-spacing:0;}
+.jn-actions{display:flex;gap:6px;margin:8px 0;flex-wrap:wrap;}
+.jn-act{font-size:10.5px;font-weight:600;padding:4px 9px;border-radius:6px;border:1px solid var(--border);background:var(--color-surface);color:var(--muted);cursor:pointer;font-family:'DM Sans',sans-serif;}
+.jn-act:hover{border-color:var(--green-dk);}
+.jn-act.sel.act-none{background:#fef3c7;color:#92400e;border-color:#fcd34d;}
+.jn-act.sel.act-working{background:#dbeafe;color:#1e40af;border-color:#93c5fd;}
+.jn-act.sel.act-done{background:#dcfce7;color:#166534;border-color:#86efac;}
+.jn-text{width:100%;min-height:120px;max-height:320px;resize:vertical;font-family:'DM Mono',monospace;font-size:11px;line-height:1.5;padding:9px 11px;border:1px solid var(--border);border-radius:8px;background:var(--color-surface);color:var(--text);box-sizing:border-box;white-space:pre-wrap;}
+.jn-foot{display:flex;align-items:center;gap:12px;margin-top:8px;}
+.jn-attach{font-size:10.5px;color:var(--green-dk);cursor:pointer;font-weight:600;}
+.jn-saved{font-size:10px;color:var(--muted);margin-left:auto;}
+.jn-save{font-size:11px;font-weight:700;padding:6px 14px;border-radius:7px;border:none;background:var(--green-dk);color:#fff;cursor:pointer;font-family:'DM Sans',sans-serif;}
+.jn-save:hover{opacity:0.9;}
+.jn-pill{display:inline-block;font-size:8.5px;font-weight:700;padding:1px 5px;border-radius:99px;letter-spacing:0.2px;font-family:'DM Sans',sans-serif;}
+.jn-pill.jn-none{background:#fef3c7;color:#92400e;}
+.jn-pill.jn-working{background:#dbeafe;color:#1e40af;}
+.jn-pill.jn-done{background:#dcfce7;color:#166534;}
 
 /* ─── SLIM POST-LOAD STATUS STRIP ─── */
 .slim-strip{display:none;align-items:center;gap:10px;padding:9px 14px;border-radius:8px;background:var(--color-success-bg);border:1px solid var(--color-success-border);font-size:11.5px;max-width:640px;margin:0 auto;}
@@ -966,7 +986,7 @@ function jobTable(jobs, mode='', showCoord=true) {
     const vendorData = (j.vendors||'').toLowerCase();
     const searchBlob = (j.jobId+' '+j.fm+' '+j.notes+' '+j.location+' '+(j.lastReviewedBy||'')+' '+(j.trades||'')+' '+(j.vendors||'')).toLowerCase();
     return `<tr class="job-row" data-jobid="${escapeHtml(j.jobId)}" onclick="openJobModal(this.dataset.jobid)" data-risk="${escapeHtml(j.risk||'')}" data-coord="${escapeHtml(j.coordinator||'')}" data-status="${escapeHtml(j.status||'')}" data-priority2="${escapeHtml(priBucket)}" data-trade="${escapeHtml(tradeData)}" data-vendor="${escapeHtml(vendorData)}" data-search="${escapeHtml(searchBlob)}">
-      <td><span class="jid">${escapeHtml(j.jobId)}</span>${flagCell?'<div style="margin-top:3px;">'+flagCell+'</div>':''}</td>
+      <td><span class="jid">${escapeHtml(j.jobId)}</span>${flagCell?'<div style="margin-top:3px;">'+flagCell+'</div>':''}${JOB_NOTES[j.jobId]?'<div style="margin-top:3px;">'+jobNoteMarker(j.jobId)+'</div>':''}</td>
       ${showCoord ? `<td style="font-size:11px;">${escapeHtml(j.coordinator)}</td>` : ''}
       <td>${statusBadge(j.status)}</td>
       <td><span class="age-pill ${ageCls(j.aged)}">${j.aged}d</span></td>
@@ -1023,6 +1043,8 @@ function stuckReason(j){
 function openJobModal(id){
   const j=JOBS.find(x=>x.jobId===id); if(!j) return;
   const r=stuckReason(j);
+  const saved=JOB_NOTES[id]||{}; const action=saved.action||'none';
+  window._jnCurrentId=id; window._jnAction=action;
   const box=document.getElementById('jobModalBox'); if(!box) return;
   const row=(k,v)=>`<div><span class="jm-k">${k}</span><span class="jm-v">${v}</span></div>`;
   box.innerHTML=`
@@ -1049,11 +1071,84 @@ function openJobModal(id){
       <div class="jm-section-label">Latest note</div>
       <div class="jm-notes">${j.notes?escapeHtml(j.notes):'No note on file.'}</div>
       ${j.mgmtNotes?'<div class="jm-section-label" style="margin-top:12px;">Mgmt notes</div><div class="jm-notes">'+escapeHtml(j.mgmtNotes)+'</div>':''}
+      <div class="jn-block">
+        <div class="jn-head"><span class="jm-section-label" style="margin:0;">WO Audit Note <span class="jn-hint">saved per Job ID · stays attached week to week</span></span></div>
+        <div class="jn-actions">
+          <button type="button" class="jn-act act-none ${action==='none'?'sel':''}" onclick="setJobNoteAction('none')">No action yet</button>
+          <button type="button" class="jn-act act-working ${action==='working'?'sel':''}" onclick="setJobNoteAction('working')">In progress</button>
+          <button type="button" class="jn-act act-done ${action==='done'?'sel':''}" onclick="setJobNoteAction('done')">Action taken</button>
+        </div>
+        <textarea id="jnText" class="jn-text" placeholder="Paste the WO Audit summary, or add notes / next steps — stays attached to this Job ID across future audits.">${escapeHtml(saved.note||'')}</textarea>
+        <div class="jn-foot">
+          <label class="jn-attach">📎 Attach .txt<input type="file" accept=".txt,.md,text/plain" style="display:none;" onchange="attachJobNoteFile(this)"></label>
+          <span id="jnSaved" class="jn-saved">${saved.updatedAt?'Last saved '+escapeHtml(new Date(saved.updatedAt).toLocaleString()):'No note saved yet'}</span>
+          <button type="button" class="jn-save" onclick="saveJobNote()">Save note</button>
+        </div>
+      </div>
     </div>`;
   const o=document.getElementById('jobModalOverlay'); if(o) o.classList.add('open');
 }
 function closeJobModal(){ const o=document.getElementById('jobModalOverlay'); if(o) o.classList.remove('open'); }
 document.addEventListener('keydown',function(e){ if(e.key==='Escape') closeJobModal(); });
+
+// ── PER-JOB WORKING NOTES (durable, keyed by Job ID) ──
+// Notes are stored by Job ID, not row position, so when next week's audit loads
+// the same job its note + action status reappear. Primary store is the shared
+// data store (slot 'job-notes'); localStorage is a same-browser cache/fallback
+// so it works before the slot is deployed and offline.
+let JOB_NOTES = {};
+const JOB_NOTES_LS = 'bn_job_notes';
+function _jnLoadLocal(){ try{ return JSON.parse(localStorage.getItem(JOB_NOTES_LS)||'{}')||{}; }catch(_){ return {}; } }
+function _jnSaveLocal(){ try{ localStorage.setItem(JOB_NOTES_LS, JSON.stringify(JOB_NOTES)); }catch(_){} }
+function jobNoteMarker(id){
+  const r=JOB_NOTES[id]; if(!r) return '';
+  const a=r.action||'none';
+  const lbl=a==='done'?'✓ Action taken':a==='working'?'● In progress':'📝 Noted';
+  return '<span class="jn-pill jn-'+a+'">'+lbl+'</span>';
+}
+async function loadJobNotes(){
+  JOB_NOTES = _jnLoadLocal();
+  if(!window.BROADWAY_SNAPSHOT){
+    const res = await bnClientGet('job-notes');
+    if(res && res.exists && res.data && res.data.notes && typeof res.data.notes==='object'){
+      const blob = res.data.notes;
+      Object.keys(blob).forEach(function(id){
+        const a=JOB_NOTES[id], b=blob[id];
+        if(!a || (b.updatedAt||'') >= (a.updatedAt||'')) JOB_NOTES[id]=b;
+      });
+      _jnSaveLocal();
+    }
+  }
+  if(JOBS.length) render(currentView); // paint row markers once notes are known
+}
+function setJobNoteAction(action){
+  window._jnAction=action;
+  document.querySelectorAll('#jobModalBox .jn-act').forEach(function(b){ b.classList.remove('sel'); });
+  const el=document.querySelector('#jobModalBox .jn-act.act-'+action); if(el) el.classList.add('sel');
+}
+function attachJobNoteFile(input){
+  const f=input.files&&input.files[0]; if(!f) return;
+  const rd=new FileReader();
+  rd.onload=function(e){ const ta=document.getElementById('jnText'); if(ta){ ta.value=(ta.value?ta.value+'\n\n':'')+String(e.target.result||''); } };
+  rd.readAsText(f);
+}
+async function saveJobNote(){
+  const id=window._jnCurrentId; if(!id) return;
+  const ta=document.getElementById('jnText'); if(!ta) return;
+  const note=ta.value;
+  const action=window._jnAction||'none';
+  if(note.trim()==='' && action==='none'){ delete JOB_NOTES[id]; }
+  else { JOB_NOTES[id]={ note:note, action:action, updatedAt:new Date().toISOString(), updatedBy:(JOB_NOTES[id]&&JOB_NOTES[id].updatedBy)||'' }; }
+  _jnSaveLocal();
+  let synced=false;
+  if(!window.BROADWAY_SNAPSHOT){
+    const res=await bnClientPost('job-notes', {notes:JOB_NOTES, savedAt:new Date().toISOString()}, {count:String(Object.keys(JOB_NOTES).length)});
+    synced=!!(res&&res.ok);
+  }
+  const st=document.getElementById('jnSaved'); if(st) st.textContent=(JOB_NOTES[id]?'Last saved '+new Date().toLocaleString():'Cleared')+(synced?' · synced to team':' · this browser');
+  toast(synced?'Note saved — synced to team':'Note saved on this browser');
+  if(JOBS.length) render(currentView);
+}
 
 function filterTbl(inp, id, type) {
   const tbl=document.getElementById(id); if(!tbl) return;
@@ -2946,6 +3041,9 @@ function base64ToFile(b64, filename){
 // Auto-load the persisted monthly revenue file (slot: revenue) so coordinator
 // YTD and the over-30 benchmark appear on open without re-uploading.
 autoLoadClosed();
+
+// Load durable per-Job-ID working notes (slot: job-notes; localStorage fallback).
+loadJobNotes();
 
 // ── SECTION 8: INIT ──────────────────────────────────────────────────────
 // Default the header date to today. handleFile() will overwrite with the
