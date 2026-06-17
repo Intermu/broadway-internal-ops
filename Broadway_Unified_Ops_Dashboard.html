@@ -294,6 +294,27 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .holdup-ai-btn:disabled{opacity:0.6;cursor:default;}
 .ai-tag{display:inline-block;font-size:8px;font-weight:800;letter-spacing:0.5px;background:var(--green-dk);color:#fff;border-radius:4px;padding:1px 4px;vertical-align:middle;margin-right:3px;}
 .holdup-meta{font-size:9px;color:var(--muted);margin-top:5px;}
+/* Modal polish: gradient header + document-style notes */
+.job-modal{overflow:hidden;}
+.job-modal-head{background:linear-gradient(135deg,#1a5f3e,#0d3d26);border-bottom:none;}
+.job-modal-head .jm-head-l{display:flex;flex-direction:column;gap:1px;margin-right:auto;}
+.job-modal-head .jm-id{color:#fff;}
+.job-modal-head .jm-head-sub{font-size:10px;color:rgba(255,255,255,0.8);font-family:'DM Sans',sans-serif;font-weight:500;}
+.job-modal-head .jm-x{color:rgba(255,255,255,0.9);}
+.job-modal-head .jm-x:hover{color:#fff;}
+.jn-doc-card{background:var(--color-surface-alt);border:1px solid var(--border);border-radius:8px;padding:13px 15px;max-height:340px;overflow-y:auto;}
+.nd-doc{font-family:'DM Sans',sans-serif;font-size:12px;line-height:1.55;color:var(--text);}
+.nd-doc>.nd-h:first-child{margin-top:0;}
+.nd-h{font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:var(--green-dk);margin:13px 0 5px;padding-bottom:3px;border-bottom:1px solid var(--border);}
+.nd-p{margin:5px 0;}
+.nd-p strong{color:var(--text);}
+.nd-ul,.nd-ol{margin:5px 0 5px 0;padding-left:18px;}
+.nd-ul li,.nd-ol li{margin:3px 0;}
+.nd-empty{color:var(--muted);font-style:italic;}
+.jn-head{margin-bottom:7px;}
+.jn-edit{font-size:10.5px;font-weight:700;padding:5px 11px;border-radius:7px;border:1px solid var(--border);background:var(--color-surface);color:var(--green-dk);cursor:pointer;font-family:'DM Sans',sans-serif;}
+.jn-edit:hover{border-color:var(--green-dk);}
+.jn-cancel{font-size:11px;font-weight:600;padding:6px 12px;border-radius:7px;border:1px solid var(--border);background:var(--color-surface);color:var(--muted);cursor:pointer;font-family:'DM Sans',sans-serif;}
 
 /* ─── SLIM POST-LOAD STATUS STRIP ─── */
 .slim-strip{display:none;align-items:center;gap:10px;padding:9px 14px;border-radius:8px;background:var(--color-success-bg);border:1px solid var(--color-success-border);font-size:11.5px;max-width:640px;margin:0 auto;}
@@ -1050,12 +1071,17 @@ function openJobModal(id){
   const j=JOBS.find(x=>x.jobId===id); if(!j) return;
   const r=stuckReason(j);
   const saved=JOB_NOTES[id]||{}; const action=saved.action||'none';
+  const hasNote=!!(saved.note&&saved.note.trim());
+  const actLbl=action==='done'?'Action taken':action==='working'?'In progress':'No action yet';
   window._jnCurrentId=id; window._jnAction=action;
   const box=document.getElementById('jobModalBox'); if(!box) return;
   const row=(k,v)=>`<div><span class="jm-k">${k}</span><span class="jm-v">${v}</span></div>`;
   box.innerHTML=`
     <div class="job-modal-head">
-      <span class="jm-id">${escapeHtml(j.jobId)}</span>
+      <div class="jm-head-l">
+        <span class="jm-id">${escapeHtml(j.jobId)}</span>
+        <span class="jm-head-sub">${escapeHtml(j.coordinator||'—')}${j.location?' · '+escapeHtml(j.location):''}</span>
+      </div>
       <span class="age-pill ${ageCls(j.aged)}">${j.aged}d</span>
       ${riskBadge(j.risk)}
       <button class="jm-x" onclick="closeJobModal()" aria-label="Close">×</button>
@@ -1068,33 +1094,45 @@ function openJobModal(id){
         </div>
         <div class="holdup-meta" id="holdupMeta">${saved.summaryAt?'AI summary · '+escapeHtml(new Date(saved.summaryAt).toLocaleString()):''}</div>
       </div>
+      <div class="jm-section-label">Details</div>
       <div class="jm-grid">
-        ${row('Coordinator', escapeHtml(j.coordinator||'—'))}
         ${row('Status', statusBadge(j.status))}
         ${row('Age', j.aged+' days since created')}
         ${row('Last update', j.daysSinceUpdate==null?'Never':j.daysSinceUpdate+' days ago')}
         ${row('Priority', priorityPill(j.priority)||'—')}
         ${row('Approved', j.amount>0?fmt$0(j.amount):'—')}
         ${row('FM', escapeHtml(j.fm||'—'))}
-        ${row('Location', escapeHtml(j.location||'—'))}
         ${row('Trades', escapeHtml(j.trades||'—'))}
         ${row('Vendors', escapeHtml(j.vendors||'—'))}
       </div>
-      <div class="jm-section-label">Latest note</div>
-      <div class="jm-notes">${j.notes?escapeHtml(j.notes):'No note on file.'}</div>
-      ${j.mgmtNotes?'<div class="jm-section-label" style="margin-top:12px;">Mgmt notes</div><div class="jm-notes">'+escapeHtml(j.mgmtNotes)+'</div>':''}
+      <div class="jm-section-label">Latest status note</div>
+      <div class="jn-doc-card nd-doc">${j.notes?renderNoteHtml(j.notes):'<p class="nd-p nd-empty">No note on file.</p>'}</div>
+      ${j.mgmtNotes?'<div class="jm-section-label">Mgmt notes (from sheet)</div><div class="jn-doc-card nd-doc">'+renderNoteHtml(j.mgmtNotes)+'</div>':''}
       <div class="jn-block">
-        <div class="jn-head"><span class="jm-section-label" style="margin:0;">WO Audit Note <span class="jn-hint">saved per Job ID · stays attached week to week</span></span></div>
-        <div class="jn-actions">
-          <button type="button" class="jn-act act-none ${action==='none'?'sel':''}" onclick="setJobNoteAction('none')">No action yet</button>
-          <button type="button" class="jn-act act-working ${action==='working'?'sel':''}" onclick="setJobNoteAction('working')">In progress</button>
-          <button type="button" class="jn-act act-done ${action==='done'?'sel':''}" onclick="setJobNoteAction('done')">Action taken</button>
+        <div class="jn-head">
+          <span class="jm-section-label" style="margin:0;">WO Audit Note <span class="jn-hint">saved per Job ID · stays attached week to week</span></span>
+          <span class="jn-pill jn-${action}">${actLbl}</span>
         </div>
-        <textarea id="jnText" class="jn-text" placeholder="Paste the WO Audit summary, or add notes / next steps — stays attached to this Job ID across future audits.">${escapeHtml(saved.note||'')}</textarea>
-        <div class="jn-foot">
-          <label class="jn-attach">📎 Attach .txt<input type="file" accept=".txt,.md,text/plain" style="display:none;" onchange="attachJobNoteFile(this)"></label>
-          <span id="jnSaved" class="jn-saved">${saved.updatedAt?'Last saved '+escapeHtml(new Date(saved.updatedAt).toLocaleString()):'No note saved yet'}</span>
-          <button type="button" class="jn-save" onclick="saveJobNote()">Save note</button>
+        <div id="jnView" ${hasNote?'':'style="display:none;"'}>
+          <div class="jn-doc-card nd-doc">${hasNote?renderNoteHtml(saved.note):''}</div>
+          <div class="jn-foot">
+            <button type="button" class="jn-edit" onclick="editJobNote()">✎ Edit note</button>
+            <span class="jn-saved">${saved.updatedAt?'Last saved '+escapeHtml(new Date(saved.updatedAt).toLocaleString()):''}</span>
+          </div>
+        </div>
+        <div id="jnEdit" ${hasNote?'style="display:none;"':''}>
+          <div class="jn-actions">
+            <button type="button" class="jn-act act-none ${action==='none'?'sel':''}" onclick="setJobNoteAction('none')">No action yet</button>
+            <button type="button" class="jn-act act-working ${action==='working'?'sel':''}" onclick="setJobNoteAction('working')">In progress</button>
+            <button type="button" class="jn-act act-done ${action==='done'?'sel':''}" onclick="setJobNoteAction('done')">Action taken</button>
+          </div>
+          <textarea id="jnText" class="jn-text" placeholder="Paste the WO Audit summary, or add notes / next steps — stays attached to this Job ID across future audits.">${escapeHtml(saved.note||'')}</textarea>
+          <div class="jn-foot">
+            <label class="jn-attach">📎 Attach .txt<input type="file" accept=".txt,.md,text/plain" style="display:none;" onchange="attachJobNoteFile(this)"></label>
+            <span id="jnSaved" class="jn-saved">${saved.updatedAt?'Last saved '+escapeHtml(new Date(saved.updatedAt).toLocaleString()):'No note saved yet'}</span>
+            ${hasNote?'<button type="button" class="jn-cancel" onclick="cancelJobNote()">Cancel</button>':''}
+            <button type="button" class="jn-save" onclick="saveJobNote()">Save note</button>
+          </div>
         </div>
       </div>
     </div>`;
@@ -1120,6 +1158,35 @@ function jobNoteMarker(id){
   const lbl=a==='done'?'✓ Action taken':a==='working'?'● In progress':'📝 Noted';
   return '<div style="margin-top:3px;"><span class="jn-pill jn-'+a+'">'+lbl+'</span></div>';
 }
+// Render a pasted plain-text note as a lightweight formatted document (headings, bullets, numbered lists, label:value, paragraphs).
+function renderNoteHtml(text){
+  const esc=escapeHtml(String(text||''));
+  const lines=esc.split(/\r?\n/);
+  let html='', list=null;
+  function closeList(){ if(list){ html+=(list==='ul'?'</ul>':'</ol>'); list=null; } }
+  for(let i=0;i<lines.length;i++){
+    const line=lines[i].trim();
+    if(!line){ closeList(); continue; }
+    let m;
+    if((m=line.match(/^(?:[\u2022\u25cf\u25aa\u2023*-])\s+(.*)$/))){ if(list!=='ul'){ closeList(); html+='<ul class="nd-ul">'; list='ul'; } html+='<li>'+m[1]+'</li>'; continue; }
+    if((m=line.match(/^(\d+)[.)]\s+(.*)$/))){ if(list!=='ol'){ closeList(); html+='<ol class="nd-ol">'; list='ol'; } html+='<li>'+m[2]+'</li>'; continue; }
+    closeList();
+    const plain=line.replace(/^[^0-9A-Za-z]+/,'');
+    const letters=plain.replace(/[^A-Za-z]/g,'');
+    if(letters.length>=3 && plain===plain.toUpperCase()){ html+='<div class="nd-h">'+line+'</div>'; continue; }
+    if((m=line.match(/^([A-Za-z][A-Za-z0-9 \/#.'-]{1,32}):\s+(.+)$/))){ html+='<p class="nd-p"><strong>'+m[1]+':</strong> '+m[2]+'</p>'; continue; }
+    html+='<p class="nd-p">'+line+'</p>';
+  }
+  closeList();
+  return html||'<p class="nd-p nd-empty">No note yet.</p>';
+}
+function editJobNote(){
+  const v=document.getElementById('jnView'), e=document.getElementById('jnEdit');
+  if(v) v.style.display='none';
+  if(e) e.style.display='';
+  const ta=document.getElementById('jnText'); if(ta) ta.focus();
+}
+function cancelJobNote(){ if(window._jnCurrentId) openJobModal(window._jnCurrentId); }
 async function loadJobNotes(){
   JOB_NOTES = _jnLoadLocal();
   if(!window.BROADWAY_SNAPSHOT){
@@ -1152,17 +1219,16 @@ async function saveJobNote(){
   const note=ta.value;
   const action=window._jnAction||'none';
   if(note.trim()==='' && action==='none'){ delete JOB_NOTES[id]; }
-  else { JOB_NOTES[id]={ note:note, action:action, updatedAt:new Date().toISOString(), updatedBy:(JOB_NOTES[id]&&JOB_NOTES[id].updatedBy)||'' }; }
+  else { const prev=JOB_NOTES[id]||{}; JOB_NOTES[id]={ note:note, action:action, updatedAt:new Date().toISOString(), updatedBy:prev.updatedBy||'', summary:prev.summary, summaryAt:prev.summaryAt }; }
   _jnSaveLocal();
   let synced=false;
   if(!window.BROADWAY_SNAPSHOT){
     const res=await bnClientPost('job-notes', {notes:JOB_NOTES, savedAt:new Date().toISOString()}, {count:String(Object.keys(JOB_NOTES).length)});
     synced=!!(res&&res.ok);
   }
-  const st=document.getElementById('jnSaved'); if(st) st.textContent=(JOB_NOTES[id]?'Last saved '+new Date().toLocaleString():'Cleared')+(synced?' · synced to team':' · this browser');
   toast(synced?'Note saved — synced to team':'Note saved on this browser');
   if(JOBS.length) render(currentView);
-  // Auto-refresh the AI holdup summary from the full picture whenever a note with content is saved.
+  openJobModal(id); // refresh modal into rendered view mode + status pill
   if(JOB_NOTES[id] && note.trim()!=='') generateHoldupSummary(id);
 }
 
@@ -1206,7 +1272,7 @@ async function generateHoldupSummary(id){
   try{
     const prompt=buildHoldupPrompt(j);
     const fetchP=fetch('/api/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt})})
-      .then(async function(res){ if(!res.ok) throw new Error('HTTP '+res.status); const d=await res.json(); if(d.error) throw new Error(d.error); if(!d.text) throw new Error('Empty response'); return String(d.text).trim(); });
+      .then(async function(res){ if(!res.ok){ const b=await res.text().catch(function(){return '';}); throw new Error('HTTP '+res.status+(b?' — '+b.replace(/\s+/g,' ').slice(0,180):'')); } const d=await res.json(); if(d.error) throw new Error(d.error); if(!d.text) throw new Error('Empty response'); return String(d.text).trim(); });
     const timeoutP=new Promise(function(_,rej){ setTimeout(function(){ rej(new Error('timed out')); },30000); });
     let summary=await Promise.race([fetchP,timeoutP]);
     summary=summary.replace(/^["']+|["']+$/g,'').trim();
@@ -1222,6 +1288,7 @@ async function generateHoldupSummary(id){
     }
     toast('AI holdup summary updated');
   }catch(err){
+    console.error('Holdup summary failed:', err);
     if(btn && window._jnCurrentId===id){ btn.disabled=false; btn.textContent='✨ AI summary'; }
     toast('Summary failed: '+(err&&err.message?err.message:err));
   }

@@ -30,10 +30,13 @@ module.exports = async function (context, req) {
       messages: [{ role: "user", content: prompt }],
     });
 
+    const outText = Array.isArray(msg.content)
+      ? msg.content.filter(function (b) { return b && b.type === "text"; }).map(function (b) { return b.text; }).join("")
+      : "";
     context.res = {
       status: 200,
       headers: { "Content-Type": "application/json" },
-      body: { text: msg.content[0].text },
+      body: { text: outText },
     };
   } catch (err) {
     context.log.error("generate error:", err);
