@@ -1507,7 +1507,16 @@ function renderFiltered(mc, title, mode, filterFn, showCoord) {
 // finish. Self-contained parser; stores JSON-safe records in window._closedJobs.
 window._closedJobs = window._closedJobs || [];
 function _cmoney(v){ if(v==null||v==='')return 0; if(typeof v==='number')return v; const n=parseFloat(String(v).replace(/[$,\s]/g,'')); return isNaN(n)?0:n; }
-function _cdate(v){ if(!v)return null; if(v instanceof Date)return isNaN(v)?null:v; return parseDateToken(v); }
+function _cdate(v){
+  if(v==null||v==='')return null;
+  if(v instanceof Date)return isNaN(v)?null:v;
+  // Numbers are Excel date serials (days since 1899-12-30).
+  if(typeof v==='number'){ const d=new Date(Math.round((v-25569)*86400000)); return isNaN(d)?null:d; }
+  const s=String(v).trim();
+  // ISO 8601 — what JSON.stringify produces when Date cells round-trip through the data store (Agent revenue sync, snapshot re-load).
+  if(/^\d{4}-\d{2}-\d{2}([T ]|$)/.test(s)){ const d=new Date(s); return isNaN(d)?null:d; }
+  return parseDateToken(s);
+}
 function _cclass(s){ s=String(s||'').trim();
   if(/^WI[\s-]*FI/i.test(s)||/^WI\s/i.test(s))return 'wifi';
   if(/^RF\b/i.test(s))return 'rf';
