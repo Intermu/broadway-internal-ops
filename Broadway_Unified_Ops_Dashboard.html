@@ -252,6 +252,22 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 /* When the panel is collapsed, the wrap shows only the slim strip */
 .upload-panel-wrap.collapsed{display:none;}
 .upload-panel-wrap.collapsed .upload-panel{display:none;}
+/* ─── JOB DETAIL MODAL ─── */
+.job-modal-overlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,0.55);z-index:9998;align-items:flex-start;justify-content:center;padding:40px 16px;overflow-y:auto;}
+.job-modal-overlay.open{display:flex;}
+.job-modal{background:var(--color-surface);border:1px solid var(--border);border-radius:10px;max-width:640px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,0.25);font-family:'DM Sans',sans-serif;}
+.job-modal-head{display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--color-surface);border-radius:10px 10px 0 0;}
+.job-modal-head .jm-id{font-family:'DM Mono',monospace;font-weight:700;font-size:14px;color:var(--text);}
+.job-modal-head .jm-x{margin-left:auto;background:none;border:none;font-size:20px;line-height:1;cursor:pointer;color:var(--muted);}
+.job-modal-body{padding:16px 18px;}
+.jm-holdup{background:var(--color-surface-alt);border:1px solid var(--border);border-left:3px solid var(--green-dk);border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12.5px;line-height:1.5;color:var(--text);}
+.jm-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px 18px;font-size:12px;margin-bottom:14px;}
+.jm-grid .jm-k{color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:0.4px;display:block;margin-bottom:1px;}
+.jm-grid .jm-v{color:var(--text);font-weight:600;}
+.jm-section-label{font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:var(--muted);font-weight:700;margin:0 0 5px;}
+.jm-notes{font-size:12px;color:var(--text);line-height:1.55;white-space:pre-wrap;background:var(--color-surface-alt);border:1px solid var(--border);border-radius:8px;padding:10px 12px;max-height:260px;overflow-y:auto;}
+.data-table tbody tr.job-row{cursor:pointer;}
+.data-table tbody tr.job-row:hover{background:var(--color-surface-alt);}
 
 /* ─── SLIM POST-LOAD STATUS STRIP ─── */
 .slim-strip{display:none;align-items:center;gap:10px;padding:9px 14px;border-radius:8px;background:var(--color-success-bg);border:1px solid var(--color-success-border);font-size:11.5px;max-width:640px;margin:0 auto;}
@@ -949,7 +965,7 @@ function jobTable(jobs, mode='', showCoord=true) {
     const tradeData = (j.trades||'').toLowerCase();
     const vendorData = (j.vendors||'').toLowerCase();
     const searchBlob = (j.jobId+' '+j.fm+' '+j.notes+' '+j.location+' '+(j.lastReviewedBy||'')+' '+(j.trades||'')+' '+(j.vendors||'')).toLowerCase();
-    return `<tr data-risk="${escapeHtml(j.risk||'')}" data-coord="${escapeHtml(j.coordinator||'')}" data-status="${escapeHtml(j.status||'')}" data-priority2="${escapeHtml(priBucket)}" data-trade="${escapeHtml(tradeData)}" data-vendor="${escapeHtml(vendorData)}" data-search="${escapeHtml(searchBlob)}">
+    return `<tr class="job-row" data-jobid="${escapeHtml(j.jobId)}" onclick="openJobModal(this.dataset.jobid)" data-risk="${escapeHtml(j.risk||'')}" data-coord="${escapeHtml(j.coordinator||'')}" data-status="${escapeHtml(j.status||'')}" data-priority2="${escapeHtml(priBucket)}" data-trade="${escapeHtml(tradeData)}" data-vendor="${escapeHtml(vendorData)}" data-search="${escapeHtml(searchBlob)}">
       <td><span class="jid">${escapeHtml(j.jobId)}</span>${flagCell?'<div style="margin-top:3px;">'+flagCell+'</div>':''}</td>
       ${showCoord ? `<td style="font-size:11px;">${escapeHtml(j.coordinator)}</td>` : ''}
       <td>${statusBadge(j.status)}</td>
@@ -962,7 +978,7 @@ function jobTable(jobs, mode='', showCoord=true) {
       <td>${updatePill(j)}${j.lastReviewedBy?`<div style="margin-top:2px;font-size:9px;color:var(--muted);font-family:'DM Mono',monospace;">✎ ${escapeHtml(j.lastReviewedBy)}</div>`:''}</td>
       <td style="font-size:11px;">${escapeHtml(j.fm||'-')}</td>
       <td style="font-size:11px;color:#64748b;">${escapeHtml(j.location)}</td>
-      <td style="font-size:10px;color:#475569;max-width:220px;">${j.notes?escapeHtml(j.notes).slice(0,180)+(j.notes.length>180?'…':''):'-'}</td>
+      <td style="font-size:10px;color:#475569;max-width:220px;" title="${escapeHtml(j.notes||'')}">${j.notes?escapeHtml(j.notes).slice(0,180)+(j.notes.length>180?'…':''):'-'}</td>
     </tr>`;
   }).join('');
   const coordHdr = showCoord ? `<th class="sortable" data-sort-tbl="tbl-${mode}" data-sort-type="str">Coordinator</th>` : '';
@@ -981,6 +997,63 @@ function jobTable(jobs, mode='', showCoord=true) {
     <thead><tr><th class="sortable" data-sort-tbl="tbl-${mode}" data-sort-type="str">Job ID</th>${coordHdr}<th class="sortable" data-sort-tbl="tbl-${mode}" data-sort-type="str">Status</th><th class="sortable" data-sort-tbl="tbl-${mode}" data-sort-type="num">Age</th><th class="sortable" data-sort-tbl="tbl-${mode}" data-sort-type="money">Approved $</th><th class="sortable" data-sort-tbl="tbl-${mode}" data-sort-type="str">Risk</th><th class="sortable" data-sort-tbl="tbl-${mode}" data-sort-type="str">Priority</th><th>Trades</th><th>Vendors</th><th>Update</th><th>FM</th><th>Location</th><th>Notes</th></tr></thead>
     <tbody>${rows}</tbody></table></div></div>`;
 }
+
+// ── JOB DETAIL MODAL — click any row for the full note + a plain-language read on why it's stuck ──
+function stuckReason(j){
+  const s=(j.status||'').toLowerCase();
+  let stage;
+  if(/material/.test(s)) stage='Waiting on materials to be ordered or delivered.';
+  else if(/3rd party|third party/.test(s)) stage='Blocked on a third party (utility, OWL, or another vendor).';
+  else if(/proposal|proposed/.test(s)) stage='Sitting in the proposal stage — awaiting approval.';
+  else if(/pending schedule/.test(s)) stage='Approved but not yet scheduled.';
+  else if(/scheduled/.test(s)) stage='Scheduled — awaiting the on-site date.';
+  else if(/in progress|on-?site/.test(s)) stage='Work is underway on site.';
+  else if(/atf/.test(s)) stage='In post-completion paperwork (ATF).';
+  else if(/client/.test(s)) stage='Waiting on the client to act.';
+  else if(/dispatch|recruit|compliance|specialist/.test(s)) stage='Still finding or onboarding a vendor.';
+  else stage='In “'+(j.status||'an unknown status')+'”.';
+  let activity;
+  if(j.daysSinceUpdate==null) activity='No update has ever been logged — this one needs a touch.';
+  else if(j.daysSinceUpdate>=14) activity='No activity in '+j.daysSinceUpdate+' days — likely stalled.';
+  else if(j.daysSinceUpdate>=7) activity='Last touched '+j.daysSinceUpdate+' days ago — going quiet.';
+  else activity='Updated '+j.daysSinceUpdate+' day'+(j.daysSinceUpdate===1?'':'s')+' ago.';
+  const inStatus = j.statusHrs>0 ? Math.round(j.statusHrs/24) : null;
+  return {stage, activity, inStatus};
+}
+function openJobModal(id){
+  const j=JOBS.find(x=>x.jobId===id); if(!j) return;
+  const r=stuckReason(j);
+  const box=document.getElementById('jobModalBox'); if(!box) return;
+  const row=(k,v)=>`<div><span class="jm-k">${k}</span><span class="jm-v">${v}</span></div>`;
+  box.innerHTML=`
+    <div class="job-modal-head">
+      <span class="jm-id">${escapeHtml(j.jobId)}</span>
+      <span class="age-pill ${ageCls(j.aged)}">${j.aged}d</span>
+      ${riskBadge(j.risk)}
+      <button class="jm-x" onclick="closeJobModal()" aria-label="Close">×</button>
+    </div>
+    <div class="job-modal-body">
+      <div class="jm-holdup"><strong>Likely holdup:</strong> ${r.stage} ${r.activity}${r.inStatus!=null?' It has been in this status about <strong>'+r.inStatus+' day'+(r.inStatus===1?'':'s')+'</strong>.':''}</div>
+      <div class="jm-grid">
+        ${row('Coordinator', escapeHtml(j.coordinator||'—'))}
+        ${row('Status', statusBadge(j.status))}
+        ${row('Age', j.aged+' days since created')}
+        ${row('Last update', j.daysSinceUpdate==null?'Never':j.daysSinceUpdate+' days ago')}
+        ${row('Priority', priorityPill(j.priority)||'—')}
+        ${row('Approved', j.amount>0?fmt$0(j.amount):'—')}
+        ${row('FM', escapeHtml(j.fm||'—'))}
+        ${row('Location', escapeHtml(j.location||'—'))}
+        ${row('Trades', escapeHtml(j.trades||'—'))}
+        ${row('Vendors', escapeHtml(j.vendors||'—'))}
+      </div>
+      <div class="jm-section-label">Latest note</div>
+      <div class="jm-notes">${j.notes?escapeHtml(j.notes):'No note on file.'}</div>
+      ${j.mgmtNotes?'<div class="jm-section-label" style="margin-top:12px;">Mgmt notes</div><div class="jm-notes">'+escapeHtml(j.mgmtNotes)+'</div>':''}
+    </div>`;
+  const o=document.getElementById('jobModalOverlay'); if(o) o.classList.add('open');
+}
+function closeJobModal(){ const o=document.getElementById('jobModalOverlay'); if(o) o.classList.remove('open'); }
+document.addEventListener('keydown',function(e){ if(e.key==='Escape') closeJobModal(); });
 
 function filterTbl(inp, id, type) {
   const tbl=document.getElementById(id); if(!tbl) return;
@@ -1731,13 +1804,13 @@ function renderOver30(mc, agg) {
     </tr>`).join('')}</tbody></table>`;
 
   // Over-30 buckets, worst-first
-  const buckets = [[90,99999,'90+ Days'],[60,89,'60–89 Days'],[30,59,'30–59 Days']];
+  const buckets = [[90,99999,'90+ Days'],[60,89,'60–89 Days'],[46,59,'46–59 Days'],[30,45,'30–45 Days'],[20,29,'20–29 Days']];
   const bucketHtml = buckets.map(([lo,hi,lbl])=>{
-    const grp = over30.filter(j=>j.aged>=lo&&j.aged<=hi);
+    const grp = JOBS.filter(j=>j.aged>=lo&&j.aged<=hi);
     if(!grp.length) return '';
     const amt = grp.reduce((s,j)=>s+j.amount,0);
     return `<div class="card">
-      <div class="card-header"><h3><span class="age-pill ${ageCls(lo>=90?90:30)}">${lbl} — ${grp.length} jobs · ${fmt$0(amt)}</span></h3></div>
+      <div class="card-header"><h3><span class="age-pill ${ageCls(lo)}">${lbl} — ${grp.length} jobs · ${fmt$0(amt)}</span></h3></div>
       <div class="card-body" style="padding:12px 16px 0;">${jobTable(grp,'o30-'+lo,true)}</div>
     </div>`;
   }).join('');
@@ -1759,11 +1832,7 @@ function renderOver30(mc, agg) {
       <div class="card-header"><h3>By Coordinator</h3><span class="card-meta">${over30.length} over 30 · ${approaching.length} approaching</span></div>
       <div class="card-body" style="padding:0;">${coordTable}</div>
     </div>
-    ${bucketHtml}
-    <div class="card">
-      <div class="card-header"><h3><span class="age-pill ${ageCls(25)}">Approaching 30 (20–30 Days) — ${approaching.length} jobs · ${fmt$0(apprAmt)}</span></h3><span class="card-meta">Push these this week so they don't cross 30</span></div>
-      <div class="card-body" style="padding:12px 16px 0;">${jobTable(approaching,'appr',true)}</div>
-    </div>`;
+    ${bucketHtml}`;
   renderOver30Trend();
   renderO30Compare();
   autoLoadClosed();
@@ -2893,6 +2962,11 @@ updateEditBadge();
 </script>
 
 <!-- Mobile sticky save bar removed — Save Dashboard now lives in the sidebar -->
+
+<!-- Job detail modal — click any job row to open -->
+<div id="jobModalOverlay" class="job-modal-overlay no-print" onclick="if(event.target===this)closeJobModal()">
+  <div class="job-modal" role="dialog" aria-modal="true" id="jobModalBox"></div>
+</div>
 
 </body>
 </html>
