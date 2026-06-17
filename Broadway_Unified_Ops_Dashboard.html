@@ -288,6 +288,12 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .jn-pill.jn-none{background:#fef3c7;color:#92400e;}
 .jn-pill.jn-working{background:#dbeafe;color:#1e40af;}
 .jn-pill.jn-done{background:#dcfce7;color:#166534;}
+.jm-holdup .holdup-row{display:flex;align-items:flex-start;gap:10px;justify-content:space-between;}
+.holdup-ai-btn{flex:none;font-size:9.5px;font-weight:700;padding:3px 8px;border-radius:6px;border:1px solid var(--border);background:var(--color-surface);color:var(--green-dk);cursor:pointer;font-family:'DM Sans',sans-serif;white-space:nowrap;}
+.holdup-ai-btn:hover{border-color:var(--green-dk);}
+.holdup-ai-btn:disabled{opacity:0.6;cursor:default;}
+.ai-tag{display:inline-block;font-size:8px;font-weight:800;letter-spacing:0.5px;background:var(--green-dk);color:#fff;border-radius:4px;padding:1px 4px;vertical-align:middle;margin-right:3px;}
+.holdup-meta{font-size:9px;color:var(--muted);margin-top:5px;}
 
 /* ─── SLIM POST-LOAD STATUS STRIP ─── */
 .slim-strip{display:none;align-items:center;gap:10px;padding:9px 14px;border-radius:8px;background:var(--color-success-bg);border:1px solid var(--color-success-border);font-size:11.5px;max-width:640px;margin:0 auto;}
@@ -986,7 +992,7 @@ function jobTable(jobs, mode='', showCoord=true) {
     const vendorData = (j.vendors||'').toLowerCase();
     const searchBlob = (j.jobId+' '+j.fm+' '+j.notes+' '+j.location+' '+(j.lastReviewedBy||'')+' '+(j.trades||'')+' '+(j.vendors||'')).toLowerCase();
     return `<tr class="job-row" data-jobid="${escapeHtml(j.jobId)}" onclick="openJobModal(this.dataset.jobid)" data-risk="${escapeHtml(j.risk||'')}" data-coord="${escapeHtml(j.coordinator||'')}" data-status="${escapeHtml(j.status||'')}" data-priority2="${escapeHtml(priBucket)}" data-trade="${escapeHtml(tradeData)}" data-vendor="${escapeHtml(vendorData)}" data-search="${escapeHtml(searchBlob)}">
-      <td><span class="jid">${escapeHtml(j.jobId)}</span>${flagCell?'<div style="margin-top:3px;">'+flagCell+'</div>':''}${JOB_NOTES[j.jobId]?'<div style="margin-top:3px;">'+jobNoteMarker(j.jobId)+'</div>':''}</td>
+      <td><span class="jid">${escapeHtml(j.jobId)}</span>${flagCell?'<div style="margin-top:3px;">'+flagCell+'</div>':''}${jobNoteMarker(j.jobId)}</td>
       ${showCoord ? `<td style="font-size:11px;">${escapeHtml(j.coordinator)}</td>` : ''}
       <td>${statusBadge(j.status)}</td>
       <td><span class="age-pill ${ageCls(j.aged)}">${j.aged}d</span></td>
@@ -1055,7 +1061,13 @@ function openJobModal(id){
       <button class="jm-x" onclick="closeJobModal()" aria-label="Close">×</button>
     </div>
     <div class="job-modal-body">
-      <div class="jm-holdup"><strong>Likely holdup:</strong> ${r.stage} ${r.activity}${r.inStatus!=null?' It has been in this status about <strong>'+r.inStatus+' day'+(r.inStatus===1?'':'s')+'</strong>.':''}</div>
+      <div class="jm-holdup">
+        <div class="holdup-row">
+          <span><strong>Likely holdup:</strong> <span id="holdupText">${saved.summary?'<span class="ai-tag">AI</span> '+escapeHtml(saved.summary):r.stage+' '+r.activity+(r.inStatus!=null?' It has been in this status about <strong>'+r.inStatus+' day'+(r.inStatus===1?'':'s')+'</strong>.':'')}</span></span>
+          <button type="button" class="holdup-ai-btn" id="holdupBtn" onclick="generateHoldupSummary(window._jnCurrentId)">${saved.summary?'↻ Refresh':'✨ AI summary'}</button>
+        </div>
+        <div class="holdup-meta" id="holdupMeta">${saved.summaryAt?'AI summary · '+escapeHtml(new Date(saved.summaryAt).toLocaleString()):''}</div>
+      </div>
       <div class="jm-grid">
         ${row('Coordinator', escapeHtml(j.coordinator||'—'))}
         ${row('Status', statusBadge(j.status))}
@@ -1103,8 +1115,10 @@ function _jnSaveLocal(){ try{ localStorage.setItem(JOB_NOTES_LS, JSON.stringify(
 function jobNoteMarker(id){
   const r=JOB_NOTES[id]; if(!r) return '';
   const a=r.action||'none';
+  const hasNote=!!(r.note&&r.note.trim());
+  if(!hasNote && a==='none') return ''; // summary-only / empty record gets no row marker
   const lbl=a==='done'?'✓ Action taken':a==='working'?'● In progress':'📝 Noted';
-  return '<span class="jn-pill jn-'+a+'">'+lbl+'</span>';
+  return '<div style="margin-top:3px;"><span class="jn-pill jn-'+a+'">'+lbl+'</span></div>';
 }
 async function loadJobNotes(){
   JOB_NOTES = _jnLoadLocal();
@@ -1148,6 +1162,69 @@ async function saveJobNote(){
   const st=document.getElementById('jnSaved'); if(st) st.textContent=(JOB_NOTES[id]?'Last saved '+new Date().toLocaleString():'Cleared')+(synced?' · synced to team':' · this browser');
   toast(synced?'Note saved — synced to team':'Note saved on this browser');
   if(JOBS.length) render(currentView);
+  // Auto-refresh the AI holdup summary from the full picture whenever a note with content is saved.
+  if(JOB_NOTES[id] && note.trim()!=='') generateHoldupSummary(id);
+}
+
+// ── AI HOLDUP SUMMARY (server-side via /api/generate; one sentence from full job context + WO Audit Note) ──
+function buildHoldupPrompt(j){
+  const rec=JOB_NOTES[j.jobId]||{};
+  const inStatus = j.statusHrs>0 ? Math.round(j.statusHrs/24) : null;
+  const facts=[
+    'Job ID: '+(j.jobId||''),
+    'Status: '+(j.status||'unknown'),
+    'Age: '+(j.aged||0)+' days since created',
+    'Days since last update: '+(j.daysSinceUpdate==null?'never updated':j.daysSinceUpdate),
+    (inStatus!=null?'Time in current status: about '+inStatus+' days':''),
+    'Priority: '+(j.priority||'n/a'),
+    'Trades: '+(j.trades||'n/a'),
+    'Vendors: '+(j.vendors||'n/a'),
+    'FM: '+(j.fm||'n/a'),
+    'Location: '+(j.location||'n/a'),
+    'Approved value: '+(j.amount>0?j.amount:'n/a')
+  ].filter(Boolean).join('\n');
+  const sheetNote=(j.notes||'').trim();
+  const auditNote=(rec.note||'').trim();
+  return [
+    'You are an operations analyst at a facility-maintenance company. In ONE sentence (max about 35 words, plain business language, no preamble, no buzzwords, do not begin with "This work order"), state the single most important reason this work order is stuck and the specific next action needed to move it forward. When a WO Audit Note is present, rely on it as the most current and detailed context.',
+    '',
+    'WORK ORDER FACTS:',
+    facts,
+    '',
+    'LATEST STATUS NOTE:',
+    (sheetNote||'(none)'),
+    '',
+    'WO AUDIT NOTE (detailed; may include risk flags and blockers):',
+    (auditNote||'(none)')
+  ].join('\n');
+}
+async function generateHoldupSummary(id){
+  id = id || window._jnCurrentId; if(!id) return;
+  const j=JOBS.find(x=>x.jobId===id); if(!j) return;
+  const btn=document.getElementById('holdupBtn');
+  if(btn && window._jnCurrentId===id){ btn.disabled=true; btn.textContent='Summarizing…'; }
+  try{
+    const prompt=buildHoldupPrompt(j);
+    const fetchP=fetch('/api/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt})})
+      .then(async function(res){ if(!res.ok) throw new Error('HTTP '+res.status); const d=await res.json(); if(d.error) throw new Error(d.error); if(!d.text) throw new Error('Empty response'); return String(d.text).trim(); });
+    const timeoutP=new Promise(function(_,rej){ setTimeout(function(){ rej(new Error('timed out')); },30000); });
+    let summary=await Promise.race([fetchP,timeoutP]);
+    summary=summary.replace(/^["']+|["']+$/g,'').trim();
+    const rec=JOB_NOTES[id]||{note:'',action:'none',updatedAt:new Date().toISOString(),updatedBy:''};
+    rec.summary=summary; rec.summaryAt=new Date().toISOString();
+    JOB_NOTES[id]=rec;
+    _jnSaveLocal();
+    if(!window.BROADWAY_SNAPSHOT) bnClientPost('job-notes',{notes:JOB_NOTES, savedAt:new Date().toISOString()},{count:String(Object.keys(JOB_NOTES).length)});
+    if(window._jnCurrentId===id){
+      const txt=document.getElementById('holdupText'); if(txt) txt.innerHTML='<span class="ai-tag">AI</span> '+escapeHtml(summary);
+      const meta=document.getElementById('holdupMeta'); if(meta) meta.textContent='AI summary · '+new Date(rec.summaryAt).toLocaleString();
+      if(btn){ btn.disabled=false; btn.textContent='↻ Refresh'; }
+    }
+    toast('AI holdup summary updated');
+  }catch(err){
+    if(btn && window._jnCurrentId===id){ btn.disabled=false; btn.textContent='✨ AI summary'; }
+    toast('Summary failed: '+(err&&err.message?err.message:err));
+  }
 }
 
 function filterTbl(inp, id, type) {
