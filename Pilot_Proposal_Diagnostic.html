@@ -868,6 +868,10 @@ function detectFileType(headers){
   const set = new Set(headers);
   // New file's signature columns
   if(set.has('Source Job #') && set.has('Is Proposed') && set.has('Total NTE')) return 'new';
+  // Current Pilot Revenue export: a full WO report with GP carried inline
+  // (Proposed? + Proposal Turnover Days present). Treat as the main dataset —
+  // processRawRows reads GP directly, so no legacy join is needed.
+  if(set.has('Proposed?') && set.has('Proposal Turnover Days') && (set.has('Inv Revenue') || set.has('GP '+String.fromCharCode(36)))) return 'new';
   // Legacy file's signature columns (GP fields are the differentiator)
   if(set.has('GP $') && set.has('GP %') && set.has('Tracking #') && set.has('Proposal Turnover Days')) return 'legacy';
   return 'unknown';

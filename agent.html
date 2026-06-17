@@ -742,94 +742,15 @@ function handleYtdFile(file){
         return;
       }
 
-      // Column-name resolver — case-insensitive with light alias support so
-      // future column-name drift doesn't silently break the parser.
-      const keyMap = {};
-      Object.keys(rows[0]).forEach(k=>{ keyMap[String(k).trim().toLowerCase()] = k; });
-      const col = (...candidates) => {
-        for(const c of candidates){
-          const hit = keyMap[c.toLowerCase()];
-          if(hit) return hit;
-        }
-        return null;
-      };
-      const kAssigned = col('Assigned To','Coordinator');
-      const kRev      = col('Inv Revenue','Invoice Revenue','Revenue');
-      const kGp       = col('GP $','GP$','Gross Profit');
-      const kPropDays = col('Proposal Turnover Days','Prop Turnover Days','Turnover Days');
-      const kInvDate  = col('Inv Date','Invoice Date');
-      const kJob      = col('Job #','Job ID','WO #');
-
-      if(!kAssigned || !kRev || !kGp){
+      const _agg = aggregateYtd(rows);
+      if(!_agg){
         showError('ytd',"This file is missing required columns",`The "${sheetName}" sheet needs Assigned To, Inv Revenue, and GP $ columns to compute YTD totals.`);
         return;
       }
-
-      // Aggregate WO-level rows by Assigned To (current ownership).
-      const buckets = new Map();
-      let totRev = 0, totGp = 0, totProp = 0, totPropN = 0, woCount = 0;
-      let minDate = null, maxDate = null;
-      for(const r of rows){
-        const name = String(r[kAssigned]||'').trim();
-        if(!name) continue;
-        const rev  = parseFloat(r[kRev])||0;
-        const gp   = parseFloat(r[kGp])||0;
-        // Proposal Turnover Days: only average over rows that have a value
-        const ptRaw = r[kPropDays];
-        const hasPt = ptRaw !== '' && ptRaw !== null && ptRaw !== undefined && !isNaN(parseFloat(ptRaw));
-        const pt   = hasPt ? parseFloat(ptRaw) : null;
-
-        if(!buckets.has(name)){
-          buckets.set(name,{rev:0,gp:0,ptSum:0,ptN:0,n:0});
-        }
-        const b = buckets.get(name);
-        b.rev += rev;
-        b.gp  += gp;
-        if(hasPt){ b.ptSum += pt; b.ptN += 1; }
-        b.n += 1;
-
-        totRev += rev;
-        totGp  += gp;
-        if(hasPt){ totProp += pt; totPropN += 1; }
-        woCount += 1;
-
-        if(kInvDate && r[kInvDate] instanceof Date){
-          if(!minDate || r[kInvDate] < minDate) minDate = r[kInvDate];
-          if(!maxDate || r[kInvDate] > maxDate) maxDate = r[kInvDate];
-        }
-      }
-
-      // Build coords array in the legacy [name, rev, gp, gpPct, propTurnover] shape
-      // (consumed by renderKPI's YTD_TABLE) and sort by revenue desc.
-      const coords = [...buckets.entries()]
-        .map(([name,b])=>[
-          name,
-          parseFloat(b.rev.toFixed(2)),
-          parseFloat(b.gp.toFixed(2)),
-          b.rev > 0 ? parseFloat((b.gp/b.rev*100).toFixed(2)) : 0,
-          b.ptN > 0 ? parseFloat((b.ptSum/b.ptN).toFixed(2)) : 0
-        ])
-        .sort((a,b)=>b[1]-a[1]);
-
-      const total = {
-        rev: parseFloat(totRev.toFixed(2)),
-        gpd: parseFloat(totGp.toFixed(2)),
-        gpp: totRev > 0 ? parseFloat((totGp/totRev*100).toFixed(2)) : 0,
-        pt:  totPropN > 0 ? parseFloat((totProp/totPropN).toFixed(2)) : 0
-      };
-
-      // Period detection — prefer Inv Date range from the data itself, fall
-      // back to filename pattern (legacy behavior) if no dates parsed.
-      const monthShort = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-      let periodLabel = 'YTD';
-      if(minDate && maxDate){
-        const sameYear = minDate.getFullYear() === maxDate.getFullYear();
-        if(sameYear){
-          periodLabel = `${monthShort[minDate.getMonth()]}–${monthShort[maxDate.getMonth()]} ${maxDate.getFullYear()}`;
-        } else {
-          periodLabel = `${monthShort[minDate.getMonth()]} ${minDate.getFullYear()}–${monthShort[maxDate.getMonth()]} ${maxDate.getFullYear()}`;
-        }
-      } else {
+      const { coords, total, woCount } = _agg;
+      let periodLabel = _agg.period;
+      // Filename fallback for the period label when the data carried no Inv Date range.
+      if(periodLabel === 'YTD'){
         const monthMatch=file.name.match(/(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[^a-z]*(\d{2,4})/i);
         if(monthMatch){
           periodLabel=`Jan–${monthMatch[1].charAt(0).toUpperCase()+monthMatch[1].slice(1).toLowerCase()} ${monthMatch[2].length===2?"20"+monthMatch[2]:monthMatch[2]}`;
@@ -871,10 +792,10 @@ function handleYtdFile(file){
       // Legacy badge update (now hidden but kept for compat with any external code)
       document.getElementById("ytd-badge").textContent=`✅ ${periodLabel} saved permanently (${coords.length} coordinators · ${woCount} WOs)`;
       document.getElementById("ytd-badge").style.color="#2e7d32";
-      log(`📊 YTD aggregated from "${sheetName}": ${periodLabel} — ${coords.length} coordinators, ${woCount} WOs, $${totRev.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})} revenue.`);
+      log(`📊 YTD aggregated from "${sheetName}": ${periodLabel} — ${coords.length} coordinators, ${woCount} WOs, $${total.rev.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})} revenue.`);
 
       // Show success state in the new panel UI
-      const revFmt = `$${(totRev/1000).toFixed(1)}k`;
+      const revFmt = `$${(total.rev/1000).toFixed(1)}k`;
       showSuccess('ytd', `${periodLabel}`, `${coords.length} coordinators · ${woCount} WOs · ${revFmt} revenue`);
     }catch(err){
       console.error(err);
