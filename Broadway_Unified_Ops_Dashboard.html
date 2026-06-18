@@ -322,6 +322,21 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .nd-tl-txt{font-size:11.5px;line-height:1.45;}
 .nd-flag{padding:8px 12px;margin:6px 0;background:var(--color-surface-alt);border:1px solid var(--border);border-left:3px solid #d9a441;border-radius:6px;font-size:11.5px;line-height:1.5;}
 .nd-flag-hot{border-left-color:#cf4b45;background:#fdf6f5;}
+.nd-tlwrap{margin:4px 0 12px;padding:9px 11px 5px;background:var(--color-surface-alt);border:1px solid var(--border);border-radius:8px;}
+.nd-tlsvg{display:block;width:100%;height:auto;overflow:visible;}
+.nd-tlsvg .tl-axis{stroke:var(--border);stroke-width:1.5;}
+.nd-tlsvg .tl-tick{stroke:var(--border);stroke-width:1;}
+.nd-tlsvg .tl-mon{fill:var(--muted);font-size:8px;font-family:'DM Mono',monospace;text-anchor:middle;}
+.nd-tlsvg .tl-dot{fill:var(--green-dk);}
+.nd-tlsvg .tl-dot-hot{fill:#cf4b45;}
+.nd-tlsvg .tl-dot-last{fill:#2ECC71;stroke:var(--green-dk);stroke-width:1.5;}
+.nd-tlsvg circle{cursor:pointer;}
+.nd-tlsvg .tl-end{fill:var(--green-dk);font-size:9px;font-weight:700;font-family:'DM Mono',monospace;}
+.nd-tlsvg .tl-end-r{text-anchor:end;}
+.nd-tlsvg .tl-span{fill:var(--muted);font-size:8.5px;font-family:'DM Sans',sans-serif;text-anchor:middle;}
+.nd-kind{display:inline-block;margin-left:6px;font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;padding:1px 5px;border-radius:4px;vertical-align:middle;}
+.nd-sup{background:#fdf3e0;color:#9a6a12;border:1px solid #e8cfa0;}
+.vnd-sep{margin:0 5px;color:var(--muted);}
 .jn-head{margin-bottom:7px;}
 .jn-edit{font-size:10.5px;font-weight:700;padding:5px 11px;border-radius:7px;border:1px solid var(--border);background:var(--color-surface);color:var(--green-dk);cursor:pointer;font-family:'DM Sans',sans-serif;}
 .jn-edit:hover{border-color:var(--green-dk);}
@@ -1109,12 +1124,12 @@ function openJobModal(id){
       <div class="jm-grid">
         ${row('Status', statusBadge(j.status))}
         ${row('Age', j.aged+' days since created')}
-        ${row('Last update', j.daysSinceUpdate==null?'Never':j.daysSinceUpdate+' days ago')}
+        ${row('Latest update', fmtDate(j.lastUpdated)?(fmtDate(j.lastUpdated)+(j.daysSinceUpdate!=null?' · '+j.daysSinceUpdate+'d ago':'')):(j.daysSinceUpdate==null?'Never':j.daysSinceUpdate+' days ago'))}
         ${row('Priority', priorityPill(j.priority)||'—')}
         ${row('Approved', j.amount>0?fmt$0(j.amount):'—')}
         ${row('FM', escapeHtml(j.fm||'—'))}
         ${row('Trades', escapeHtml(j.trades||'—'))}
-        ${row('Vendors', escapeHtml(j.vendors||'—'))}
+        ${row('Vendors', vendorListHtml(j.vendors))}
       </div>
       <div class="jm-section-label">Latest status note</div>
       <div class="jn-doc-card nd-doc">${j.notes?renderNoteHtml(j.notes):'<p class="nd-p nd-empty">No note on file.</p>'}</div>
@@ -1169,14 +1184,34 @@ function jobNoteMarker(id){
   const lbl=a==='done'?'✓ Action taken':a==='working'?'● In progress':'📝 Noted';
   return '<div style="margin-top:3px;"><span class="jn-pill jn-'+a+'">'+lbl+'</span></div>';
 }
-// Render a pasted plain-text note as a formatted case-file document (title, section headings, risk flags, dated timeline, tables, lists).
+const SUPPLIER_PATTERNS=[/\bLSI\b/i,/INDUSTRIES/i,/LIGHTING/i,/LIGHTMART/i,/MANUFACTUR/i,/\bSUPPLY\b/i,/SUPPLIES/i,/\bMATERIALS?\b/i,/GRAYBAR/i,/REXEL/i,/WESCO/i,/\bUPS\b/i,/UNITED PARCEL/i,/FEDEX/i,/FREIGHT/i,/LOGISTICS/i,/ROBINSON/i,/\bXPO\b/i,/OLD DOMINION/i,/TRUCKING/i,/SHIPPING/i,/ELECTRIC SUPPLY/i,/WHOLESALE/i,/DISTRIBUT/i];
+function vendorKind(name){ const n=String(name||''); if(!n.trim()) return ''; for(const re of SUPPLIER_PATTERNS){ if(re.test(n)) return 'supplier'; } return 'vendor'; }
+// Render a Vendor(s) string with supplier tagging. Splits only on safe delimiters (; | newline) so names containing commas stay intact.
+function vendorListHtml(str){ const s=String(str||'').trim(); if(!s) return '—'; const tag=function(p){ return escapeHtml(p)+(vendorKind(p)==='supplier'?'<span class="nd-kind nd-sup">Supplier</span>':''); }; const parts=s.split(/[;|\n]+/).map(function(x){return x.trim();}).filter(Boolean); if(parts.length<=1) return tag(s); return parts.map(tag).join('<span class="vnd-sep">·</span>'); }
+function tlDate(tok){ const ms=[...String(tok).matchAll(/(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?/g)]; if(!ms.length) return null; let yr=null; for(let k=ms.length-1;k>=0;k--){ if(ms[k][3]!=null){ yr=+ms[k][3]; break; } } if(yr==null) yr=new Date().getFullYear(); else if(yr<100) yr=2000+yr; const f=ms[0]; let fy=f[3]!=null?(+f[3]<100?2000+ +f[3]:+f[3]):yr; return new Date(fy,(+f[1])-1,+f[2]).getTime(); }
+function fmtShort(t){ const d=new Date(t); return (d.getMonth()+1)+'/'+d.getDate()+'/'+String(d.getFullYear()).slice(2); }
+function buildTlSvg(events){
+  const ev=events.filter(function(e){return e.t!=null;});
+  if(ev.length<2) return '';
+  let min=ev[0].t,max=ev[0].t; ev.forEach(function(e){ if(e.t<min)min=e.t; if(e.t>max)max=e.t; });
+  const span=(max-min)||1, W=700,H=66,padL=14,padR=14,axisY=34,plotW=W-padL-padR;
+  let ticks=''; const MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const d0=new Date(min); let cur=new Date(d0.getFullYear(),d0.getMonth(),1); if(cur.getTime()<min) cur=new Date(d0.getFullYear(),d0.getMonth()+1,1);
+  let guard=0;
+  while(cur.getTime()<=max && guard<60){ const x=padL+((cur.getTime()-min)/span)*plotW; ticks+='<line x1="'+x.toFixed(1)+'" y1="'+(axisY-5)+'" x2="'+x.toFixed(1)+'" y2="'+(axisY+5)+'" class="tl-tick"/>'; ticks+='<text x="'+x.toFixed(1)+'" y="'+(axisY+18)+'" class="tl-mon">'+MON[cur.getMonth()]+(cur.getMonth()===0?" '"+String(cur.getFullYear()).slice(2):'')+'</text>'; cur=new Date(cur.getFullYear(),cur.getMonth()+1,1); guard++; }
+  const axis='<line x1="'+padL+'" y1="'+axisY+'" x2="'+(W-padR)+'" y2="'+axisY+'" class="tl-axis"/>';
+  let dots=''; ev.forEach(function(e,idx){ const x=padL+((e.t-min)/span)*plotW; const hot=/FLAG|invoice|cancel|hospital|delay|increase|dispute|unresolved|rejected/i.test(e.raw); const last=idx===ev.length-1; dots+='<circle cx="'+x.toFixed(1)+'" cy="'+axisY+'" r="'+(last?4.5:3.3)+'" class="tl-dot'+(last?' tl-dot-last':hot?' tl-dot-hot':'')+'"><title>'+e.title+'</title></circle>'; });
+  const lbl='<text x="'+padL+'" y="12" class="tl-end">'+fmtShort(min)+'</text><text x="'+(W-padR)+'" y="12" class="tl-end tl-end-r">'+fmtShort(max)+'</text><text x="'+(W/2)+'" y="12" class="tl-span">'+Math.round(span/86400000)+' days · '+ev.length+' events</text>';
+  return '<svg class="nd-tlsvg" viewBox="0 0 '+W+' '+H+'" width="100%" preserveAspectRatio="xMidYMid meet" role="img">'+lbl+ticks+axis+dots+'</svg>';
+}
+// Render a pasted plain-text note as a formatted case-file document (title, sections, risk flags, dated timeline + visual rail, vendor/supplier tagging, tables, lists).
 function renderNoteHtml(text){
   const esc=escapeHtml(String(text||''));
   const lines=esc.split(/\r?\n/);
   const isTableRow=function(s){ return /^\|/.test(s) && (s.match(/\|/g)||[]).length>=2; };
   const isSep=function(c){ return /-/.test(c) && /^[\s:-]+$/.test(c); };
   const cells=function(s){ let p=s.split('|'); if(p.length && p[0].trim()==='') p.shift(); if(p.length && p[p.length-1].trim()==='') p.pop(); return p.map(function(x){return x.trim();}); };
-  let html='', list=null, section='', titled=false;
+  let html='', list=null, section='', titled=false, tl=[];
   const closeList=function(){ if(list){ html+=(list==='ul'?'</ul>':'</ol>'); list=null; } };
   const multi=lines.filter(function(l){return l.trim();}).length>3;
   for(let i=0;i<lines.length;i++){
@@ -1184,19 +1219,22 @@ function renderNoteHtml(text){
     if(!line){ closeList(); continue; }
     if(isTableRow(line)){
       closeList();
-      const rows=[]; let j=i;
-      while(j<lines.length && isTableRow(lines[j].trim())){ rows.push(cells(lines[j].trim())); j++; }
-      let body='', head=null;
-      for(let k=0;k<rows.length;k++){
-        if(rows[k].length>0 && rows[k].every(isSep)) continue;
-        if(head===null){ head=rows[k]; continue; }
-        body+='<tr>'+rows[k].map(function(c){return '<td>'+c+'</td>';}).join('')+'</tr>';
-      }
-      let thead=''; if(head){ thead='<tr>'+head.map(function(c){return '<th>'+c+'</th>';}).join('')+'</tr>'; }
+      const rows=[]; let jj=i;
+      while(jj<lines.length && isTableRow(lines[jj].trim())){ rows.push(cells(lines[jj].trim())); jj++; }
+      const dataRows=rows.filter(function(rw){ return !(rw.length>0 && rw.every(isSep)); });
+      const head=dataRows.length?dataRows[0]:null;
+      const vendorTbl=section==='vendors' || (head && /vendor|supplier|company/i.test(head.join(' ')));
+      let body='';
+      for(let k=1;k<dataRows.length;k++){ const rw=dataRows[k]; body+='<tr>'+rw.map(function(c,ci){ let cell=c; if(vendorTbl && ci===0 && vendorKind(c)==='supplier'){ cell=c+'<span class="nd-kind nd-sup">Supplier</span>'; } return '<td>'+cell+'</td>'; }).join('')+'</tr>'; }
+      const thead=head?'<tr>'+head.map(function(c){return '<th>'+c+'</th>';}).join('')+'</tr>':'';
       html+='<table class="nd-table">'+thead+body+'</table>';
-      i=j-1; continue;
+      i=jj-1; continue;
     }
     let m;
+    if(section==='timeline'){
+      const dl=line.replace(/^(?:[\u2022\u25cf\u25aa\u2023*-])\s+/,'');
+      if((m=dl.match(/^(\d{1,2}\/\d{1,2}(?:\/\d{2,4})?(?:\s*[\u2013-]\s*\d{1,2}\/\d{1,2}(?:\/\d{2,4})?)?)\s*[\u2014\u2013-]\s+(.*)$/))){ closeList(); tl.push({t:tlDate(m[1]),raw:m[2],title:m[1]+' — '+m[2]}); html+='<div class="nd-tl"><span class="nd-tl-date">'+m[1]+'</span><span class="nd-tl-txt">'+m[2]+'</span></div>'; continue; }
+    }
     if((m=line.match(/^(?:[\u2022\u25cf\u25aa\u2023*-])\s+(.*)$/))){ if(list!=='ul'){ closeList(); html+='<ul class="nd-ul">'; list='ul'; } html+='<li>'+m[1]+'</li>'; continue; }
     if((m=line.match(/^(\d+)[.)]\s+(.*)$/))){ if(list!=='ol'){ closeList(); html+='<ol class="nd-ol">'; list='ol'; } html+='<li>'+m[2]+'</li>'; continue; }
     closeList();
@@ -1206,12 +1244,12 @@ function renderNoteHtml(text){
     const isHead=letters.length>=3 && plain.replace(/:$/,'')===plain.replace(/:$/,'').toUpperCase() && /[A-Z]/.test(plain) && bare.length<=60;
     if(!titled){ titled=true; if(multi && line.length<110 && /[\u2014-]/.test(line) && !/[.!?]$/.test(line)){ html+='<div class="nd-title">'+line+'</div>'; continue; } }
     if(isHead){ section=/RISK/.test(plain)?'risk':/TIMELINE/.test(plain)?'timeline':/VENDOR/.test(plain)?'vendors':'other'; html+='<div class="nd-h">'+line+'</div>'; continue; }
-    if(section==='timeline' && (m=line.match(/^(\d{1,2}\/\d{1,2}(?:\/\d{2,4})?(?:\s*[\u2013-]\s*\d{1,2}\/\d{1,2}(?:\/\d{2,4})?)?)\s*[\u2014\u2013-]\s+(.*)$/))){ html+='<div class="nd-tl"><span class="nd-tl-date">'+m[1]+'</span><span class="nd-tl-txt">'+m[2]+'</span></div>'; continue; }
     if((m=line.match(/^([A-Za-z][A-Za-z0-9 \/#.'&-]{1,32}):\s+(.+)$/))){ const b='<strong>'+m[1]+':</strong> '+m[2]; if(section==='risk'){ html+='<div class="nd-flag'+(/FLAG\b/.test(line)?' nd-flag-hot':'')+'">'+b+'</div>'; } else { html+='<p class="nd-p">'+b+'</p>'; } continue; }
     if(section==='risk'){ html+='<div class="nd-flag'+(/FLAG\b/.test(line)?' nd-flag-hot':'')+'">'+line+'</div>'; continue; }
     html+='<p class="nd-p">'+line+'</p>';
   }
   closeList();
+  if(tl.length>=3){ const svg=buildTlSvg(tl); if(svg){ const k=html.indexOf('<div class="nd-tl">'); if(k>=0){ html=html.slice(0,k)+'<div class="nd-tlwrap">'+svg+'</div>'+html.slice(k); } } }
   return html||'<p class="nd-p nd-empty">No note yet.</p>';
 }
 function editJobNote(){
@@ -1286,16 +1324,16 @@ function buildHoldupPrompt(j){
   const sheetNote=(j.notes||'').trim();
   const auditNote=(rec.note||'').trim();
   return [
-    'You are an operations analyst at a facility-maintenance company. In ONE sentence (max about 35 words, plain business language, no preamble, no buzzwords, do not begin with "This work order"), state the single most important reason this work order is stuck and the specific next action needed to move it forward. When a WO Audit Note is present, rely on it as the most current and detailed context.',
+    'You are an operations analyst at a facility-maintenance company. In ONE sentence (max about 35 words, plain business language, no preamble, no buzzwords, do not begin with "This work order"), state the single most important reason this work order is stuck and the specific next action needed to move it forward. Base your answer primarily on the LATEST STATUS NOTE — it is the most authoritative, current signal. Use the WO AUDIT NOTE only to fill in details the status note leaves out; if the two conflict, the latest status note wins.',
     '',
-    'WORK ORDER FACTS:',
-    facts,
-    '',
-    'LATEST STATUS NOTE:',
+    'LATEST STATUS NOTE (primary source):',
     (sheetNote||'(none)'),
     '',
-    'WO AUDIT NOTE (detailed; may include risk flags and blockers):',
-    (auditNote||'(none)')
+    'WO AUDIT NOTE (supporting context only — history, risk flags, blockers):',
+    (auditNote||'(none)'),
+    '',
+    'WORK ORDER FACTS:',
+    facts
   ].join('\n');
 }
 async function generateHoldupSummary(id){
@@ -2471,9 +2509,10 @@ function setEscMode(m) {
 
 function updatePill(j) {
   const b = staleBucket(j);
+  const t = fmtDate(j.lastUpdated); const ttl = t?` title="Latest update: ${t}"`:'';
   if (b === 'never') return '<span class="upd-pill upd-never">Never Updated</span>';
-  if (b === 'stale') return `<span class="upd-pill upd-stale">${j.daysSinceUpdate}d since update</span>`;
-  return `<span class="upd-pill upd-recent">${j.daysSinceUpdate===0?'Updated today':j.daysSinceUpdate+'d ago'}</span>`;
+  if (b === 'stale') return `<span class="upd-pill upd-stale"${ttl}>${j.daysSinceUpdate}d since update</span>`;
+  return `<span class="upd-pill upd-recent"${ttl}>${j.daysSinceUpdate===0?'Updated today':j.daysSinceUpdate+'d ago'}</span>`;
 }
 
 // escapeHtml moved to top of script (Section 2). Inlined definition removed.
@@ -2595,15 +2634,17 @@ function handleFile(file) {
       const raw = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], {defval:'',raw:false});
       CURRENT_FILE = file.name;
       JOBS = raw.map(r=>{
-        const amtRaw = getCol(r,'Approved_Amount','Amount','Client DNE');
+        const amtRaw = getCol(r,'Approved_Amount','Approved Amount','Amount');
         const amt = parseFloat(String(amtRaw||0).replace(/[$,]/g,''))||0;
-        const lastUpd = parseExcelDate(getCol(r,'Last Updated'));
-        // Prefer sheet's own "Days Since Update" if present, else compute.
+        const lastUpd = parseExcelDate(getCol(r,'Latest Update','Last Updated'));
+        // The Update column reflects the "Latest Update" date from the WO Audit upload.
+        // Prefer that date; fall back to a "Days Since Update" column only when no date is present.
         const dsuRaw = String(getCol(r,'Days Since Update')||'').trim();
         let daysSinceUpdate;
-        if (/never/i.test(dsuRaw)) daysSinceUpdate = null;
+        if (lastUpd) daysSinceUpdate = daysSince(lastUpd);
+        else if (/never/i.test(dsuRaw)) daysSinceUpdate = null;
         else if (dsuRaw) daysSinceUpdate = parseInt(dsuRaw);
-        else daysSinceUpdate = lastUpd ? daysSince(lastUpd) : null;
+        else daysSinceUpdate = null;
         return {
           jobId: String(getCol(r,'Job ID','Source Job #')||'').trim(),
           coordinator: String(getCol(r,'Assigned To')||'').trim(),
@@ -2722,6 +2763,7 @@ function extractReportDate(sheetName, fileName) {
 }
 
 function round2(n){return Math.round(n*100)/100;}
+function fmtDate(v){ const d=v?parseExcelDate(v):null; return d?d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):''; }
 
 // ── SAVE DASHBOARD (self-contained HTML snapshot) ───────────────
 // Builds a standalone .html file with current JOBS / KPIs / YTD baked in as
