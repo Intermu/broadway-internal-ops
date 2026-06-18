@@ -255,7 +255,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 /* ─── JOB DETAIL MODAL ─── */
 .job-modal-overlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,0.55);z-index:9998;align-items:flex-start;justify-content:center;padding:40px 16px;overflow-y:auto;}
 .job-modal-overlay.open{display:flex;}
-.job-modal{background:var(--color-surface);border:1px solid var(--border);border-radius:10px;max-width:640px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,0.25);font-family:'DM Sans',sans-serif;}
+.job-modal{background:var(--color-surface);border:1px solid var(--border);border-radius:10px;max-width:760px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,0.25);font-family:'DM Sans',sans-serif;}
 .job-modal-head{display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--color-surface);border-radius:10px 10px 0 0;}
 .job-modal-head .jm-id{font-family:'DM Mono',monospace;font-weight:700;font-size:14px;color:var(--text);}
 .job-modal-head .jm-x{margin-left:auto;background:none;border:none;font-size:20px;line-height:1;cursor:pointer;color:var(--muted);}
@@ -303,40 +303,59 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .job-modal-head .jm-x{color:rgba(255,255,255,0.9);}
 .job-modal-head .jm-x:hover{color:#fff;}
 .jn-doc-card{background:var(--color-surface-alt);border:1px solid var(--border);border-radius:8px;padding:15px 17px;max-height:420px;overflow-y:auto;box-shadow:inset 0 1px 2px rgba(0,0,0,0.03);}
-.nd-doc{font-family:'DM Sans',sans-serif;font-size:12px;line-height:1.55;color:var(--text);}
-.nd-doc>.nd-h:first-child{margin-top:0;}
-.nd-h{font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:var(--green-dk);margin:13px 0 5px;padding-bottom:3px;border-bottom:1px solid var(--border);}
+.nd-doc{font-family:'DM Sans',sans-serif;font-size:13px;line-height:1.55;color:#2a3530;}
+.nd-doc>.nd-h:first-child,.nd-doc>.nd-title:first-child{margin-top:0;}
+.nd-title{font:800 19px/1.2 'DM Sans',system-ui,sans-serif;color:#0d3d26;letter-spacing:-.02em;margin:0 0 3px;}
+.nd-sub{font:600 11px 'DM Mono',monospace;color:#7c8c83;letter-spacing:.2px;margin:0 0 14px;}
+.nd-h{display:flex;align-items:center;gap:10px;margin:22px 0 11px;font:700 11px 'DM Mono',monospace;color:#1a5f3e;text-transform:uppercase;letter-spacing:.12em;}
+.nd-h::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,#d6e6dd,transparent);}
 .nd-p{margin:5px 0;}
-.nd-p strong{color:var(--text);}
-.nd-ul,.nd-ol{margin:5px 0 5px 0;padding-left:18px;}
-.nd-ul li,.nd-ol li{margin:3px 0;}
+.nd-p strong{color:#0d3d26;}
 .nd-empty{color:var(--muted);font-style:italic;}
-.nd-title{font-size:14px;font-weight:800;color:var(--green-dk);line-height:1.3;margin:0 0 11px;padding-bottom:9px;border-bottom:2px solid var(--green-dk);}
+.nd-status{background:linear-gradient(135deg,#f1f9f4,#eaf5ef);border:1px solid #d3e8dc;border-left:4px solid #2ECC71;border-radius:10px;padding:12px 15px;margin:0 0 6px;font-size:13px;line-height:1.55;color:#234034;}
+.nd-flag{display:grid;grid-template-columns:26px 1fr;gap:11px;align-items:start;margin:8px 0;padding:11px 14px;background:#fff8ee;border:1px solid #f0ddbe;border-left:3px solid #e08a1e;border-radius:10px;font-size:13px;line-height:1.5;color:#5a4012;}
+.nd-flag .fn{font:700 11px 'DM Mono',monospace;color:#b9740f;background:#fbeacb;border-radius:6px;width:26px;height:22px;display:flex;align-items:center;justify-content:center;}
+.nd-flag.hot{background:#fdece9;border-color:#f1cabf;border-left-color:#c0392b;color:#6e2018;}
+.nd-flag.hot .fn{color:#fff;background:#c0392b;}
+.nd-vend{display:grid;grid-template-columns:1fr 112px;gap:14px;align-items:start;margin:8px 0;padding:12px 15px;background:#fff;border:1px solid #e4ece7;border-radius:10px;}
+.nd-vend .vn-main{min-width:0;}
+.nd-vend .vn-head{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;}
+.nd-vend .vn-name{font:700 13.5px 'DM Sans',system-ui,sans-serif;color:#0d3d26;}
+.nd-vend .vn-role{font:600 10.5px 'DM Mono',monospace;color:#1a5f3e;background:#e8f3ed;border:1px solid #d3e8dc;border-radius:999px;padding:2px 9px;letter-spacing:.2px;}
+.nd-vend .vn-people{font:500 11.5px 'DM Mono',monospace;color:#90a097;margin:3px 0 0;}
+.nd-vend .vn-det{list-style:none;margin:8px 0 0;padding:0;}
+.nd-vend .vn-det li{position:relative;padding-left:15px;margin:3px 0;font-size:12.5px;line-height:1.45;color:#3c4842;}
+.nd-vend .vn-det li::before{content:"";position:absolute;left:2px;top:8px;width:4px;height:4px;border-radius:50%;background:#9fc7ac;}
+.nd-vend .vn-det li strong{color:#0d3d26;}
+.nd-vend .vn-money{display:flex;flex-direction:column;gap:4px;align-items:flex-end;border-left:1px solid #eef2f4;padding-left:12px;}
+.nd-vend .vn-amt{font:700 12.5px 'DM Mono',monospace;color:#1a5f3e;white-space:nowrap;}
+.nd-vend .vn-amt.none{color:#c2ccc6;font-weight:500;}
 .nd-table{width:100%;border-collapse:collapse;margin:8px 0 12px;font-size:11px;}
 .nd-table th{text-align:left;background:var(--color-surface-alt);color:var(--green-dk);font-weight:700;font-size:9.5px;text-transform:uppercase;letter-spacing:0.4px;padding:6px 9px;border:1px solid var(--border);}
 .nd-table td{padding:6px 9px;border:1px solid var(--border);vertical-align:top;}
 .nd-table tr:nth-child(even) td{background:rgba(15,61,38,0.025);}
-.nd-tl{display:grid;grid-template-columns:94px 1fr;gap:11px;padding:6px 0;border-bottom:1px solid rgba(15,61,38,0.06);align-items:start;}
-.nd-tl:last-child{border-bottom:none;}
-.nd-tl-date{font-family:'DM Mono',monospace;font-size:10px;font-weight:600;color:var(--green-dk);background:var(--color-surface-alt);border:1px solid var(--border);border-radius:5px;padding:2px 0;text-align:center;white-space:nowrap;}
-.nd-tl-txt{font-size:11.5px;line-height:1.45;}
-.nd-flag{padding:8px 12px;margin:6px 0;background:var(--color-surface-alt);border:1px solid var(--border);border-left:3px solid #d9a441;border-radius:6px;font-size:11.5px;line-height:1.5;}
-.nd-flag-hot{border-left-color:#cf4b45;background:#fdf6f5;}
-.nd-tlwrap{margin:4px 0 12px;padding:9px 11px 5px;background:var(--color-surface-alt);border:1px solid var(--border);border-radius:8px;}
-.nd-tlsvg{display:block;width:100%;height:auto;overflow:visible;}
-.nd-tlsvg .tl-axis{stroke:var(--border);stroke-width:1.5;}
-.nd-tlsvg .tl-tick{stroke:var(--border);stroke-width:1;}
-.nd-tlsvg .tl-mon{fill:var(--muted);font-size:8px;font-family:'DM Mono',monospace;text-anchor:middle;}
-.nd-tlsvg .tl-dot{fill:var(--green-dk);}
-.nd-tlsvg .tl-dot-hot{fill:#cf4b45;}
-.nd-tlsvg .tl-dot-last{fill:#2ECC71;stroke:var(--green-dk);stroke-width:1.5;}
-.nd-tlsvg circle{cursor:pointer;}
-.nd-tlsvg .tl-end{fill:var(--green-dk);font-size:9px;font-weight:700;font-family:'DM Mono',monospace;}
-.nd-tlsvg .tl-end-r{text-anchor:end;}
-.nd-tlsvg .tl-span{fill:var(--muted);font-size:8.5px;font-family:'DM Sans',sans-serif;text-anchor:middle;}
+.nd-tl{display:flex;flex-direction:column;margin:8px 0 14px;border:1px solid #e7eee9;border-radius:11px;overflow:hidden;}
+.nd-tlrow{display:grid;grid-template-columns:104px 1fr;gap:14px;padding:8px 14px;border-bottom:1px solid #f1f5f2;font-size:13px;line-height:1.45;}
+.nd-tlrow:last-child{border-bottom:none;}
+.nd-tlrow:nth-child(even){background:#fafcfb;}
+.nd-tldate{font:700 11px 'DM Mono',monospace;color:#1a5f3e;white-space:nowrap;padding-top:1px;}
+.nd-tltext{color:#2a3530;min-width:0;}
+.nd-tlrow.hot{background:#fdece9;}
+.nd-tlrow.hot .nd-tldate{color:#c0392b;}
+.nd-ol{margin:6px 0 14px;padding-left:0;list-style:none;counter-reset:nd;}
+.nd-ol li{position:relative;counter-increment:nd;padding:5px 0 5px 34px;line-height:1.5;border-bottom:1px solid #f3f6f4;}
+.nd-ol li:last-child{border-bottom:none;}
+.nd-ol li::before{content:counter(nd);position:absolute;left:0;top:5px;width:22px;height:22px;border-radius:7px;background:#e8f3ed;color:#1a5f3e;font:700 11px 'DM Mono',monospace;display:flex;align-items:center;justify-content:center;}
+.nd-ul{margin:6px 0 14px;padding-left:4px;list-style:none;}
+.nd-ul li{position:relative;margin:5px 0;padding-left:18px;line-height:1.5;}
+.nd-ul li::before{content:"";position:absolute;left:3px;top:9px;width:5px;height:5px;border-radius:50%;background:#2ECC71;}
 .nd-kind{display:inline-block;margin-left:6px;font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;padding:1px 5px;border-radius:4px;vertical-align:middle;}
 .nd-sup{background:#fdf3e0;color:#9a6a12;border:1px solid #e8cfa0;}
 .vnd-sep{margin:0 5px;color:var(--muted);}
+.jm-na{background:linear-gradient(135deg,#f1f9f4,#eaf5ef);border:1px solid #d3e8dc;border-radius:8px;padding:11px 14px 6px;margin-bottom:14px;}
+.jm-na-h{font:700 10.5px 'DM Mono',monospace;color:#0d3d26;text-transform:uppercase;letter-spacing:.1em;margin-bottom:5px;}
+.jm-na .nd-ol{margin:2px 0 4px;}
+.jm-na .nd-ol li{font-size:12.5px;border-bottom-color:#d8e8de;}
 .jn-head{margin-bottom:7px;}
 .jn-edit{font-size:10.5px;font-weight:700;padding:5px 11px;border-radius:7px;border:1px solid var(--border);background:var(--color-surface);color:var(--green-dk);cursor:pointer;font-family:'DM Sans',sans-serif;}
 .jn-edit:hover{border-color:var(--green-dk);}
@@ -1098,6 +1117,7 @@ function openJobModal(id){
   const r=stuckReason(j);
   const saved=JOB_NOTES[id]||{}; const action=saved.action||'none';
   const hasNote=!!(saved.note&&saved.note.trim());
+  const na=extractNextActions(saved.note||'');
   const actLbl=action==='done'?'Action taken':action==='working'?'In progress':'No action yet';
   window._jnCurrentId=id; window._jnAction=action;
   const box=document.getElementById('jobModalBox'); if(!box) return;
@@ -1115,11 +1135,12 @@ function openJobModal(id){
     <div class="job-modal-body">
       <div class="jm-holdup">
         <div class="holdup-row">
-          <span><strong>Likely holdup:</strong> <span id="holdupText">${saved.summary?'<span class="ai-tag">AI</span> '+escapeHtml(saved.summary):r.stage+' '+r.activity+(r.inStatus!=null?' It has been in this status about <strong>'+r.inStatus+' day'+(r.inStatus===1?'':'s')+'</strong>.':'')}</span></span>
+          <span><strong>Bottleneck:</strong> <span id="holdupText">${saved.summary?'<span class="ai-tag">AI</span> '+escapeHtml(saved.summary):r.stage+' '+r.activity+(r.inStatus!=null?' It has been in this status about <strong>'+r.inStatus+' day'+(r.inStatus===1?'':'s')+'</strong>.':'')}</span></span>
           <button type="button" class="holdup-ai-btn" id="holdupBtn" onclick="generateHoldupSummary(window._jnCurrentId)">${saved.summary?'↻ Refresh':'✨ AI summary'}</button>
         </div>
         <div class="holdup-meta" id="holdupMeta">${saved.summaryAt?'AI summary · '+escapeHtml(new Date(saved.summaryAt).toLocaleString()):''}</div>
       </div>
+      ${na.actions.length?'<div class="jm-na"><div class="jm-na-h">Next Actions Required</div>'+nextActionsCardHtml(na.actions)+'</div>':''}
       <div class="jm-section-label">Details</div>
       <div class="jm-grid">
         ${row('Status', statusBadge(j.status))}
@@ -1140,7 +1161,7 @@ function openJobModal(id){
           <span class="jn-pill jn-${action}">${actLbl}</span>
         </div>
         <div id="jnView" ${hasNote?'':'style="display:none;"'}>
-          <div class="jn-doc-card nd-doc">${hasNote?renderNoteHtml(saved.note):''}</div>
+          <div class="jn-doc-card nd-doc">${hasNote?renderNoteHtml(na.rest):''}</div>
           <div class="jn-foot">
             <button type="button" class="jn-edit" onclick="editJobNote()">✎ Edit note</button>
             <span class="jn-saved">${saved.updatedAt?'Last saved '+escapeHtml(new Date(saved.updatedAt).toLocaleString()):''}</span>
@@ -1188,69 +1209,150 @@ const SUPPLIER_PATTERNS=[/\bLSI\b/i,/INDUSTRIES/i,/LIGHTING/i,/LIGHTMART/i,/MANU
 function vendorKind(name){ const n=String(name||''); if(!n.trim()) return ''; for(const re of SUPPLIER_PATTERNS){ if(re.test(n)) return 'supplier'; } return 'vendor'; }
 // Render a Vendor(s) string with supplier tagging. Splits only on safe delimiters (; | newline) so names containing commas stay intact.
 function vendorListHtml(str){ const s=String(str||'').trim(); if(!s) return '—'; const tag=function(p){ return escapeHtml(p)+(vendorKind(p)==='supplier'?'<span class="nd-kind nd-sup">Supplier</span>':''); }; const parts=s.split(/[;|\n]+/).map(function(x){return x.trim();}).filter(Boolean); if(parts.length<=1) return tag(s); return parts.map(tag).join('<span class="vnd-sep">·</span>'); }
-function tlDate(tok){ const ms=[...String(tok).matchAll(/(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?/g)]; if(!ms.length) return null; let yr=null; for(let k=ms.length-1;k>=0;k--){ if(ms[k][3]!=null){ yr=+ms[k][3]; break; } } if(yr==null) yr=new Date().getFullYear(); else if(yr<100) yr=2000+yr; const f=ms[0]; let fy=f[3]!=null?(+f[3]<100?2000+ +f[3]:+f[3]):yr; return new Date(fy,(+f[1])-1,+f[2]).getTime(); }
-function fmtShort(t){ const d=new Date(t); return (d.getMonth()+1)+'/'+d.getDate()+'/'+String(d.getFullYear()).slice(2); }
-function buildTlSvg(events){
-  const ev=events.filter(function(e){return e.t!=null;});
-  if(ev.length<2) return '';
-  let min=ev[0].t,max=ev[0].t; ev.forEach(function(e){ if(e.t<min)min=e.t; if(e.t>max)max=e.t; });
-  const span=(max-min)||1, W=700,H=66,padL=14,padR=14,axisY=34,plotW=W-padL-padR;
-  let ticks=''; const MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  const d0=new Date(min); let cur=new Date(d0.getFullYear(),d0.getMonth(),1); if(cur.getTime()<min) cur=new Date(d0.getFullYear(),d0.getMonth()+1,1);
-  let guard=0;
-  while(cur.getTime()<=max && guard<60){ const x=padL+((cur.getTime()-min)/span)*plotW; ticks+='<line x1="'+x.toFixed(1)+'" y1="'+(axisY-5)+'" x2="'+x.toFixed(1)+'" y2="'+(axisY+5)+'" class="tl-tick"/>'; ticks+='<text x="'+x.toFixed(1)+'" y="'+(axisY+18)+'" class="tl-mon">'+MON[cur.getMonth()]+(cur.getMonth()===0?" '"+String(cur.getFullYear()).slice(2):'')+'</text>'; cur=new Date(cur.getFullYear(),cur.getMonth()+1,1); guard++; }
-  const axis='<line x1="'+padL+'" y1="'+axisY+'" x2="'+(W-padR)+'" y2="'+axisY+'" class="tl-axis"/>';
-  let dots=''; ev.forEach(function(e,idx){ const x=padL+((e.t-min)/span)*plotW; const hot=/FLAG|invoice|cancel|hospital|delay|increase|dispute|unresolved|rejected/i.test(e.raw); const last=idx===ev.length-1; dots+='<circle cx="'+x.toFixed(1)+'" cy="'+axisY+'" r="'+(last?4.5:3.3)+'" class="tl-dot'+(last?' tl-dot-last':hot?' tl-dot-hot':'')+'"><title>'+e.title+'</title></circle>'; });
-  const lbl='<text x="'+padL+'" y="12" class="tl-end">'+fmtShort(min)+'</text><text x="'+(W-padR)+'" y="12" class="tl-end tl-end-r">'+fmtShort(max)+'</text><text x="'+(W/2)+'" y="12" class="tl-span">'+Math.round(span/86400000)+' days · '+ev.length+' events</text>';
-  return '<svg class="nd-tlsvg" viewBox="0 0 '+W+' '+H+'" width="100%" preserveAspectRatio="xMidYMid meet" role="img">'+lbl+ticks+axis+dots+'</svg>';
-}
-// Render a pasted plain-text note as a formatted case-file document (title, sections, risk flags, dated timeline + visual rail, vendor/supplier tagging, tables, lists).
-function renderNoteHtml(text){
-  const esc=escapeHtml(String(text||''));
-  const lines=esc.split(/\r?\n/);
-  const isTableRow=function(s){ return /^\|/.test(s) && (s.match(/\|/g)||[]).length>=2; };
-  const isSep=function(c){ return /-/.test(c) && /^[\s:-]+$/.test(c); };
-  const cells=function(s){ let p=s.split('|'); if(p.length && p[0].trim()==='') p.shift(); if(p.length && p[p.length-1].trim()==='') p.pop(); return p.map(function(x){return x.trim();}); };
-  let html='', list=null, section='', titled=false, tl=[];
-  const closeList=function(){ if(list){ html+=(list==='ul'?'</ul>':'</ol>'); list=null; } };
-  const multi=lines.filter(function(l){return l.trim();}).length>3;
-  for(let i=0;i<lines.length;i++){
-    const line=lines[i].trim();
-    if(!line){ closeList(); continue; }
-    if(isTableRow(line)){
-      closeList();
-      const rows=[]; let jj=i;
-      while(jj<lines.length && isTableRow(lines[jj].trim())){ rows.push(cells(lines[jj].trim())); jj++; }
-      const dataRows=rows.filter(function(rw){ return !(rw.length>0 && rw.every(isSep)); });
-      const head=dataRows.length?dataRows[0]:null;
-      const vendorTbl=section==='vendors' || (head && /vendor|supplier|company/i.test(head.join(' ')));
-      let body='';
-      for(let k=1;k<dataRows.length;k++){ const rw=dataRows[k]; body+='<tr>'+rw.map(function(c,ci){ let cell=c; if(vendorTbl && ci===0 && vendorKind(c)==='supplier'){ cell=c+'<span class="nd-kind nd-sup">Supplier</span>'; } return '<td>'+cell+'</td>'; }).join('')+'</tr>'; }
-      const thead=head?'<tr>'+head.map(function(c){return '<th>'+c+'</th>';}).join('')+'</tr>':'';
-      html+='<table class="nd-table">'+thead+body+'</table>';
-      i=jj-1; continue;
-    }
-    let m;
-    if(section==='timeline'){
-      const dl=line.replace(/^(?:[\u2022\u25cf\u25aa\u2023*-])\s+/,'');
-      if((m=dl.match(/^(\d{1,2}\/\d{1,2}(?:\/\d{2,4})?(?:\s*[\u2013-]\s*\d{1,2}\/\d{1,2}(?:\/\d{2,4})?)?)\s*[\u2014\u2013-]\s+(.*)$/))){ closeList(); tl.push({t:tlDate(m[1]),raw:m[2],title:m[1]+' — '+m[2]}); html+='<div class="nd-tl"><span class="nd-tl-date">'+m[1]+'</span><span class="nd-tl-txt">'+m[2]+'</span></div>'; continue; }
-    }
-    if((m=line.match(/^(?:[\u2022\u25cf\u25aa\u2023*-])\s+(.*)$/))){ if(list!=='ul'){ closeList(); html+='<ul class="nd-ul">'; list='ul'; } html+='<li>'+m[1]+'</li>'; continue; }
-    if((m=line.match(/^(\d+)[.)]\s+(.*)$/))){ if(list!=='ol'){ closeList(); html+='<ol class="nd-ol">'; list='ol'; } html+='<li>'+m[2]+'</li>'; continue; }
-    closeList();
-    const bare=line.replace(/&(?:amp|lt|gt|quot|#\d+);/g,' ');
-    const plain=bare.replace(/^[^0-9A-Za-z]+/,'');
-    const letters=plain.replace(/[^A-Za-z]/g,'');
-    const isHead=letters.length>=3 && plain.replace(/:$/,'')===plain.replace(/:$/,'').toUpperCase() && /[A-Z]/.test(plain) && bare.length<=60;
-    if(!titled){ titled=true; if(multi && line.length<110 && /[\u2014-]/.test(line) && !/[.!?]$/.test(line)){ html+='<div class="nd-title">'+line+'</div>'; continue; } }
-    if(isHead){ section=/RISK/.test(plain)?'risk':/TIMELINE/.test(plain)?'timeline':/VENDOR/.test(plain)?'vendors':'other'; html+='<div class="nd-h">'+line+'</div>'; continue; }
-    if((m=line.match(/^([A-Za-z][A-Za-z0-9 \/#.'&-]{1,32}):\s+(.+)$/))){ const b='<strong>'+m[1]+':</strong> '+m[2]; if(section==='risk'){ html+='<div class="nd-flag'+(/FLAG\b/.test(line)?' nd-flag-hot':'')+'">'+b+'</div>'; } else { html+='<p class="nd-p">'+b+'</p>'; } continue; }
-    if(section==='risk'){ html+='<div class="nd-flag'+(/FLAG\b/.test(line)?' nd-flag-hot':'')+'">'+line+'</div>'; continue; }
-    html+='<p class="nd-p">'+line+'</p>';
+// ---- Inline markdown (bold/italic) into a DOM node, safely (no innerHTML) ----
+function mdInline(parent, text){
+  const re=/(\*\*([^*]+)\*\*|\*([^*]+)\*|_([^_]+)_)/g; let m, last=0;
+  while((m=re.exec(text))!==null){
+    if(m.index>last) parent.appendChild(document.createTextNode(text.slice(last,m.index)));
+    const bold=m[2]!==undefined;
+    const node=document.createElement(bold?'strong':'em');
+    node.textContent= bold?m[2]:(m[3]!==undefined?m[3]:m[4]);
+    parent.appendChild(node);
+    last=m.index+m[0].length;
   }
-  closeList();
-  if(tl.length>=3){ const svg=buildTlSvg(tl); if(svg){ const k=html.indexOf('<div class="nd-tl">'); if(k>=0){ html=html.slice(0,k)+'<div class="nd-tlwrap">'+svg+'</div>'+html.slice(k); } } }
-  return html||'<p class="nd-p nd-empty">No note yet.</p>';
+  if(last<text.length) parent.appendChild(document.createTextNode(text.slice(last)));
+}
+// Render a pasted plain-text note as a formatted case-file document into `container`.
+// Eyebrow section headings, CURRENT STATUS callout, numbered amber/red risk-flag cards,
+// vendor cards (role pill + people + detail bullets + right-hand $ column, with Supplier
+// tagging), a clean dated timeline rail, numbered (chip) + bulleted lists, and markdown
+// tables. Safe DOM construction (textContent), no innerHTML.
+function bnRenderCaseFile(container, src){
+  while(container.firstChild) container.removeChild(container.firstChild);
+  const lines=(src||'').replace(/\r/g,'').split('\n');
+  let ul=null, ol=null, tl=null, first=true, section='other', flagN=0;
+  const HOT_FLAG=/\b(escalat|overdue|unpaid|halt|cannot|breach|urgent|immediately|lien|default|stop work)\b/i;
+  const HOT_TL=/\b(escalat|halt|hospital|accident|overdue|dispute|rejected|cancel|lawsuit|lien)\b/i;
+  const flushUl=()=>{ if(ul){ container.appendChild(ul); ul=null; } };
+  const flushOl=()=>{ if(ol){ container.appendChild(ol); ol=null; } };
+  const flushTl=()=>{ if(tl){ container.appendChild(tl); tl=null; } };
+  const flushAll=()=>{ flushUl(); flushOl(); flushTl(); };
+  const addP=(txt,cls)=>{ const p=document.createElement('p'); if(cls) p.className=cls; mdInline(p,txt); container.appendChild(p); };
+  const heading=(txt)=>{ flushAll(); const hd=document.createElement('div'); hd.className='nd-h'; hd.textContent=txt.replace(/\*\*/g,'').replace(/:\s*$/,'').trim(); container.appendChild(hd); };
+  const capsLabel=(s)=>{ const core=s.replace(/\([^)]*\)/g,''); return (core.match(/[a-z]/g)||[]).length<=1 && /[A-Z]/.test(core); };
+  const sectionOf=(label)=>{ const L=label.toUpperCase(); if(/RISK FLAG/.test(L))return 'flags'; if(/VENDOR|SUPPLIER/.test(L))return 'vendors'; if(/TIMELINE/.test(L))return 'timeline'; if(/NEXT ACTION/.test(L))return 'actions'; if(/BLOCK|REMAIN|DONE SO FAR/.test(L))return 'list'; if(/STATUS/.test(L))return 'status'; return 'other'; };
+  const isTableRow=(s)=>/^\|/.test(s) && (s.match(/\|/g)||[]).length>=2;
+  const isSep=(c)=>/-/.test(c) && /^[\s:|-]+$/.test(c);
+  function flagCard(txt){
+    flushAll();
+    txt=txt.replace(/^\s*(?:\d+[.)]|[\u2022\-*])\s*/,'').replace(/^FLAG\s*[:\-\u2014]\s*/i,'');
+    flagN++;
+    const card=document.createElement('div'); card.className='nd-flag'+(HOT_FLAG.test(txt)?' hot':'');
+    const n=document.createElement('span'); n.className='fn'; n.textContent=flagN;
+    const body=document.createElement('span'); mdInline(body, txt.replace(/\bFLAG:\s*/gi,''));
+    card.appendChild(n); card.appendChild(body); container.appendChild(card);
+  }
+  function vendorCard(line){
+    flushAll();
+    const segs=line.split(/\s+\u2014\s+/);
+    const nameRaw=segs[0]||line; let people='', name=nameRaw, role='', detail='';
+    const pm=nameRaw.match(/^(.*?)\s*\(([^)]*)\)\s*$/);
+    if(pm){ name=pm[1].trim(); people=pm[2].trim(); }
+    if(segs.length>=3){ role=segs[1].trim(); detail=segs.slice(2).join(' \u2014 '); }
+    else { detail=segs.slice(1).join(' \u2014 '); }
+    const money=[], seen={}; let mm; const mre=/\$[\d,]+(?:\.\d+)?\s?[KkMm]?/g;
+    while((mm=mre.exec(line))!==null){ const v=mm[0].replace(/\s+/g,''); if(!seen[v]){ seen[v]=1; money.push(v); } }
+    const card=document.createElement('div'); card.className='nd-vend';
+    const main=document.createElement('div'); main.className='vn-main';
+    const headEl=document.createElement('div'); headEl.className='vn-head';
+    const nmEl=document.createElement('span'); nmEl.className='vn-name'; nmEl.textContent=name; headEl.appendChild(nmEl);
+    if(vendorKind(name)==='supplier'){ const kd=document.createElement('span'); kd.className='nd-kind nd-sup'; kd.textContent='Supplier'; headEl.appendChild(kd); }
+    if(role){ const rl=document.createElement('span'); rl.className='vn-role'; rl.textContent=role; headEl.appendChild(rl); }
+    main.appendChild(headEl);
+    if(people){ const pe=document.createElement('div'); pe.className='vn-people'; pe.textContent=people; main.appendChild(pe); }
+    const parts=detail.split(/;\s*/).map(s=>s.trim()).filter(Boolean);
+    if(parts.length){ const dl=document.createElement('ul'); dl.className='vn-det'; parts.forEach(p=>{ const li=document.createElement('li'); mdInline(li,p); dl.appendChild(li); }); main.appendChild(dl); }
+    card.appendChild(main);
+    const moneyEl=document.createElement('div'); moneyEl.className='vn-money';
+    if(money.length){ money.forEach(v=>{ const s=document.createElement('span'); s.className='vn-amt'; s.textContent=v; moneyEl.appendChild(s); }); }
+    else { const dash=document.createElement('span'); dash.className='vn-amt none'; dash.textContent='\u2014'; moneyEl.appendChild(dash); }
+    card.appendChild(moneyEl); container.appendChild(card);
+  }
+  for(let i=0;i<lines.length;i++){
+    const t=lines[i].trim();
+    if(!t){ flushAll(); continue; }
+    if(isTableRow(t)){
+      flushAll();
+      const rows=[]; let jj=i;
+      while(jj<lines.length && isTableRow(lines[jj].trim())){
+        let p=lines[jj].trim().split('|'); if(p.length&&p[0].trim()==='')p.shift(); if(p.length&&p[p.length-1].trim()==='')p.pop();
+        rows.push(p.map(x=>x.trim())); jj++;
+      }
+      const dataRows=rows.filter(rw=>!(rw.length>0 && rw.every(isSep)));
+      const head=dataRows.length?dataRows[0]:null;
+      const vendorTbl = section==='vendors' || (head && /vendor|supplier|company/i.test(head.join(' ')));
+      const table=document.createElement('table'); table.className='nd-table';
+      if(head){ const trh=document.createElement('tr'); head.forEach(c=>{ const th=document.createElement('th'); th.textContent=c; trh.appendChild(th); }); table.appendChild(trh); }
+      for(let k=1;k<dataRows.length;k++){ const tr=document.createElement('tr'); dataRows[k].forEach((c,ci)=>{ const td=document.createElement('td'); if(vendorTbl&&ci===0&&vendorKind(c)==='supplier'){ td.textContent=c+' '; const kd=document.createElement('span'); kd.className='nd-kind nd-sup'; kd.textContent='Supplier'; td.appendChild(kd);} else { td.textContent=c; } tr.appendChild(td); }); table.appendChild(tr); }
+      container.appendChild(table); i=jj-1; continue;
+    }
+    if(first){ first=false; flushAll(); const ttl=document.createElement('div'); ttl.className='nd-title'; ttl.textContent=t.replace(/\*\*/g,''); container.appendChild(ttl); continue; }
+    if(/\|/.test(t) || /tracking #|internal use only/i.test(t)){ flushAll(); addP(t,'nd-sub'); continue; }
+    if(/^(-{3,}|\*{3,}|_{3,})$/.test(t)){ flushAll(); container.appendChild(document.createElement('hr')); continue; }
+    const hm=t.match(/^#{1,6}\s+(.*)$/);
+    const wb=t.match(/^\*\*([^*]+)\*\*$/);
+    const lc=t.match(/^([A-Z0-9][A-Z0-9 .,'\/&()\-]{2,46}?):\s*(.*)$/);
+    if(hm||wb||(lc&&capsLabel(lc[1]))){
+      const label=hm?hm[1]:wb?wb[1]:lc[1];
+      const sec=sectionOf(label);
+      if(section==='flags' && sec==='other' && lc && !hm && !wb){ flagCard(t); continue; }
+      heading(label); section=sec; flagN=0;
+      if(lc&&lc[2]&&lc[2].trim()){ if(section==='status'){ const cb=document.createElement('div'); cb.className='nd-status'; mdInline(cb,lc[2].trim()); container.appendChild(cb); } else addP(lc[2].trim()); }
+      continue;
+    }
+    if(section==='vendors'){ vendorCard(t); continue; }
+    if(section==='flags'){ flagCard(t); continue; }
+    const dm=t.match(/^(\d{1,2}\/\d{1,2}(?:\/\d{2,4})?(?:[\u2013\-]\d{1,2}\/\d{1,2}(?:\/\d{2,4})?)?)\s+[\u2014\u2013\-]\s+(.*)$/);
+    if(dm){ flushUl(); flushOl(); if(!tl){ tl=document.createElement('div'); tl.className='nd-tl'; } const row=document.createElement('div'); row.className='nd-tlrow'+(HOT_TL.test(dm[2])?' hot':''); const ds=document.createElement('span'); ds.className='nd-tldate'; ds.textContent=dm[1]; const tx=document.createElement('span'); tx.className='nd-tltext'; mdInline(tx,dm[2]); row.appendChild(ds); row.appendChild(tx); tl.appendChild(row); continue; }
+    flushTl();
+    const nm2=t.match(/^(\d+)[.)]\s+(.*)$/);
+    if(nm2){ flushUl(); if(!ol){ ol=document.createElement('ol'); ol.className='nd-ol'; } const oli=document.createElement('li'); mdInline(oli,nm2[2]); ol.appendChild(oli); continue; }
+    flushOl();
+    const bm=t.match(/^([\u2022\-*])\s+(.*)$/);
+    if(bm||section==='list'){ if(!ul){ ul=document.createElement('ul'); ul.className='nd-ul'; } const bli=document.createElement('li'); mdInline(bli, bm?bm[2]:t); ul.appendChild(bli); continue; }
+    flushUl();
+    addP(t);
+  }
+  flushAll();
+}
+// Public renderer: returns an HTML string for the existing innerHTML call sites.
+function renderNoteHtml(text){
+  const box=document.createElement('div');
+  bnRenderCaseFile(box, String(text||''));
+  return box.innerHTML || '<p class="nd-p nd-empty">No note yet.</p>';
+}
+// Pull a NEXT ACTIONS section out of a note so it can be hoisted to the top of the
+// modal (moved, not duplicated). Returns { actions:[...], rest:<note without that section> }.
+function extractNextActions(text){
+  const src=String(text||''); const ls=src.replace(/\r/g,'').split('\n');
+  const headLabel=(s)=>{ const t=s.trim(); const hm=t.match(/^#{1,6}\s+(.*)$/); const wb=t.match(/^\*\*([^*]+)\*\*$/); const lc=t.match(/^([A-Z0-9][A-Z0-9 .,'\/&()\-]{2,46}?):\s*(.*)$/); return hm?hm[1]:wb?wb[1]:lc?lc[1]:null; };
+  let start=-1;
+  for(let i=0;i<ls.length;i++){ const h=headLabel(ls[i]); if(h && /NEXT ACTION/i.test(h)){ start=i; break; } }
+  if(start<0) return { actions:[], rest:src };
+  let end=ls.length;
+  for(let j=start+1;j<ls.length;j++){ if(headLabel(ls[j])){ end=j; break; } }
+  const actions=[];
+  const inline=ls[start].match(/:\s*(.+)$/); if(inline) actions.push(inline[1].trim());
+  ls.slice(start+1,end).forEach(l=>{ const tt=l.trim(); if(tt) actions.push(tt.replace(/^\s*(?:\d+[.)]|[\u2022\-*])\s*/,'')); });
+  const rest=ls.slice(0,start).concat(ls.slice(end)).join('\n').replace(/\n{3,}/g,'\n\n').trim();
+  return { actions, rest };
+}
+// Numbered (chip) list for the hoisted Next Actions card.
+function nextActionsCardHtml(actions){
+  if(!actions||!actions.length) return '';
+  const ol=document.createElement('ol'); ol.className='nd-ol';
+  actions.forEach(a=>{ const li=document.createElement('li'); mdInline(li,a); ol.appendChild(li); });
+  return ol.outerHTML;
 }
 function editJobNote(){
   const v=document.getElementById('jnView'), e=document.getElementById('jnEdit');
