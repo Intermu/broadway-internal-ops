@@ -302,7 +302,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .job-modal-head .jm-head-sub{font-size:10px;color:rgba(255,255,255,0.8);font-family:'DM Sans',sans-serif;font-weight:500;}
 .job-modal-head .jm-x{color:rgba(255,255,255,0.9);}
 .job-modal-head .jm-x:hover{color:#fff;}
-.jn-doc-card{background:var(--color-surface-alt);border:1px solid var(--border);border-radius:8px;padding:13px 15px;max-height:340px;overflow-y:auto;}
+.jn-doc-card{background:var(--color-surface-alt);border:1px solid var(--border);border-radius:8px;padding:15px 17px;max-height:420px;overflow-y:auto;box-shadow:inset 0 1px 2px rgba(0,0,0,0.03);}
 .nd-doc{font-family:'DM Sans',sans-serif;font-size:12px;line-height:1.55;color:var(--text);}
 .nd-doc>.nd-h:first-child{margin-top:0;}
 .nd-h{font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:var(--green-dk);margin:13px 0 5px;padding-bottom:3px;border-bottom:1px solid var(--border);}
@@ -311,6 +311,17 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .nd-ul,.nd-ol{margin:5px 0 5px 0;padding-left:18px;}
 .nd-ul li,.nd-ol li{margin:3px 0;}
 .nd-empty{color:var(--muted);font-style:italic;}
+.nd-title{font-size:14px;font-weight:800;color:var(--green-dk);line-height:1.3;margin:0 0 11px;padding-bottom:9px;border-bottom:2px solid var(--green-dk);}
+.nd-table{width:100%;border-collapse:collapse;margin:8px 0 12px;font-size:11px;}
+.nd-table th{text-align:left;background:var(--color-surface-alt);color:var(--green-dk);font-weight:700;font-size:9.5px;text-transform:uppercase;letter-spacing:0.4px;padding:6px 9px;border:1px solid var(--border);}
+.nd-table td{padding:6px 9px;border:1px solid var(--border);vertical-align:top;}
+.nd-table tr:nth-child(even) td{background:rgba(15,61,38,0.025);}
+.nd-tl{display:grid;grid-template-columns:94px 1fr;gap:11px;padding:6px 0;border-bottom:1px solid rgba(15,61,38,0.06);align-items:start;}
+.nd-tl:last-child{border-bottom:none;}
+.nd-tl-date{font-family:'DM Mono',monospace;font-size:10px;font-weight:600;color:var(--green-dk);background:var(--color-surface-alt);border:1px solid var(--border);border-radius:5px;padding:2px 0;text-align:center;white-space:nowrap;}
+.nd-tl-txt{font-size:11.5px;line-height:1.45;}
+.nd-flag{padding:8px 12px;margin:6px 0;background:var(--color-surface-alt);border:1px solid var(--border);border-left:3px solid #d9a441;border-radius:6px;font-size:11.5px;line-height:1.5;}
+.nd-flag-hot{border-left-color:#cf4b45;background:#fdf6f5;}
 .jn-head{margin-bottom:7px;}
 .jn-edit{font-size:10.5px;font-weight:700;padding:5px 11px;border-radius:7px;border:1px solid var(--border);background:var(--color-surface);color:var(--green-dk);cursor:pointer;font-family:'DM Sans',sans-serif;}
 .jn-edit:hover{border-color:var(--green-dk);}
@@ -1158,23 +1169,46 @@ function jobNoteMarker(id){
   const lbl=a==='done'?'✓ Action taken':a==='working'?'● In progress':'📝 Noted';
   return '<div style="margin-top:3px;"><span class="jn-pill jn-'+a+'">'+lbl+'</span></div>';
 }
-// Render a pasted plain-text note as a lightweight formatted document (headings, bullets, numbered lists, label:value, paragraphs).
+// Render a pasted plain-text note as a formatted case-file document (title, section headings, risk flags, dated timeline, tables, lists).
 function renderNoteHtml(text){
   const esc=escapeHtml(String(text||''));
   const lines=esc.split(/\r?\n/);
-  let html='', list=null;
-  function closeList(){ if(list){ html+=(list==='ul'?'</ul>':'</ol>'); list=null; } }
+  const isTableRow=function(s){ return /^\|/.test(s) && (s.match(/\|/g)||[]).length>=2; };
+  const isSep=function(c){ return /-/.test(c) && /^[\s:-]+$/.test(c); };
+  const cells=function(s){ let p=s.split('|'); if(p.length && p[0].trim()==='') p.shift(); if(p.length && p[p.length-1].trim()==='') p.pop(); return p.map(function(x){return x.trim();}); };
+  let html='', list=null, section='', titled=false;
+  const closeList=function(){ if(list){ html+=(list==='ul'?'</ul>':'</ol>'); list=null; } };
+  const multi=lines.filter(function(l){return l.trim();}).length>3;
   for(let i=0;i<lines.length;i++){
     const line=lines[i].trim();
     if(!line){ closeList(); continue; }
+    if(isTableRow(line)){
+      closeList();
+      const rows=[]; let j=i;
+      while(j<lines.length && isTableRow(lines[j].trim())){ rows.push(cells(lines[j].trim())); j++; }
+      let body='', head=null;
+      for(let k=0;k<rows.length;k++){
+        if(rows[k].length>0 && rows[k].every(isSep)) continue;
+        if(head===null){ head=rows[k]; continue; }
+        body+='<tr>'+rows[k].map(function(c){return '<td>'+c+'</td>';}).join('')+'</tr>';
+      }
+      let thead=''; if(head){ thead='<tr>'+head.map(function(c){return '<th>'+c+'</th>';}).join('')+'</tr>'; }
+      html+='<table class="nd-table">'+thead+body+'</table>';
+      i=j-1; continue;
+    }
     let m;
     if((m=line.match(/^(?:[\u2022\u25cf\u25aa\u2023*-])\s+(.*)$/))){ if(list!=='ul'){ closeList(); html+='<ul class="nd-ul">'; list='ul'; } html+='<li>'+m[1]+'</li>'; continue; }
     if((m=line.match(/^(\d+)[.)]\s+(.*)$/))){ if(list!=='ol'){ closeList(); html+='<ol class="nd-ol">'; list='ol'; } html+='<li>'+m[2]+'</li>'; continue; }
     closeList();
-    const plain=line.replace(/^[^0-9A-Za-z]+/,'');
+    const bare=line.replace(/&(?:amp|lt|gt|quot|#\d+);/g,' ');
+    const plain=bare.replace(/^[^0-9A-Za-z]+/,'');
     const letters=plain.replace(/[^A-Za-z]/g,'');
-    if(letters.length>=3 && plain===plain.toUpperCase()){ html+='<div class="nd-h">'+line+'</div>'; continue; }
-    if((m=line.match(/^([A-Za-z][A-Za-z0-9 \/#.'-]{1,32}):\s+(.+)$/))){ html+='<p class="nd-p"><strong>'+m[1]+':</strong> '+m[2]+'</p>'; continue; }
+    const isHead=letters.length>=3 && plain.replace(/:$/,'')===plain.replace(/:$/,'').toUpperCase() && /[A-Z]/.test(plain) && bare.length<=60;
+    if(!titled){ titled=true; if(multi && line.length<110 && /[\u2014-]/.test(line) && !/[.!?]$/.test(line)){ html+='<div class="nd-title">'+line+'</div>'; continue; } }
+    if(isHead){ section=/RISK/.test(plain)?'risk':/TIMELINE/.test(plain)?'timeline':/VENDOR/.test(plain)?'vendors':'other'; html+='<div class="nd-h">'+line+'</div>'; continue; }
+    if(section==='timeline' && (m=line.match(/^(\d{1,2}\/\d{1,2}(?:\/\d{2,4})?(?:\s*[\u2013-]\s*\d{1,2}\/\d{1,2}(?:\/\d{2,4})?)?)\s*[\u2014\u2013-]\s+(.*)$/))){ html+='<div class="nd-tl"><span class="nd-tl-date">'+m[1]+'</span><span class="nd-tl-txt">'+m[2]+'</span></div>'; continue; }
+    if((m=line.match(/^([A-Za-z][A-Za-z0-9 \/#.'&-]{1,32}):\s+(.+)$/))){ const b='<strong>'+m[1]+':</strong> '+m[2]; if(section==='risk'){ html+='<div class="nd-flag'+(/FLAG\b/.test(line)?' nd-flag-hot':'')+'">'+b+'</div>'; } else { html+='<p class="nd-p">'+b+'</p>'; } continue; }
+    if(section==='risk'){ html+='<div class="nd-flag'+(/FLAG\b/.test(line)?' nd-flag-hot':'')+'">'+line+'</div>'; continue; }
     html+='<p class="nd-p">'+line+'</p>';
   }
   closeList();
