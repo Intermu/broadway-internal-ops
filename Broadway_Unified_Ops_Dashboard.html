@@ -255,11 +255,11 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 /* ─── JOB DETAIL MODAL ─── */
 .job-modal-overlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,0.55);z-index:9998;align-items:flex-start;justify-content:center;padding:40px 16px;overflow-y:auto;}
 .job-modal-overlay.open{display:flex;}
-.job-modal{background:var(--color-surface);border:1px solid var(--border);border-radius:10px;max-width:760px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,0.25);font-family:'DM Sans',sans-serif;}
+.job-modal{background:var(--color-surface);border:1px solid var(--border);border-radius:10px;max-width:1100px;width:100%;max-height:calc(100vh - 80px);display:flex;flex-direction:column;box-shadow:0 12px 40px rgba(0,0,0,0.25);font-family:'DM Sans',sans-serif;}
 .job-modal-head{display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--color-surface);border-radius:10px 10px 0 0;}
 .job-modal-head .jm-id{font-family:'DM Mono',monospace;font-weight:700;font-size:14px;color:var(--text);}
 .job-modal-head .jm-x{margin-left:auto;background:none;border:none;font-size:20px;line-height:1;cursor:pointer;color:var(--muted);}
-.job-modal-body{padding:16px 18px;}
+.job-modal-body{padding:16px 18px;flex:1 1 auto;min-height:0;overflow:hidden;}
 .jm-holdup{background:var(--color-surface-alt);border:1px solid var(--border);border-left:3px solid var(--green-dk);border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12.5px;line-height:1.5;color:var(--text);}
 .jm-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px 18px;font-size:12px;margin-bottom:14px;}
 .jm-grid .jm-k{color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:0.4px;display:block;margin-bottom:1px;}
@@ -303,6 +303,18 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .job-modal-head .jm-x{color:rgba(255,255,255,0.9);}
 .job-modal-head .jm-x:hover{color:#fff;}
 .jn-doc-card{background:var(--color-surface-alt);border:1px solid var(--border);border-radius:8px;padding:15px 17px;max-height:420px;overflow-y:auto;box-shadow:inset 0 1px 2px rgba(0,0,0,0.03);}
+/* Landscape two-column modal layout */
+.jm-cols{display:grid;grid-template-columns:minmax(0,0.95fr) minmax(0,1.05fr);gap:18px;height:100%;min-height:0;}
+.jm-col{min-width:0;min-height:0;overflow-y:auto;padding-right:6px;}
+.jm-col-r .jn-block{margin-top:0;border-top:none;padding-top:0;}
+.jm-cols .jn-doc-card{max-height:none;}
+@media (max-width:900px){
+  .jm-cols{grid-template-columns:1fr;gap:0;height:auto;min-height:0;}
+  .jm-col{overflow-y:visible;padding-right:0;}
+  .job-modal-body{overflow:auto;}
+  .jm-col-r .jn-block{margin-top:14px;border-top:1px solid var(--border);padding-top:12px;}
+  .jm-cols .jn-doc-card{max-height:420px;}
+}
 .nd-doc{font-family:'DM Sans',sans-serif;font-size:13px;line-height:1.55;color:#2a3530;}
 .nd-doc>.nd-h:first-child,.nd-doc>.nd-title:first-child{margin-top:0;}
 .nd-title{font:800 19px/1.2 'DM Sans',system-ui,sans-serif;color:#0d3d26;letter-spacing:-.02em;margin:0 0 3px;}
@@ -1133,6 +1145,8 @@ function openJobModal(id){
       <button class="jm-x" onclick="closeJobModal()" aria-label="Close">×</button>
     </div>
     <div class="job-modal-body">
+      <div class="jm-cols">
+      <div class="jm-col jm-col-l">
       <div class="jm-holdup">
         <div class="holdup-row">
           <span><strong>Bottleneck:</strong> <span id="holdupText">${saved.summary?'<span class="ai-tag">AI</span> '+escapeHtml(saved.summary):r.stage+' '+r.activity+(r.inStatus!=null?' It has been in this status about <strong>'+r.inStatus+' day'+(r.inStatus===1?'':'s')+'</strong>.':'')}</span></span>
@@ -1155,6 +1169,8 @@ function openJobModal(id){
       <div class="jm-section-label">Latest status note</div>
       <div class="jn-doc-card nd-doc">${j.notes?renderNoteHtml(j.notes):'<p class="nd-p nd-empty">No note on file.</p>'}</div>
       ${j.mgmtNotes?'<div class="jm-section-label">Mgmt notes (from sheet)</div><div class="jn-doc-card nd-doc">'+renderNoteHtml(j.mgmtNotes)+'</div>':''}
+      </div>
+      <div class="jm-col jm-col-r">
       <div class="jn-block">
         <div class="jn-head">
           <span class="jm-section-label" style="margin:0;">WO Audit Note <span class="jn-hint">saved per Job ID · stays attached week to week</span></span>
@@ -1181,6 +1197,8 @@ function openJobModal(id){
             <button type="button" class="jn-save" onclick="saveJobNote()">Save note</button>
           </div>
         </div>
+      </div>
+      </div>
       </div>
     </div>`;
   const o=document.getElementById('jobModalOverlay'); if(o) o.classList.add('open');
