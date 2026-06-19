@@ -1263,8 +1263,11 @@ function jobNoteMarker(id){
   const lbl=a==='done'?'✓ Action taken':a==='working'?'● In progress':'📝 Noted';
   return '<div style="margin-top:3px;"><span class="jn-pill jn-'+a+'">'+lbl+'</span></div>';
 }
-const SUPPLIER_PATTERNS=[/\bLSI\b/i,/INDUSTRIES/i,/LIGHTING/i,/LIGHTMART/i,/MANUFACTUR/i,/\bSUPPLY\b/i,/SUPPLIES/i,/\bMATERIALS?\b/i,/GRAYBAR/i,/REXEL/i,/WESCO/i,/\bUPS\b/i,/UNITED PARCEL/i,/FEDEX/i,/FREIGHT/i,/LOGISTICS/i,/ROBINSON/i,/\bXPO\b/i,/OLD DOMINION/i,/TRUCKING/i,/SHIPPING/i,/ELECTRIC SUPPLY/i,/WHOLESALE/i,/DISTRIBUT/i];
-function vendorKind(name){ const n=String(name||''); if(!n.trim()) return ''; for(const re of SUPPLIER_PATTERNS){ if(re.test(n)) return 'supplier'; } return 'vendor'; }
+const SUPPLIER_PATTERNS=[/\bLSI\b/i,/INDUSTRIES/i,/LIGHTING/i,/LIGHTMART/i,/MANUFACTUR/i,/\bSUPPLY\b/i,/SUPPLIES/i,/\bMATERIALS?\b/i,/GRAYBAR/i,/REXEL/i,/WESCO/i,/\bUPS\b/i,/UNITED PARCEL/i,/FEDEX/i,/FREIGHT/i,/LOGISTICS/i,/ROBINSON/i,/\bXPO\b/i,/OLD DOMINION/i,/TRUCKING/i,/SHIPPING/i,/ELECTRIC SUPPLY/i,/WHOLESALE/i,/DISTRIBUT/i,/\bCDW\b/i,/\bLOOMIN\b/i,/UNITED HDD/i,/\bELECTRONICS\b/i,/\bACAVATI\b/i,/ENERGY LIGHT/i,/SUNBELT/i,/\bRENTALS?\b/i,/\bPOST IT\b/i,/BATTERYSTUFF/i,/\bBATTER(Y|IES)\b/i,/MURDOCH/i];
+// Names that look like suppliers (e.g. contain "LIGHTING") but are actually field vendors.
+// Checked before SUPPLIER_PATTERNS so these always resolve to 'vendor'.
+const VENDOR_OVERRIDES=[/CERTIFIED LIGHTING/i];
+function vendorKind(name){ const n=String(name||''); if(!n.trim()) return ''; for(const re of VENDOR_OVERRIDES){ if(re.test(n)) return 'vendor'; } for(const re of SUPPLIER_PATTERNS){ if(re.test(n)) return 'supplier'; } return 'vendor'; }
 // Render a Vendor(s) string with supplier tagging. Splits only on safe delimiters (; | newline) so names containing commas stay intact.
 // Split a vendor string into individual names: splits on ; | newline and commas, then glues
 // corporate suffixes (Inc, LLC, Co, Corp, ...) back so "WISCONSIN LIGHTING LAB, INC." stays intact.
@@ -2278,7 +2281,6 @@ function renderO30Compare(){
     </div>
   </div>
   ${typeCard}
-  ${coordCard}
   ${proposalCard}`;
 }
 
@@ -2308,24 +2310,32 @@ function renderOver30(mc, agg) {
   const TYPES = [['','All'],['WiFi','WiFi'],['Photometrics','Photometrics'],['Service','Service']];
   const typeBar = '<div class="o30-typebar">'+TYPES.map(function(t){ var val=t[0],lbl=t[1]; var cnt=val?o30All.filter(function(j){return o30Division(j)===val;}).length:o30All.length; var active=TYPE===val; return '<button class="o30-chip'+(active?' active':'')+'" onclick="setO30Type(\''+val+'\')">'+lbl+' <span class="o30-chip-n">'+cnt+'</span></button>'; }).join('')+'</div>';
 
-  // Per-coordinator breakdown (worst-first by over-30 count), respecting the active type filter
+  // Per-coordinator breakdown (worst-first by over-30 count), respecting the active type filter.
+  // Closed pace (avg days / count) is merged in from the loaded completed/invoiced export so the
+  // open over-30 load and the historical closed cadence live in one table.
+  const _closedByCoord={};
+  (window._closedJobs||[]).forEach(function(j){ if(!j.coord || typeof j.ageToComplete!=='number' || j.ageToComplete<0) return; const c=_closedByCoord[j.coord]||(_closedByCoord[j.coord]={sum:0,nn:0}); c.sum+=j.ageToComplete; c.nn++; });
+  const _hasClosed = !!(window._closedJobs||[]).length;
   const rows = Object.keys(agg.coords).map(name=>{
     const cj = TYPE ? agg.coords[name].jobs.filter(j=>o30Division(j)===TYPE) : agg.coords[name].jobs;
     const o30 = cj.filter(j=>j.aged>30);
     const appr = cj.filter(j=>j.aged>=20 && j.aged<=30);
     const amt = o30.reduce((s,j)=>s+j.amount,0);
     const oldest = o30.reduce((m,j)=>Math.max(m,j.aged),0);
-    return {name, o30:o30.length, appr:appr.length, amt, oldest};
+    const cb = _closedByCoord[name];
+    return {name, o30:o30.length, appr:appr.length, amt, oldest, cAvg:cb?Math.round(cb.sum/cb.nn):null, cN:cb?cb.nn:0};
   }).filter(r=>r.o30>0||r.appr>0).sort((a,b)=>b.o30-a.o30||b.oldest-a.oldest);
 
   const coordTable = `<table class="data-table">
-    <thead><tr><th>Coordinator</th><th>Over 30</th><th>20–30</th><th>Over-30 $</th><th>Oldest</th></tr></thead>
+    <thead><tr><th>Coordinator</th><th>Over 30</th><th>20–30</th><th>Over-30 $</th><th>Oldest</th><th>Closed avg days</th><th>Closed jobs</th></tr></thead>
     <tbody>${rows.map(r=>`<tr>
       <td style="font-weight:600;">${r.name}</td>
       <td><strong class="${r.o30>10?'c-red':r.o30>5?'c-amber':'c-green'}">${r.o30}</strong></td>
       <td>${r.appr}</td>
       <td class="amt">${r.amt>0?fmt$0(r.amt):'-'}</td>
       <td>${r.oldest?`<span class="age-pill ${ageCls(r.oldest)}">${r.oldest}d</span>`:'-'}</td>
+      <td>${r.cAvg!=null?r.cAvg+'d':'-'}</td>
+      <td>${r.cN||'-'}</td>
     </tr>`).join('')}</tbody></table>`;
 
   // Over-30 buckets, worst-first
@@ -2382,7 +2392,7 @@ function renderOver30(mc, agg) {
     <div id="o30TrendSlot"></div>
     <div id="o30CompareSlot"></div>
     <div class="card">
-      <div class="card-header"><h3>Over-30 by Coordinator</h3><span class="card-meta">${over30.length} over 30 · ${approaching.length} approaching</span></div>
+      <div class="card-header"><h3>By Coordinator</h3><span class="card-meta">${over30.length} over 30 · ${approaching.length} approaching${_hasClosed?' · open load + closed pace':''}</span></div>
       <div class="card-body" style="padding:0;">${coordTable}</div>
     </div>
     ${vendorCard}
