@@ -310,6 +310,14 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .jm-cols .jn-doc-card{max-height:none;}
 .np-text{font-size:13px;line-height:1.55;color:#2a3530;white-space:pre-wrap;font-family:'DM Sans',sans-serif;}
 .np-text.np-empty{color:var(--muted);font-style:italic;white-space:normal;}
+.vpills{display:flex;flex-wrap:wrap;gap:4px;margin-top:2px;}
+.vpill{display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:600;line-height:1.3;padding:2px 8px;border-radius:99px;background:var(--color-surface-alt);border:1px solid var(--border);color:var(--text);font-family:'DM Sans',sans-serif;}
+.vpill-sup{background:#fdf3e0;border-color:#e8cfa0;color:#9a6a12;}
+.vpill-tag{font-size:7px;font-weight:800;letter-spacing:0.3px;opacity:0.85;}
+.jm-timing{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:0 0 14px;}
+.jt{background:var(--color-surface-alt);border:1px solid var(--border);border-radius:8px;padding:8px 10px;text-align:center;}
+.jt-n{font:800 17px 'DM Sans',system-ui,sans-serif;color:#0d3d26;line-height:1.1;}
+.jt-l{font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;color:var(--muted);margin-top:3px;}
 @media (max-width:900px){
   .jm-cols{grid-template-columns:1fr;grid-template-rows:auto;gap:0;flex:0 0 auto;height:auto;min-height:0;}
   .jm-col{overflow-y:visible;padding-right:0;}
@@ -926,7 +934,7 @@ const normPriority = p => {
   if (/^l/.test(s)) return 'Low';
   return '';
 };
-const needsAssist = j => /^y(es)?$/i.test((j.mgmtAssist||'').trim());
+const needsAssist = j => { const v=String(j.mgmtAssist||'').trim().toLowerCase(); if(!v||/^(no|n|n\/a|na|false|0|none|-|\u2014|ok)$/.test(v)) return false; return /^(y|yes|true|1|x|\u2713|\u2714)$/.test(v)||/^(need|req|escalat|assist|urgent|mgmt|help)/.test(v); };
 const isSlaViol = j => { const t=SLA_THRESH[j.status]; return t && j.statusHrs > t; };
 
 // Source Priority field (P1-P4 / Red-Yellow-Blue). Distinct from Mgmt Escalation
@@ -1157,6 +1165,11 @@ function openJobModal(id){
         <div class="holdup-meta" id="holdupMeta">${saved.summaryAt?'AI summary · '+escapeHtml(new Date(saved.summaryAt).toLocaleString()):''}</div>
       </div>
       ${na.actions.length?'<div class="jm-na"><div class="jm-na-h">Next Actions Required</div>'+nextActionsCardHtml(na.actions)+'</div>':''}
+      <div class="jm-timing">
+        <div class="jt"><div class="jt-n">${j.aged}</div><div class="jt-l">Days open</div></div>
+        <div class="jt"><div class="jt-n">${j.statusHrs?(j.statusHrs>=24?Math.round(j.statusHrs/24)+'d':Math.round(j.statusHrs)+'h'):'\u2014'}</div><div class="jt-l">In status</div></div>
+        <div class="jt"><div class="jt-n">${j.daysSinceUpdate==null?'\u2014':(j.daysSinceUpdate===0?'Today':j.daysSinceUpdate+'d')}</div><div class="jt-l">Since last note</div></div>
+      </div>
       <div class="jm-section-label">Details</div>
       <div class="jm-grid">
         ${row('Status', statusBadge(j.status))}
@@ -1228,7 +1241,14 @@ function jobNoteMarker(id){
 const SUPPLIER_PATTERNS=[/\bLSI\b/i,/INDUSTRIES/i,/LIGHTING/i,/LIGHTMART/i,/MANUFACTUR/i,/\bSUPPLY\b/i,/SUPPLIES/i,/\bMATERIALS?\b/i,/GRAYBAR/i,/REXEL/i,/WESCO/i,/\bUPS\b/i,/UNITED PARCEL/i,/FEDEX/i,/FREIGHT/i,/LOGISTICS/i,/ROBINSON/i,/\bXPO\b/i,/OLD DOMINION/i,/TRUCKING/i,/SHIPPING/i,/ELECTRIC SUPPLY/i,/WHOLESALE/i,/DISTRIBUT/i];
 function vendorKind(name){ const n=String(name||''); if(!n.trim()) return ''; for(const re of SUPPLIER_PATTERNS){ if(re.test(n)) return 'supplier'; } return 'vendor'; }
 // Render a Vendor(s) string with supplier tagging. Splits only on safe delimiters (; | newline) so names containing commas stay intact.
-function vendorListHtml(str){ const s=String(str||'').trim(); if(!s) return '—'; const tag=function(p){ return escapeHtml(p)+(vendorKind(p)==='supplier'?'<span class="nd-kind nd-sup">Supplier</span>':''); }; const parts=s.split(/[;|\n]+/).map(function(x){return x.trim();}).filter(Boolean); if(parts.length<=1) return tag(s); return parts.map(tag).join('<span class="vnd-sep">·</span>'); }
+function vendorListHtml(str){
+  const raw=String(str||'').split(/[;|\n,]+/).map(function(x){return x.trim();}).filter(Boolean);
+  if(!raw.length) return '—';
+  const SUF=/^(inc\.?|llc|l\.l\.c\.?|co\.?|corp\.?|ltd\.?|lp|l\.p\.?|llp|pllc|p\.c\.?|pc|company|incorporated)$/i;
+  const parts=[];
+  raw.forEach(function(p){ if(parts.length && SUF.test(p)){ parts[parts.length-1]+=', '+p; } else parts.push(p); });
+  return '<span class="vpills">'+parts.map(function(p){ var sup=vendorKind(p)==='supplier'; return '<span class="vpill'+(sup?' vpill-sup':'')+'" title="'+(sup?'Supplier':'Vendor')+'">'+escapeHtml(p)+(sup?'<span class="vpill-tag">SUP</span>':'')+'</span>'; }).join('')+'</span>';
+}
 // ---- Inline markdown (bold/italic) into a DOM node, safely (no innerHTML) ----
 function mdInline(parent, text){
   const re=/(\*\*([^*]+)\*\*|\*([^*]+)\*|_([^_]+)_)/g; let m, last=0;
@@ -2631,7 +2651,7 @@ function setEscMode(m) {
 
 function updatePill(j) {
   const b = staleBucket(j);
-  const t = fmtDate(j.lastUpdated); const ttl = t?` title="Latest update: ${t}"`:'';
+  const t = fmtDate(j.lastUpdated); const ttl = t?` title="Last activity: ${t}"`:'';
   if (b === 'never') return '<span class="upd-pill upd-never">Never Updated</span>';
   if (b === 'stale') return `<span class="upd-pill upd-stale"${ttl}>${j.daysSinceUpdate}d since update</span>`;
   return `<span class="upd-pill upd-recent"${ttl}>${j.daysSinceUpdate===0?'Updated today':j.daysSinceUpdate+'d ago'}</span>`;
@@ -2758,9 +2778,11 @@ function handleFile(file) {
       JOBS = raw.map(r=>{
         const amtRaw = getCol(r,'Approved_Amount','Approved Amount','Amount');
         const amt = parseFloat(String(amtRaw||0).replace(/[$,]/g,''))||0;
-        const lastUpd = parseExcelDate(getCol(r,'Latest Update','Last Updated'));
-        // The Update column reflects the "Latest Update" date from the WO Audit upload.
-        // Prefer that date; fall back to a "Days Since Update" column only when no date is present.
+        const lastUpd = parseExcelDate(getCol(r,'Latest Update','Last Updated','Last Note Date','Last Note'));
+        // The Update column reflects the latest activity date from the WO Audit upload.
+        // Prefer "Latest Update"/"Last Updated"; those are usually blank in the audit sheet, so
+        // fall back to "Last Note Date" (the schema's primary staleness signal), then a
+        // "Days Since Update" column only when no date is present.
         const dsuRaw = String(getCol(r,'Days Since Update')||'').trim();
         let daysSinceUpdate;
         if (lastUpd) daysSinceUpdate = daysSince(lastUpd);
@@ -2773,7 +2795,7 @@ function handleFile(file) {
           status: String(getCol(r,'Status Category','Status')||'').trim(),
           amount: round2(amt),
           aged: parseInt(getCol(r,'Aged (Days)','# Days'))||0,
-          statusHrs: parseFloat(getCol(r,'Status Hrs.','Status (hrs.)'))||0,
+          statusHrs: parseFloat(getCol(r,'Time in Status (hrs.)','Status Hrs.','Status (hrs.)'))||0,
           risk: String(getCol(r,'Risk Flag')||'OK').trim(),
           fm: String(getCol(r,'FM')||'').trim(),
           location: String(getCol(r,'Location','Location #')||'').trim(),
@@ -2781,7 +2803,7 @@ function handleFile(file) {
           state: String(getCol(r,'State')||'').trim(),
           notes: String(getCol(r,'Notes')||'').trim(),
           // --- New audit workflow fields ---
-          mgmtAssist: String(getCol(r,'Mgmt Assist Needed')||'').trim(),
+          mgmtAssist: String(getCol(r,'Mgmt Assist Needed','Mgmt Assist','Management Assist Needed','Management Assist','Assist Needed','Needs Mgmt Assist','Needs Assist')||'').trim(),
           escalationPriority: String(getCol(r,'Escalation Priority')||'').trim(),
           lastReviewedBy: String(getCol(r,'Last Reviewed By','Team Update')||'').trim(),
           mgmtNotes: String(getCol(r,'Mgmt Notes')||'').trim(),
