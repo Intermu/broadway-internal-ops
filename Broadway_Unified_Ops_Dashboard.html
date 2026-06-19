@@ -2228,7 +2228,7 @@ function renderO30Compare(){
   const _closedByCoord={};
   withAge.forEach(j=>{ if(!j.coord)return; const c=_closedByCoord[j.coord]||(_closedByCoord[j.coord]={sum:0,nn:0}); c.sum+=j.ageToComplete; c.nn++; });
   const coordRows=Object.keys(_openByCoord).map(name=>{ const o=_openByCoord[name]; const cb=_closedByCoord[name]; return {name, open:o.open, oldest:o.oldest, cAvg:cb?Math.round(cb.sum/cb.nn):null, cN:cb?cb.nn:0}; }).sort((a,b)=>b.open-a.open);
-  const coordCard=coordRows.length?`<div class="card"><div class="card-header"><h3>By Coordinator</h3><span class="card-meta">open over-30 owners vs their closed pace</span></div>
+  const coordCard=coordRows.length?`<div class="card"><div class="card-header"><h3>Closed Pace by Coordinator</h3><span class="card-meta">open over-30 owners vs their closed pace</span></div>
     <div class="card-body" style="padding:0;"><table class="data-table">
     <thead><tr><th>Coordinator</th><th>Open &gt;30</th><th>Oldest open</th><th>Closed avg days</th><th>Closed jobs</th></tr></thead>
     <tbody>${coordRows.map(r=>`<tr>
@@ -2276,12 +2276,20 @@ function renderO30Compare(){
   ${proposalCard}`;
 }
 
-// Over-30 type filter (All / Service / WiFi / Retrofit). State lives on window so the
+// Over-30 division classifier (scoped to this view): WiFi = Job ID has an iteration of "WiFi";
+// Photometrics = "RF" prefix followed by a PO number (e.g. RF 01766156); everything else = Service.
+function o30Division(j){
+  const id=(j.jobId||'').toUpperCase();
+  if(/WI[\s\-]?FI/.test(id)) return 'WiFi';
+  if(/(?:^|[^A-Z])RF[\s-]*\d/.test(id)) return 'Photometrics';
+  return 'Service';
+}
+// Over-30 type filter (All / WiFi / Photometrics / Service). State lives on window so the
 // chip selection survives a re-render; the setter just re-runs the Over-30 view.
 function setO30Type(t){ window._o30Type = t||''; render('over30-review'); }
 function renderOver30(mc, agg) {
   const TYPE = window._o30Type || '';
-  const base = TYPE ? JOBS.filter(j=>jobType(j)===TYPE) : JOBS;
+  const base = TYPE ? JOBS.filter(j=>o30Division(j)===TYPE) : JOBS;
   const over30 = base.filter(j=>j.aged>30);
   const approaching = base.filter(j=>j.aged>=20 && j.aged<=30);
   const o30Amt = over30.reduce((s,j)=>s+j.amount,0);
@@ -2291,12 +2299,12 @@ function renderOver30(mc, agg) {
 
   // Type filter chips. Counts are over ALL over-30 jobs so they stay stable across filtering.
   const o30All = JOBS.filter(j=>j.aged>30);
-  const TYPES = [['','All'],['Service','Service'],['WIFI','WiFi'],['Retrofit','Retrofit']];
-  const typeBar = '<div class="o30-typebar">'+TYPES.map(function(t){ var val=t[0],lbl=t[1]; var cnt=val?o30All.filter(function(j){return jobType(j)===val;}).length:o30All.length; var active=TYPE===val; return '<button class="o30-chip'+(active?' active':'')+'" onclick="setO30Type(\''+val+'\')">'+lbl+' <span class="o30-chip-n">'+cnt+'</span></button>'; }).join('')+'</div>';
+  const TYPES = [['','All'],['WiFi','WiFi'],['Photometrics','Photometrics'],['Service','Service']];
+  const typeBar = '<div class="o30-typebar">'+TYPES.map(function(t){ var val=t[0],lbl=t[1]; var cnt=val?o30All.filter(function(j){return o30Division(j)===val;}).length:o30All.length; var active=TYPE===val; return '<button class="o30-chip'+(active?' active':'')+'" onclick="setO30Type(\''+val+'\')">'+lbl+' <span class="o30-chip-n">'+cnt+'</span></button>'; }).join('')+'</div>';
 
   // Per-coordinator breakdown (worst-first by over-30 count), respecting the active type filter
   const rows = Object.keys(agg.coords).map(name=>{
-    const cj = TYPE ? agg.coords[name].jobs.filter(j=>jobType(j)===TYPE) : agg.coords[name].jobs;
+    const cj = TYPE ? agg.coords[name].jobs.filter(j=>o30Division(j)===TYPE) : agg.coords[name].jobs;
     const o30 = cj.filter(j=>j.aged>30);
     const appr = cj.filter(j=>j.aged>=20 && j.aged<=30);
     const amt = o30.reduce((s,j)=>s+j.amount,0);
@@ -2341,7 +2349,7 @@ function renderOver30(mc, agg) {
     <div id="o30TrendSlot"></div>
     <div id="o30CompareSlot"></div>
     <div class="card">
-      <div class="card-header"><h3>By Coordinator</h3><span class="card-meta">${over30.length} over 30 · ${approaching.length} approaching</span></div>
+      <div class="card-header"><h3>Over-30 by Coordinator</h3><span class="card-meta">${over30.length} over 30 · ${approaching.length} approaching</span></div>
       <div class="card-body" style="padding:0;">${coordTable}</div>
     </div>
     ${bucketHtml}`;
@@ -2835,8 +2843,12 @@ function handleFile(file) {
       const raw = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], {defval:'',raw:false});
       CURRENT_FILE = file.name;
       JOBS = raw.map(r=>{
-        const amtRaw = getCol(r,'Approved_Amount','Approved Amount','Amount');
-        const amt = parseFloat(String(amtRaw||0).replace(/[$,]/g,''))||0;
+        // Approved Amount: prefer an explicit Approved/Amount column, else use Client DNE.
+        // Placeholder/default figures are treated as "not a real approval" and excluded from
+        // approved-dollar totals (matches the original dashboard logic).
+        const amtRaw = getCol(r,'Approved_Amount','Approved Amount','Amount','Client DNE','Client DNE ($)');
+        let amt = parseFloat(String(amtRaw||0).replace(/[$,]/g,''))||0;
+        if ([2500,1500,1350,1200,1000,800,750,650,600,550,500,350,2,1,0].indexOf(amt) !== -1) amt = 0;
         const lastUpd = parseExcelDate(getCol(r,'Latest Update','Last Updated','Last Note Date','Last Note'));
         // The Update column reflects the latest activity date from the WO Audit upload.
         // Prefer "Latest Update"/"Last Updated"; those are usually blank in the audit sheet, so
