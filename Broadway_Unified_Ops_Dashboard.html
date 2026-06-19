@@ -336,6 +336,12 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .lc-node.future .lc-date,.lc-node.empty .lc-date{color:var(--muted);}
 .lc-node.miss .lc-date{color:#c0392b;}
 .lc-lbl{font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:var(--muted);margin-top:2px;}
+.o30-typebar{display:flex;flex-wrap:wrap;gap:7px;margin:0 0 14px;}
+.o30-chip{display:inline-flex;align-items:center;gap:6px;font:600 12px 'DM Sans',sans-serif;padding:5px 13px;border-radius:99px;border:1px solid var(--border);background:var(--color-surface);color:var(--text);cursor:pointer;}
+.o30-chip:hover{border-color:var(--green-dk);}
+.o30-chip.active{background:var(--green-dk);border-color:var(--green-dk);color:#fff;}
+.o30-chip-n{font:700 11px 'DM Mono',monospace;opacity:.7;}
+.o30-chip.active .o30-chip-n{opacity:.9;}
 @media (max-width:900px){
   .jm-cols{grid-template-columns:1fr;grid-template-rows:auto;gap:0;flex:0 0 auto;height:auto;min-height:0;}
   .jm-col{overflow-y:visible;padding-right:0;}
@@ -2270,17 +2276,27 @@ function renderO30Compare(){
   ${proposalCard}`;
 }
 
+// Over-30 type filter (All / Service / WiFi / Retrofit). State lives on window so the
+// chip selection survives a re-render; the setter just re-runs the Over-30 view.
+function setO30Type(t){ window._o30Type = t||''; render('over30-review'); }
 function renderOver30(mc, agg) {
-  const over30 = JOBS.filter(j=>j.aged>30);
-  const approaching = JOBS.filter(j=>j.aged>=20 && j.aged<=30);
+  const TYPE = window._o30Type || '';
+  const base = TYPE ? JOBS.filter(j=>jobType(j)===TYPE) : JOBS;
+  const over30 = base.filter(j=>j.aged>30);
+  const approaching = base.filter(j=>j.aged>=20 && j.aged<=30);
   const o30Amt = over30.reduce((s,j)=>s+j.amount,0);
   const apprAmt = approaching.reduce((s,j)=>s+j.amount,0);
-  let oldestAge=0, oldestId='—';
+  let oldestAge=0, oldestId='\u2014';
   over30.forEach(j=>{ if(j.aged>oldestAge){oldestAge=j.aged;oldestId=j.jobId;} });
 
-  // Per-coordinator breakdown (worst-first by over-30 count)
+  // Type filter chips. Counts are over ALL over-30 jobs so they stay stable across filtering.
+  const o30All = JOBS.filter(j=>j.aged>30);
+  const TYPES = [['','All'],['Service','Service'],['WIFI','WiFi'],['Retrofit','Retrofit']];
+  const typeBar = '<div class="o30-typebar">'+TYPES.map(function(t){ var val=t[0],lbl=t[1]; var cnt=val?o30All.filter(function(j){return jobType(j)===val;}).length:o30All.length; var active=TYPE===val; return '<button class="o30-chip'+(active?' active':'')+'" onclick="setO30Type(\''+val+'\')">'+lbl+' <span class="o30-chip-n">'+cnt+'</span></button>'; }).join('')+'</div>';
+
+  // Per-coordinator breakdown (worst-first by over-30 count), respecting the active type filter
   const rows = Object.keys(agg.coords).map(name=>{
-    const cj = agg.coords[name].jobs;
+    const cj = TYPE ? agg.coords[name].jobs.filter(j=>jobType(j)===TYPE) : agg.coords[name].jobs;
     const o30 = cj.filter(j=>j.aged>30);
     const appr = cj.filter(j=>j.aged>=20 && j.aged<=30);
     const amt = o30.reduce((s,j)=>s+j.amount,0);
@@ -2301,7 +2317,7 @@ function renderOver30(mc, agg) {
   // Over-30 buckets, worst-first
   const buckets = [[90,99999,'90+ Days'],[60,89,'60–89 Days'],[46,59,'46–59 Days'],[30,45,'30–45 Days'],[20,29,'20–29 Days']];
   const bucketHtml = buckets.map(([lo,hi,lbl])=>{
-    const grp = JOBS.filter(j=>j.aged>=lo&&j.aged<=hi);
+    const grp = base.filter(j=>j.aged>=lo&&j.aged<=hi);
     if(!grp.length) return '';
     const amt = grp.reduce((s,j)=>s+j.amount,0);
     return `<div class="card">
@@ -2314,6 +2330,7 @@ function renderOver30(mc, agg) {
     <div class="print-header"><span class="ph-brand">BROADWAY NATIONAL</span><span class="ph-title">Over-30 Weekly Review · ${document.getElementById('reportDateLabel').textContent}</span></div>
     <div class="page-title screen-title">Over-30 Weekly Review</div>
     <div class="page-sub screen-title">${document.getElementById('reportDateLabel').textContent} · jobs aged by days since creation</div>
+    ${typeBar}
     <button class="no-print" onclick="window.print()" style="margin-bottom:12px;padding:6px 12px;border:1px solid var(--border);border-radius:6px;background:var(--color-surface);color:var(--color-brand-ink);font-size:11px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;">🖨 Print / Save PDF</button>
     <div class="stat-grid sg-4" style="margin-bottom:14px;">
       <div class="stat-box"><div class="sb-num c-red">${over30.length}</div><div class="sb-lbl">Over 30 Days</div><div class="sb-sub">${fmt$0(o30Amt)} exposure</div></div>
