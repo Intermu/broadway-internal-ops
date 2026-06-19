@@ -1266,12 +1266,18 @@ function jobNoteMarker(id){
 const SUPPLIER_PATTERNS=[/\bLSI\b/i,/INDUSTRIES/i,/LIGHTING/i,/LIGHTMART/i,/MANUFACTUR/i,/\bSUPPLY\b/i,/SUPPLIES/i,/\bMATERIALS?\b/i,/GRAYBAR/i,/REXEL/i,/WESCO/i,/\bUPS\b/i,/UNITED PARCEL/i,/FEDEX/i,/FREIGHT/i,/LOGISTICS/i,/ROBINSON/i,/\bXPO\b/i,/OLD DOMINION/i,/TRUCKING/i,/SHIPPING/i,/ELECTRIC SUPPLY/i,/WHOLESALE/i,/DISTRIBUT/i];
 function vendorKind(name){ const n=String(name||''); if(!n.trim()) return ''; for(const re of SUPPLIER_PATTERNS){ if(re.test(n)) return 'supplier'; } return 'vendor'; }
 // Render a Vendor(s) string with supplier tagging. Splits only on safe delimiters (; | newline) so names containing commas stay intact.
-function vendorListHtml(str){
+// Split a vendor string into individual names: splits on ; | newline and commas, then glues
+// corporate suffixes (Inc, LLC, Co, Corp, ...) back so "WISCONSIN LIGHTING LAB, INC." stays intact.
+function splitVendors(str){
   const raw=String(str||'').split(/[;|\n,]+/).map(function(x){return x.trim();}).filter(Boolean);
-  if(!raw.length) return '—';
   const SUF=/^(inc\.?|llc|l\.l\.c\.?|co\.?|corp\.?|ltd\.?|lp|l\.p\.?|llp|pllc|p\.c\.?|pc|company|incorporated)$/i;
   const parts=[];
   raw.forEach(function(p){ if(parts.length && SUF.test(p)){ parts[parts.length-1]+=', '+p; } else parts.push(p); });
+  return parts;
+}
+function vendorListHtml(str){
+  const parts=splitVendors(str);
+  if(!parts.length) return '—';
   return '<span class="vpills">'+parts.map(function(p){ var sup=vendorKind(p)==='supplier'; return '<span class="vpill'+(sup?' vpill-sup':'')+'" title="'+(sup?'Supplier':'Vendor')+'">'+escapeHtml(p)+(sup?'<span class="vpill-tag">SUP</span>':'')+'</span>'; }).join('')+'</span>';
 }
 // Lifecycle rail for the Over-30 modal. Normalizes each date via parseExcelDate so it works
@@ -2334,6 +2340,33 @@ function renderOver30(mc, agg) {
     </div>`;
   }).join('');
 
+  // By Vendor breakdown (respects the active division filter). A job is counted under every
+  // vendor it lists; suppliers are tagged. $ omitted on purpose — multi-vendor would double-count.
+  const vAgg={};
+  base.forEach(function(j){
+    const isO30=j.aged>30, isAppr=j.aged>=20&&j.aged<=30;
+    if(!isO30&&!isAppr) return;
+    splitVendors(j.vendors).forEach(function(v){
+      const e=vAgg[v]||(vAgg[v]={name:v,o30:0,appr:0,oldest:0,sup:vendorKind(v)==='supplier'});
+      if(isO30){ e.o30++; if(j.aged>e.oldest) e.oldest=j.aged; }
+      if(isAppr) e.appr++;
+    });
+  });
+  const vRows=Object.keys(vAgg).map(function(k){return vAgg[k];}).filter(function(r){return r.o30>0||r.appr>0;}).sort(function(a,b){return b.o30-a.o30||b.oldest-a.oldest;});
+  const vTop=vRows.slice(0,25);
+  const vendorTable=vRows.length?`<table class="data-table">
+    <thead><tr><th>Vendor</th><th>Over 30</th><th>20–30</th><th>Oldest</th></tr></thead>
+    <tbody>${vTop.map(function(r){return `<tr>
+      <td style="font-weight:600;">${escapeHtml(r.name)}${r.sup?' <span class="nd-kind nd-sup">SUP</span>':''}</td>
+      <td><strong class="${r.o30>10?'c-red':r.o30>5?'c-amber':'c-green'}">${r.o30}</strong></td>
+      <td>${r.appr||'-'}</td>
+      <td>${r.oldest?`<span class="age-pill ${ageCls(r.oldest)}">${r.oldest}d</span>`:'-'}</td>
+    </tr>`;}).join('')}</tbody></table>`:'<div style="padding:14px 16px;color:var(--muted);font-size:12px;">No vendors on the current over-30 / approaching set.</div>';
+  const vendorCard=`<div class="card">
+      <div class="card-header"><h3>By Vendor</h3><span class="card-meta">${vRows.length} vendor${vRows.length===1?'':'s'}${vRows.length>25?' · top 25 shown':''} · includes suppliers</span></div>
+      <div class="card-body" style="padding:0;">${vendorTable}</div>
+    </div>`;
+
   mc.innerHTML = `
     <div class="print-header"><span class="ph-brand">BROADWAY NATIONAL</span><span class="ph-title">Over-30 Weekly Review · ${document.getElementById('reportDateLabel').textContent}</span></div>
     <div class="page-title screen-title">Over-30 Weekly Review</div>
@@ -2352,6 +2385,7 @@ function renderOver30(mc, agg) {
       <div class="card-header"><h3>Over-30 by Coordinator</h3><span class="card-meta">${over30.length} over 30 · ${approaching.length} approaching</span></div>
       <div class="card-body" style="padding:0;">${coordTable}</div>
     </div>
+    ${vendorCard}
     ${bucketHtml}`;
   renderOver30Trend();
   renderO30Compare();
