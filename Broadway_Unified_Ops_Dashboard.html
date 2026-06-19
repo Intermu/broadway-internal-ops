@@ -318,6 +318,24 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .jt{background:var(--color-surface-alt);border:1px solid var(--border);border-radius:8px;padding:8px 10px;text-align:center;}
 .jt-n{font:800 17px 'DM Sans',system-ui,sans-serif;color:#0d3d26;line-height:1.1;}
 .jt-l{font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;color:var(--muted);margin-top:3px;}
+.lc-head{display:flex;align-items:center;gap:10px;margin:2px 0 10px;}
+.lc-title{font:700 11px 'DM Mono',monospace;color:#1a5f3e;text-transform:uppercase;letter-spacing:.12em;}
+.lc-badge{font-size:9.5px;font-weight:700;border-radius:99px;padding:2px 9px;letter-spacing:.2px;}
+.lc-badge.ok{background:#eaf5ef;color:#1a5f3e;border:1px solid #cfe7d8;}
+.lc-badge.late{background:#fdece9;color:#c0392b;border:1px solid #f1cabf;}
+.lc-rail{display:flex;align-items:flex-start;position:relative;margin:6px 2px 14px;}
+.lc-node{flex:1;display:flex;flex-direction:column;align-items:center;text-align:center;position:relative;min-width:0;}
+.lc-node::before{content:"";position:absolute;top:6px;left:-50%;width:100%;height:2px;background:var(--border);z-index:0;}
+.lc-node:first-child::before{display:none;}
+.lc-node.done::before{background:#2ECC71;}
+.lc-dot{width:13px;height:13px;border-radius:50%;background:var(--color-surface);border:2px solid var(--border);z-index:1;margin-bottom:6px;}
+.lc-node.done .lc-dot{background:#2ECC71;border-color:#2ECC71;}
+.lc-node.next .lc-dot{background:var(--color-surface);border-color:var(--green-dk);box-shadow:0 0 0 3px #e8f3ed;}
+.lc-node.miss .lc-dot{background:#c0392b;border-color:#c0392b;}
+.lc-date{font:700 11px 'DM Mono',monospace;color:var(--text);line-height:1.2;}
+.lc-node.future .lc-date,.lc-node.empty .lc-date{color:var(--muted);}
+.lc-node.miss .lc-date{color:#c0392b;}
+.lc-lbl{font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:var(--muted);margin-top:2px;}
 @media (max-width:900px){
   .jm-cols{grid-template-columns:1fr;grid-template-rows:auto;gap:0;flex:0 0 auto;height:auto;min-height:0;}
   .jm-col{overflow-y:visible;padding-right:0;}
@@ -1170,6 +1188,7 @@ function openJobModal(id){
         <div class="jt"><div class="jt-n">${j.statusHrs?(j.statusHrs>=24?Math.round(j.statusHrs/24)+'d':Math.round(j.statusHrs)+'h'):'\u2014'}</div><div class="jt-l">In status</div></div>
         <div class="jt"><div class="jt-n">${j.daysSinceUpdate==null?'\u2014':(j.daysSinceUpdate===0?'Today':j.daysSinceUpdate+'d')}</div><div class="jt-l">Since last note</div></div>
       </div>
+      ${lifecycleStripHtml(j)}
       <div class="jm-section-label">Details</div>
       <div class="jm-grid">
         ${row('Status', statusBadge(j.status))}
@@ -1248,6 +1267,29 @@ function vendorListHtml(str){
   const parts=[];
   raw.forEach(function(p){ if(parts.length && SUF.test(p)){ parts[parts.length-1]+=', '+p; } else parts.push(p); });
   return '<span class="vpills">'+parts.map(function(p){ var sup=vendorKind(p)==='supplier'; return '<span class="vpill'+(sup?' vpill-sup':'')+'" title="'+(sup?'Supplier':'Vendor')+'">'+escapeHtml(p)+(sup?'<span class="vpill-tag">SUP</span>':'')+'</span>'; }).join('')+'</span>';
+}
+// Lifecycle rail for the Over-30 modal. Normalizes each date via parseExcelDate so it works
+// for live Date objects and snapshot ISO strings alike. Nodes: Created (WO Date) -> First trip
+// -> Next onsite -> Target close (Expected Completion). SLA badge compares target close to today.
+function lifecycleStripHtml(j){
+  var today=Date.now();
+  var md=function(d){ return (d && !isNaN(d))?((d.getMonth()+1)+'/'+d.getDate()):''; };
+  var wo=parseExcelDate(j.woDate), ft=parseExcelDate(j.firstTripDate), no=parseExcelDate(j.nextOnsiteDate), exp=parseExcelDate(j.expectedCompletion);
+  var seq=[{d:wo,l:'Created'},{d:ft,l:'First trip'},{d:no,l:'Next onsite'}];
+  var nextIdx=-1;
+  for(var i=0;i<seq.length;i++){ if(seq[i].d && seq[i].d.getTime()>today){ nextIdx=i; break; } }
+  var nodes=seq.map(function(n,i){
+    var cls = !n.d ? 'empty' : (i===nextIdx ? 'next' : (n.d.getTime()<=today ? 'done' : 'future'));
+    return {cls:cls, date:n.d?md(n.d):'\u2014', lbl:n.l};
+  });
+  var tcCls, tcDate;
+  if(exp){ tcDate=md(exp); tcCls = exp.getTime()<today ? 'miss' : (nextIdx<0?'next':'future'); }
+  else { tcCls='empty'; tcDate='\u2014'; }
+  nodes.push({cls:tcCls, date:tcDate, lbl:'Target close'});
+  var rail=nodes.map(function(n){ return '<div class="lc-node '+n.cls+'"><div class="lc-dot"></div><div class="lc-date">'+n.date+'</div><div class="lc-lbl">'+n.lbl+'</div></div>'; }).join('');
+  var badge='';
+  if(exp){ var dl=Math.ceil((exp.getTime()-today)/86400000); badge = dl<0 ? '<span class="lc-badge late">Past due '+(-dl)+'d</span>' : '<span class="lc-badge ok">On track \u00b7 '+dl+'d left</span>'; }
+  return '<div class="lc-head"><span class="lc-title">Lifecycle</span>'+badge+'</div><div class="lc-rail">'+rail+'</div>';
 }
 // ---- Inline markdown (bold/italic) into a DOM node, safely (no innerHTML) ----
 function mdInline(parent, text){
@@ -2813,7 +2855,11 @@ function handleFile(file) {
           // --- New audit metadata fields (4/30/26 drop) ---
           priority: String(getCol(r,'Priority')||'').trim(),
           trades: String(getCol(r,'Trades')||'').trim(),
-          vendors: String(getCol(r,'Vendor(s)','Vendors')||'').trim()
+          vendors: String(getCol(r,'Vendor(s)','Vendors')||'').trim(),
+          woDate: parseExcelDate(getCol(r,'WO Date','Created Date','Creation Date')),
+          firstTripDate: parseExcelDate(getCol(r,'First Trip Date','First Trip')),
+          nextOnsiteDate: parseExcelDate(getCol(r,'Next Onsite Date','Next Onsite')),
+          expectedCompletion: parseExcelDate(getCol(r,'Expected Completion Date','Expected Completion'))
         };
       }).filter(j=>j.jobId);
       // Apply any mgmt-notes edits persisted in this session
@@ -2921,6 +2967,7 @@ function saveDashboard() {
       const copy = Object.assign({}, j);
       if (Object.prototype.hasOwnProperty.call(MGMT_EDITS, j.jobId)) copy.mgmtNotes = MGMT_EDITS[j.jobId];
       if (copy.lastUpdated instanceof Date) copy.lastUpdated = copy.lastUpdated.toISOString();
+      ['woDate','firstTripDate','nextOnsiteDate','expectedCompletion'].forEach(function(k){ if (copy[k] instanceof Date) copy[k] = copy[k].toISOString(); });
       return copy;
     });
 
