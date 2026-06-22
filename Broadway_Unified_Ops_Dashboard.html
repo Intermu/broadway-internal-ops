@@ -1777,6 +1777,7 @@ function nav(view, btn) {
   currentView = view;
   render(view);
   updatePinBtn();
+  _syncHash();
   // Re-apply persistent filters after render
   setTimeout(restoreFilters, 0);
   // Auto-close mobile sidebar on selection
@@ -1813,6 +1814,58 @@ function applyPinnedView(){
     if(btn) nav(pinned, btn); // stays on overview if the pinned view isn't present
   }
   updatePinBtn();
+}
+// URL-HASH DEEP-LINKING (saved / shareable views)
+// Reflects the current view (and the over-30 division chip) in location.hash so
+// any view is bookmarkable and shareable, and browser back/forward navigates
+// views. A URL hash wins over the pinned default on load. Format:
+//   #view=<view>            e.g. #view=over30-review
+//   #view=<view>&o30=<type> e.g. #view=over30-review&o30=WiFi
+// A legacy bare "#<view>" is also accepted on read.
+function _isKnownView(v){
+  if(!v) return false;
+  if(v.indexOf('coord-')===0) return true;
+  return !!document.querySelector('.nav-btn[data-view="'+v.replace(/"/g,'')+'"]');
+}
+function _parseHash(){
+  const raw=(location.hash||'').replace(/^#/,'');
+  if(!raw) return {view:null,o30:null};
+  if(raw.indexOf('=')===-1) return {view:raw,o30:null};
+  const out={view:null,o30:null};
+  raw.split('&').forEach(function(kv){
+    const i=kv.indexOf('='); if(i===-1) return;
+    const k=kv.slice(0,i), val=decodeURIComponent(kv.slice(i+1));
+    if(k==='view') out.view=val; else if(k==='o30') out.o30=val;
+  });
+  return out;
+}
+function _syncHash(){
+  const parts=['view='+currentView];
+  if(currentView==='over30-review' && window._o30Type) parts.push('o30='+encodeURIComponent(window._o30Type));
+  const h='#'+parts.join('&');
+  if(location.hash!==h) location.hash=h;
+}
+function _onHashChange(){
+  const h=_parseHash();
+  if(!_isKnownView(h.view)) return;
+  const sameView = h.view===currentView;
+  const sameO30 = (h.o30||'')===(window._o30Type||'');
+  if(sameView && (h.view!=='over30-review' || sameO30)) return;
+  if(h.view==='over30-review') window._o30Type = h.o30||'';
+  const btn=document.querySelector('.nav-btn[data-view="'+h.view.replace(/"/g,'')+'"]');
+  nav(h.view, btn||null);
+}
+function _applyInitialView(){
+  if(window._initialViewApplied) return;
+  window._initialViewApplied = true;
+  const h=_parseHash();
+  if(_isKnownView(h.view)){
+    if(h.view==='over30-review' && h.o30!=null) window._o30Type = h.o30;
+    const btn=document.querySelector('.nav-btn[data-view="'+h.view.replace(/"/g,'')+'"]');
+    nav(h.view, btn||null);
+    return;
+  }
+  applyPinnedView();
 }
 // Global job search (Phase 1). Find any job by ID, location, coordinator, or FM
 // from any view; a result jumps to that coordinator's view (numeric index only,
@@ -2503,7 +2556,7 @@ function o30Division(j){
 }
 // Over-30 type filter (All / WiFi / Photometrics / Service). State lives on window so the
 // chip selection survives a re-render; the setter just re-runs the Over-30 view.
-function setO30Type(t){ window._o30Type = t||''; render('over30-review'); }
+function setO30Type(t){ window._o30Type = t||''; render('over30-review'); _syncHash(); }
 function renderOver30(mc, agg) {
   const TYPE = window._o30Type || '';
   const base = TYPE ? JOBS.filter(j=>o30Division(j)===TYPE) : JOBS;
@@ -3295,7 +3348,7 @@ function handleFile(file) {
       // Drive the new upload panel UI: success state + auto-collapse to slim strip
       setDashState('success', file.name, `${shortDate} · ${JOBS.length} jobs · loaded just now`);
       initCounts(); render(currentView);
-      applyPinnedView();
+      _applyInitialView();
       toast(`✅ Loaded ${JOBS.length} jobs from ${file.name}`);
       saveOver30Snapshot(); // fire-and-forget: upsert this audit date into blob history
     } catch(err) {
@@ -4067,6 +4120,8 @@ function initDateLabels() {
 initDateLabels();
 initCounts();
 render('overview');
+_applyInitialView();
+window.addEventListener('hashchange', _onHashChange);
 updateEditBadge();
 </script>
 
