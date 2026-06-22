@@ -350,6 +350,21 @@ body{font-family:'DM Sans',sans-serif;background:linear-gradient(135deg,#f0fdf4,
   .kpi-grid{grid-template-columns:repeat(2,1fr);}
   .two-col,.three-col{grid-template-columns:1fr;}
 }
+.wb-health{background:var(--color-surface);border:1px solid var(--border);border-left-width:4px;border-radius:9px;margin:12px 0 0;overflow:hidden;}
+.wb-health.wb-ok{border-left-color:var(--green);}
+.wb-health.wb-warn{border-left-color:var(--amber);}
+.wb-health.wb-crit{border-left-color:var(--red);}
+.wb-health-head{display:flex;align-items:center;gap:10px;padding:9px 13px;cursor:pointer;user-select:none;}
+.wb-health-ico{font-size:14px;line-height:1;flex:0 0 auto;}
+.wb-health-msg{flex:1;color:var(--text);font-weight:600;font-size:12.5px;}
+.wb-health-msg small{display:block;font-weight:400;color:var(--muted);margin-top:1px;font-size:11px;}
+.wb-health-tog{font-size:11px;color:var(--muted);flex:0 0 auto;}
+.wb-health-body{border-top:1px solid var(--border);background:var(--color-surface-alt);padding:10px 13px;display:none;}
+.wb-health.open .wb-health-body{display:block;}
+.wb-health-meta{color:var(--muted);font-size:11px;margin-bottom:8px;}
+.wb-col-list{width:100%;border-collapse:collapse;font-size:11.5px;}
+.wb-col-list td{padding:3px 8px;border-bottom:1px solid var(--border);vertical-align:top;}
+.wb-col-list td:first-child{color:var(--muted);white-space:nowrap;width:1%;}
 </style>
 <style>html.embedded .header,html.embedded .tool-mode-bar{display:none}</style>
 <script>if(window.self!==window.top)document.documentElement.classList.add('embedded');</script>
@@ -380,6 +395,8 @@ body{font-family:'DM Sans',sans-serif;background:linear-gradient(135deg,#f0fdf4,
     </div>
     <button class="replace-btn" onclick="goToUpload()">Replace File</button>
   </div>
+
+  <div id="wbHealthBox"></div>
 
   <div class="tabs">
     <button class="tab-button active" onclick="showTab(event,'tab-upload')">📂 Upload</button>
@@ -838,6 +855,7 @@ function processRawRows(raw, sourceLabel){
     carvedOut: proposed.filter(j => !j.measured).length,
     schema: isNewSchema ? 'new' : 'legacy',
     sourceFile: sourceLabel,
+    headers: (raw[0] ? Object.keys(raw[0]) : []),
   };
 
   DATA = proposed;
@@ -1061,6 +1079,77 @@ async function bnClientPost(slot,data,metadata){
 })();
 
 // File status strip — visible across all tabs
+// WORKBOOK HEALTH (ingestion diagnostics) -- Proposal Diagnostic
+// Reuses the stats captured in _INGEST_STATS. Adapted to this tool's pipeline:
+// proposed/not-proposed split and Pilot exclusions are BY DESIGN (not failures);
+// the failure signal is 0 proposed jobs from a non-empty sheet (the schema-
+// misdetection bug) or a missing proposal-status / turnaround column.
+function wbHealthDiagHtml(s){
+  const headers = s.headers || [];
+  const hset = headers.map(function(k){ return String(k).toLowerCase().trim(); });
+  function match(aliases){ for(const a of aliases){ const i=hset.indexOf(a.toLowerCase().trim()); if(i!==-1) return headers[i]; } return null; }
+  const cols = [
+    {label:"Proposal status", aliases:["Is Proposed","Proposed?"], level:"crit"},
+    {label:"Turnaround days", aliases:["Proposal Turnaround Days","Proposal Turnover Days"], level:"crit"},
+    {label:"Source Job #", aliases:["Source Job #"], level:"warn"},
+    {label:"Coordinator", aliases:["Assigned To"], level:"warn"},
+    {label:"Exclusion flag", aliases:["Exclusion"], level:"info"},
+    {label:"NTE / Revenue", aliases:["Total NTE","Inv Revenue"], level:"info"},
+    {label:"Days open", aliases:["Job Age","# Days"], level:"info"}
+  ].map(function(c){ c.matched = match(c.aliases); return c; });
+  const nonExcluded = (s.totalRows||0) - (s.pilotExcluded||0);
+  const flagCol = cols[0].matched;
+  const ptdCol = cols[1].matched;
+  const missingWarn = cols.filter(function(c){ return !c.matched && c.level==="warn"; });
+  let sev = "ok";
+  if((nonExcluded>0 && (s.proposed||0)===0) || !flagCol) sev="crit";
+  else if(missingWarn.length || !ptdCol) sev="warn";
+  const ico = sev==="crit"?"\u26d4":sev==="warn"?"\u26a0\ufe0f":"\u2705";
+  let msg, sub;
+  if(sev==="crit"){
+    msg = flagCol ? "No proposed jobs parsed \u2014 possible schema mismatch"
+                  : "No proposal-status column found";
+    sub = flagCol ? "All "+nonExcluded+" non-excluded rows read as not-proposed. Check the export schema."
+                  : "Looked for an Is Proposed or Proposed? column. Check the export headers.";
+  } else if(sev==="warn"){
+    const miss=[]; if(!ptdCol) miss.push("Turnaround days"); missingWarn.forEach(function(c){ miss.push(c.label); });
+    msg = "Loaded with warnings \u2014 "+(s.proposed||0)+" proposed jobs";
+    sub = "missing: "+miss.join(", ");
+  } else {
+    msg = "Proposal data loaded \u2014 "+(s.proposed||0)+" proposed job"+((s.proposed||0)===1?"":"s")+" ("+(s.measured||0)+" measured)";
+    const bits=[(s.schema||"")+" schema"];
+    if(s.carvedOut>0) bits.push(s.carvedOut+" carved out");
+    if(s.notProposed>0) bits.push(s.notProposed+" not-proposed");
+    if(s.pilotExcluded>0) bits.push(s.pilotExcluded+" Pilot exclusions removed");
+    sub = bits.join(" \u00b7 ");
+  }
+  const rowsHtml = cols.map(function(c){
+    let st;
+    if(c.matched) st='<span style="color:var(--green-dk);font-weight:600;">\u2713 '+escapeHtml(c.matched)+'</span>';
+    else if(c.level==="crit") st='<span style="color:var(--red);font-weight:700;">\u2717 missing</span>';
+    else if(c.level==="warn") st='<span style="color:#b45309;font-weight:600;">\u2014 missing</span>';
+    else st='<span style="color:var(--muted);">\u2014 not provided</span>';
+    return "<tr><td>"+escapeHtml(c.label)+"</td><td>"+st+"</td></tr>";
+  }).join("");
+  const open = sev==="ok" ? "" : " open";
+  return '<div class="wb-health wb-'+sev+open+'">'
+    + '<div class="wb-health-head" onclick="this.parentNode.classList.toggle(\'open\')">'
+    +   '<span class="wb-health-ico">'+ico+'</span>'
+    +   '<span class="wb-health-msg">'+escapeHtml(msg)+(sub?"<small>"+escapeHtml(sub)+"</small>":"")+'</span>'
+    +   '<span class="wb-health-tog">details \u25be</span>'
+    + '</div>'
+    + '<div class="wb-health-body">'
+    +   '<div class="wb-health-meta">'+escapeHtml(s.sourceFile||"Pilot Revenue")+' \u00b7 '+(s.totalRows||0)+' rows \u00b7 '+nonExcluded+' after exclusions \u2192 '+(s.proposed||0)+' proposed</div>'
+    +   '<table class="wb-col-list"><tbody>'+rowsHtml+'</tbody></table>'
+    + '</div>'
+  + '</div>';
+}
+function renderWbHealthDiag(){
+  const box=document.getElementById('wbHealthBox');
+  if(!box) return;
+  box.innerHTML = window._INGEST_STATS ? wbHealthDiagHtml(window._INGEST_STATS) : '';
+}
+
 function updateFileStatus(name, jobs){
   document.getElementById('fs-name').textContent = name;
   const stats = window._INGEST_STATS;
@@ -1079,6 +1168,7 @@ function updateFileStatus(name, jobs){
   const t = now.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}).toLowerCase().replace(' ','');
   document.getElementById('fs-loaded').textContent = `loaded ${t}`;
   document.getElementById('fileStatus').classList.add('visible');
+  renderWbHealthDiag();
 }
 
 // KPI delta tracking — store prior load's headline KPIs and expose previous values for cards
