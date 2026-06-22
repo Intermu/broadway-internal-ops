@@ -357,6 +357,11 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .data-table tr.em-click{cursor:pointer;}
 .data-table tr.em-click:hover td{background:#f0f7f3;}
 #entModalBox .job-modal-body{display:block;overflow-y:auto;}
+.em-kind{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--muted);margin:0 0 14px;flex-wrap:wrap;}
+.em-kind b{color:var(--green-dk);font-weight:700;}
+.em-kind-btn{font:600 11px 'DM Sans',system-ui,sans-serif;color:#1a5f3e;background:#eef6f0;border:1px solid #cfe6d8;border-radius:6px;padding:3px 9px;cursor:pointer;}
+.em-kind-btn:hover{background:#e2f0e7;}
+.em-kind-ov{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#2f6df6;background:#eaf1ff;border-radius:4px;padding:2px 5px;}
 @media (max-width:900px){
   .jm-cols{grid-template-columns:1fr;grid-template-rows:auto;gap:0;flex:0 0 auto;height:auto;min-height:0;}
   .jm-col{overflow-y:visible;padding-right:0;}
@@ -1269,6 +1274,7 @@ function openEntityModal(kind, idx){
   const name = order[idx]; if(name==null) return;
   const box=document.getElementById('entModalBox'); if(!box) return;
   const isV = kind==='vendor';
+  window._emKind=kind; window._emIdx=idx; window._emName=name;
   const open = (isV ? JOBS.filter(function(j){ return splitVendors(j.vendors).indexOf(name)!==-1; })
                     : JOBS.filter(function(j){ return j.coordinator===name; })
                ).slice().sort(function(a,b){ return (b.aged||0)-(a.aged||0); });
@@ -1285,6 +1291,8 @@ function openEntityModal(kind, idx){
   const withAge = closed.filter(function(j){ return typeof j.ageToComplete==='number' && j.ageToComplete>=0; });
   const avgDays = withAge.length ? Math.round(withAge.reduce(function(s,j){ return s+j.ageToComplete; },0)/withAge.length) : null;
   const supTag = (isV && vendorKind(name)==='supplier') ? ' <span class="nd-kind nd-sup">SUP</span>' : '';
+  const curKind = isV ? (vendorKind(name)||'vendor') : '';
+  const kindCtrl = isV ? ('<div class="em-kind">Classified as <b>'+(curKind==='supplier'?'Supplier':'Vendor')+'</b> <button class="em-kind-btn" onclick="emToggleKind()">Mark as '+(curKind==='supplier'?'Vendor':'Supplier')+'</button>'+(VENDOR_KIND[vkKey(name)]?' <span class="em-kind-ov">manual override</span>':'')+'</div>') : '';
   const tile=function(l,v,c){ return '<div class="et"><div class="et-n'+(c?' '+c:'')+'">'+v+'</div><div class="et-l">'+l+'</div></div>'; };
   const tiles = tile('Open jobs',open.length,'')
     + tile('Open &gt;30d',openO30,openO30>0?'red':'')
@@ -1327,6 +1335,7 @@ function openEntityModal(kind, idx){
     + '<button class="jm-x" onclick="closeEntityModal()" aria-label="Close">\u00d7</button></div>'
     + '<div class="job-modal-body">'
     + '<div class="em-tiles">'+tiles+'</div>'
+    + kindCtrl
     + '<div class="em-seclbl">Open work <span class="n">\u00b7 '+open.length+' '+(open.length===1?'job':'jobs')+' \u00b7 click a row to open the job</span></div>'
     + '<table class="data-table em-table"><thead><tr><th>Job #</th><th>Status</th><th>Age</th><th>Approved $</th><th>'+otherCol+'</th></tr></thead><tbody>'+openRows+'</tbody></table>'
     + '<div class="em-seclbl">Invoiced \u2014 completed'+(hasClosed?' <span class="n">\u00b7 '+closed.length+' '+(closed.length===1?'job':'jobs')+(window._closedSource?' \u00b7 '+escapeHtml(window._closedSource):'')+'</span>':'')+'</div>'
@@ -1356,8 +1365,49 @@ function jobNoteMarker(id){
 const SUPPLIER_PATTERNS=[/\bLSI\b/i,/INDUSTRIES/i,/LIGHTING/i,/LIGHTMART/i,/MANUFACTUR/i,/\bSUPPLY\b/i,/SUPPLIES/i,/\bMATERIALS?\b/i,/GRAYBAR/i,/REXEL/i,/WESCO/i,/\bUPS\b/i,/UNITED PARCEL/i,/FEDEX/i,/FREIGHT/i,/LOGISTICS/i,/ROBINSON/i,/\bXPO\b/i,/OLD DOMINION/i,/TRUCKING/i,/SHIPPING/i,/ELECTRIC SUPPLY/i,/WHOLESALE/i,/DISTRIBUT/i,/\bCDW\b/i,/\bLOOMIN\b/i,/UNITED HDD/i,/\bELECTRONICS\b/i,/\bACAVATI\b/i,/ENERGY LIGHT/i,/SUNBELT/i,/\bRENTALS?\b/i,/\bPOST IT\b/i,/BATTERYSTUFF/i,/\bBATTER(Y|IES)\b/i,/MURDOCH/i];
 // Names that look like suppliers (e.g. contain "LIGHTING") but are actually field vendors.
 // Checked before SUPPLIER_PATTERNS so these always resolve to 'vendor'.
-const VENDOR_OVERRIDES=[/CERTIFIED LIGHTING/i];
-function vendorKind(name){ const n=String(name||''); if(!n.trim()) return ''; for(const re of VENDOR_OVERRIDES){ if(re.test(n)) return 'vendor'; } for(const re of SUPPLIER_PATTERNS){ if(re.test(n)) return 'supplier'; } return 'vendor'; }
+const VENDOR_OVERRIDES=[/CERTIFIED LIGHTING/i,/KILGORE INDUSTRIES/i,/LIGHTING MAINTENANCE/i,/LED ELECTRIC AND LIGHTING/i];
+// User-set vendor classification overrides (Vendor vs Supplier), keyed by normalized name.
+// Stored team-wide in the shared data store (slot 'vendor-kinds') with a localStorage cache,
+// mirroring the job-notes pattern; a user override always wins over the keyword heuristics.
+let VENDOR_KIND = {};
+const VENDOR_KIND_LS = 'bn_vendor_kind';
+function vkKey(name){ return String(name||'').trim().toUpperCase().replace(/\s+/g,' '); }
+function _vkLoadLocal(){ try{ return JSON.parse(localStorage.getItem(VENDOR_KIND_LS)||'{}')||{}; }catch(_){ return {}; } }
+function _vkSaveLocal(){ try{ localStorage.setItem(VENDOR_KIND_LS, JSON.stringify(VENDOR_KIND)); }catch(_){} }
+async function loadVendorKinds(){
+  VENDOR_KIND = _vkLoadLocal();
+  if(!window.BROADWAY_SNAPSHOT){
+    const res = await bnClientGet('vendor-kinds');
+    if(res && res.exists && res.data && res.data.kinds && typeof res.data.kinds==='object'){
+      const blob = res.data.kinds;
+      Object.keys(blob).forEach(function(k){
+        const a=VENDOR_KIND[k], b=blob[k];
+        if(!a || (b.updatedAt||'') >= (a.updatedAt||'')) VENDOR_KIND[k]=b;
+      });
+      _vkSaveLocal();
+    }
+  }
+  if(JOBS.length) render(currentView); // repaint supplier tags once overrides are known
+}
+async function setVendorKind(name, kind){
+  const k=vkKey(name); if(!k) return;
+  VENDOR_KIND[k]={ kind:kind, updatedAt:new Date().toISOString() };
+  _vkSaveLocal();
+  let synced=false;
+  if(!window.BROADWAY_SNAPSHOT){
+    const res=await bnClientPost('vendor-kinds', {kinds:VENDOR_KIND, savedAt:new Date().toISOString()}, {count:String(Object.keys(VENDOR_KIND).length)});
+    synced=!!(res&&res.ok);
+  }
+  toast(synced?(name+' set to '+kind+' — synced to team'):(name+' set to '+kind+' on this browser'));
+  render(currentView);
+  if(window._emName!=null) openEntityModal(window._emKind, window._emIdx);
+}
+function emToggleKind(){
+  const name=window._emName; if(name==null || window._emKind!=='vendor') return;
+  const cur=vendorKind(name)||'vendor';
+  setVendorKind(name, cur==='supplier'?'vendor':'supplier');
+}
+function vendorKind(name){ const n=String(name||''); if(!n.trim()) return ''; const ov=VENDOR_KIND[vkKey(n)]; if(ov&&ov.kind) return ov.kind; for(const re of VENDOR_OVERRIDES){ if(re.test(n)) return 'vendor'; } for(const re of SUPPLIER_PATTERNS){ if(re.test(n)) return 'supplier'; } return 'vendor'; }
 // Render a Vendor(s) string with supplier tagging. Splits only on safe delimiters (; | newline) so names containing commas stay intact.
 // Split a vendor string into individual names: splits on ; | newline and commas, then glues
 // corporate suffixes (Inc, LLC, Co, Corp, ...) back so "WISCONSIN LIGHTING LAB, INC." stays intact.
@@ -3639,6 +3689,7 @@ autoLoadClosed();
 
 // Load durable per-Job-ID working notes (slot: job-notes; localStorage fallback).
 loadJobNotes();
+loadVendorKinds();
 
 // ── SECTION 8: INIT ──────────────────────────────────────────────────────
 // Default the header date to today. handleFile() will overwrite with the
