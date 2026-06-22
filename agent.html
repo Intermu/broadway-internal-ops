@@ -1207,6 +1207,7 @@ function processData(raw,fname){
       "Last Updated":fmtDate(r["Last Updated"]),
       "Last Note Date":fmtDate(r["Last Note Date"]),
       "Next Onsite Date":fmtDate(r["Next Onsite Date"]),
+      "Expected Completion Date":fmtDate(r["Expected Completion Date"]||r["Expected Completion"]||""),
       "Escalation Priority":String(r["Escalation Priority"]||"").trim(),
       "Project Type":String(r["Project Type"]||"").trim(),
       "Days Since Update":dsuNum,
@@ -1401,7 +1402,7 @@ async function generateExcel(opts){
                     "Priority","Trades","Vendor(s)"];
     const OPS_WIDTHS=[14,20,28,12,10,10,12,12,14,16,10,12,8,12,14,40,
                       16,14,34,16,14,14,14,14,12,
-                      18,30,40];
+                      18,30,40,18];
     function dfToRow(r){return[
       r["Job ID"],r["Assigned To"],r["Status"],r["Amount"],r["Aged"],
       r["Status Hrs"],r["Risk Flag"],r["Amount"],r["Approved_Flag"],r["Approved_Amount"],
@@ -1439,12 +1440,12 @@ async function generateExcel(opts){
     // Columns K–P: FM, City, State, Location, Brand, Notes (static)
     // Columns Q–AB: Audit workflow — Mgmt Assist, Escalation Priority, Mgmt Notes, Next Onsite Date,
     //              Last Reviewed By, Last Updated, Last Note Date, Days Since Update, Project Type,
-    //              Priority, Trades, Vendor(s) (static pass-through)
+    //              Priority, Trades, Vendor(s), Expected Completion Date (static pass-through)
     const STATIC_COLS_LEFT=["Job ID","Assigned To","Status Category","Amount","Aged (Days)","Status Hrs."];
     const STATIC_COLS_RIGHT=["FM","City","State","Location","Brand","Notes",
                              "Mgmt Assist Needed","Escalation Priority","Mgmt Notes","Next Onsite Date",
                              "Last Reviewed By","Last Updated","Last Note Date","Days Since Update","Project Type",
-                             "Priority","Trades","Vendor(s)"];
+                             "Priority","Trades","Vendor(s)","Expected Completion Date"];
     const ALL_HDR_COLS=[...STATIC_COLS_LEFT,"Risk Flag","Amount_Num","Approved_Flag","Approved_Amount",...STATIC_COLS_RIGHT];
 
     wsRaw.addTable({
@@ -1459,7 +1460,7 @@ async function generateExcel(opts){
         r["Mgmt Assist Needed"]||"",r["Escalation Priority"]||"",r["Mgmt Notes"]||"",r["Next Onsite Date"]||"",
         r["Last Reviewed By"]||"",r["Last Updated"]||"",r["Last Note Date"]||"",
         (r["Days Since Update"]==null?(r["Days Since Update Raw"]||""):r["Days Since Update"]),r["Project Type"]||"",
-        r["Priority"]||"",r["Trades"]||"",r["Vendors"]||""
+        r["Priority"]||"",r["Trades"]||"",r["Vendors"]||"",r["Expected Completion Date"]||""
       ])
     });
 
@@ -1491,7 +1492,7 @@ async function generateExcel(opts){
     });
 
     wsRaw.columns=OPS_WIDTHS.map(w=>({width:w}));
-    if(df.length>0)wsRaw.addConditionalFormatting({ref:`A2:AB${df.length+1}`,rules:[
+    if(df.length>0)wsRaw.addConditionalFormatting({ref:`A2:AC${df.length+1}`,rules:[
       {type:'expression',formulae:['$G2="HIGH RISK"'],priority:1,style:{fill:{type:'pattern',pattern:'solid',bgColor:{argb:RED_FILL}}}},
       {type:'expression',formulae:['$G2="WATCH"'],priority:2,style:{fill:{type:'pattern',pattern:'solid',bgColor:{argb:YEL_FILL}}}},
     ]});

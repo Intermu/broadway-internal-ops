@@ -1378,15 +1378,18 @@ document.addEventListener('keydown',function(e){ if(e.key==='Escape') closeJobMo
 // (live audit, click-through to job modal) + invoiced history (loaded Pilot Revenue export).
 function closeEntityModal(){ const o=document.getElementById('entModalOverlay'); if(o) o.classList.remove('open'); }
 function openEntityModal(kind, idx){
-  const order = kind==='vendor' ? (window._o30VendorOrder||[]) : (window._o30CoordOrder||[]);
+  const order = kind==='vendor' ? (window._o30VendorOrder||[]) : kind==='trade' ? (window._o30TradeOrder||[]) : (window._o30CoordOrder||[]);
   const name = order[idx]; if(name==null) return;
   const box=document.getElementById('entModalBox'); if(!box) return;
   const isV = kind==='vendor';
+  const isT = kind==='trade';
+  const kindLbl = isV?'vendor':isT?'trade':'coordinator';
   window._emKind=kind; window._emIdx=idx; window._emName=name;
   const open = (isV ? JOBS.filter(function(j){ return splitVendors(j.vendors).indexOf(name)!==-1; })
+                    : isT ? JOBS.filter(function(j){ return splitTrades(j.trades).indexOf(name)!==-1; })
                     : JOBS.filter(function(j){ return j.coordinator===name; })
                ).slice().sort(function(a,b){ return (b.aged||0)-(a.aged||0); });
-  const closed = (window._closedJobs||[]).filter(function(j){ return isV ? splitVendors(j.vendor).indexOf(name)!==-1 : j.coord===name; });
+  const closed = (window._closedJobs||[]).filter(function(j){ return isV ? splitVendors(j.vendor).indexOf(name)!==-1 : isT ? splitTrades(j.trade).indexOf(name)!==-1 : j.coord===name; });
   const closedSorted = closed.slice().sort(function(a,b){ const da=a.completed?+new Date(a.completed):0, db=b.completed?+new Date(b.completed):0; return db-da; });
   const CAP=50;
   const hasClosed = !!(window._closedJobs||[]).length;
@@ -1410,24 +1413,24 @@ function openEntityModal(kind, idx){
     + tile('Invoiced $',hasClosed?fmt$0(invAmt):'-','blue')
     + tile('Avg days to complete',avgDays!=null?avgDays+'d':'-','')
     + tile('GP %',gpPct!=null?gpPct.toFixed(0)+'%':'-','');
-  const otherCol = isV ? 'Coordinator' : 'Vendors';
+  const otherCol = (isV||isT) ? 'Coordinator' : 'Vendors';
   const openRows = open.length ? open.map(function(j){
-      const other = isV ? escapeHtml(j.coordinator||'-') : vendorListHtml(j.vendors);
+      const other = (isV||isT) ? escapeHtml(j.coordinator||'-') : vendorListHtml(j.vendors);
       return '<tr class="em-click" onclick="closeEntityModal();openJobModal('+JSON.stringify(String(j.jobId))+')">'
         + '<td class="em-jid">'+escapeHtml(j.jobId)+'</td>'
         + '<td>'+statusBadge(j.status)+'</td>'
         + '<td><span class="age-pill '+ageCls(j.aged)+'">'+j.aged+'d</span></td>'
         + '<td class="amt">'+(j.amount>0?fmt$0(j.amount):'-')+'</td>'
         + '<td>'+other+'</td></tr>';
-    }).join('') : '<tr><td colspan="5" class="em-empty">No open work orders for this '+(isV?'vendor':'coordinator')+'.</td></tr>';
+    }).join('') : '<tr><td colspan="5" class="em-empty">No open work orders for this '+kindLbl+'.</td></tr>';
   const mdShort=function(d){ if(!d) return '-'; const x=new Date(d); return isNaN(x)?'-':((x.getMonth()+1)+'/'+String(x.getDate()).padStart(2,'0')+'/'+String(x.getFullYear()).slice(-2)); };
   let invSection;
   if(!hasClosed){ invSection='<div class="em-note">Load the completed/invoiced export (Pilot Revenue) to see invoiced history here.</div>'; }
-  else if(!closed.length){ invSection='<div class="em-note">No invoiced jobs on file for this '+(isV?'vendor':'coordinator')+'.</div>'; }
+  else if(!closed.length){ invSection='<div class="em-note">No invoiced jobs on file for this '+kindLbl+'.</div>'; }
   else {
-    const invOther = isV ? 'Coordinator' : 'Vendor';
+    const invOther = (isV||isT) ? 'Coordinator' : 'Vendor';
     const invRows = closedSorted.slice(0,CAP).map(function(j){
-      const other = isV ? escapeHtml(j.coord||'-') : (j.vendor?vendorListHtml(j.vendor):'-');
+      const other = (isV||isT) ? escapeHtml(j.coord||'-') : (j.vendor?vendorListHtml(j.vendor):'-');
       return '<tr><td class="em-jid">'+escapeHtml(j.sourceJobNum||'-')+'</td>'
         + '<td class="em-mut">'+mdShort(j.completed)+'</td>'
         + '<td>'+(typeof j.ageToComplete==='number'?'<span class="age-pill '+ageCls(j.ageToComplete)+'">'+j.ageToComplete+'d</span>':'-')+'</td>'
@@ -1439,7 +1442,7 @@ function openEntityModal(kind, idx){
   }
   box.innerHTML =
     '<div class="job-modal-head"><div class="jm-head-l"><span class="jm-id">'+escapeHtml(name)+supTag+'</span>'
-    + '<span class="jm-head-sub">'+(isV?'Vendor':'Coordinator')+' \u00b7 '+open.length+' open'+(hasClosed?' \u00b7 '+closed.length+' invoiced':'')+'</span></div>'
+    + '<span class="jm-head-sub">'+(isV?'Vendor':isT?'Trade':'Coordinator')+' \u00b7 '+open.length+' open'+(hasClosed?' \u00b7 '+closed.length+' invoiced':'')+'</span></div>'
     + '<button class="jm-x" onclick="closeEntityModal()" aria-label="Close">\u00d7</button></div>'
     + '<div class="job-modal-body">'
     + '<div class="em-tiles">'+tiles+'</div>'
@@ -1525,6 +1528,12 @@ function splitVendors(str){
   const parts=[];
   raw.forEach(function(p){ if(parts.length && SUF.test(p)){ parts[parts.length-1]+=', '+p; } else parts.push(p); });
   return parts;
+}
+// Split a comma-delimited Trades string into trimmed, non-empty trade names. Comma is the audit's
+// multi-trade delimiter; slash-containing names like "Data / Ethernet / Internet" are single
+// trades and stay intact. Mirrors chipList / the trade filter convention.
+function splitTrades(str){
+  return String(str||'').split(',').map(function(x){return x.trim();}).filter(Boolean);
 }
 function vendorListHtml(str){
   const parts=splitVendors(str);
@@ -2796,6 +2805,34 @@ function renderOver30(mc, agg) {
       <div class="card-body" style="padding:0;">${vendorTable}</div>
     </div>`;
 
+  // By Trade breakdown (respects the active division filter). A job is counted under every trade
+  // it lists (comma-delimited); $ omitted on purpose — multi-trade jobs would double-count.
+  const tAgg={};
+  base.forEach(function(j){
+    const isO30=j.aged>30, isAppr=j.aged>=20&&j.aged<=30;
+    if(!isO30&&!isAppr) return;
+    splitTrades(j.trades).forEach(function(t){
+      const e=tAgg[t]||(tAgg[t]={name:t,o30:0,appr:0,oldest:0});
+      if(isO30){ e.o30++; if(j.aged>e.oldest) e.oldest=j.aged; }
+      if(isAppr) e.appr++;
+    });
+  });
+  const tRows=Object.keys(tAgg).map(function(k){return tAgg[k];}).filter(function(r){return r.o30>0||r.appr>0;}).sort(function(a,b){return b.o30-a.o30||b.oldest-a.oldest;});
+  const tTop=tRows.slice(0,25);
+  window._o30TradeOrder = tRows.map(function(x){ return x.name; });
+  const tradeTable=tRows.length?`<table class="data-table">
+    <thead><tr><th>Trade</th><th>Over 30</th><th>20–30</th><th>Oldest</th></tr></thead>
+    <tbody>${tTop.map(function(r,i){return `<tr class="em-click" onclick="openEntityModal('trade',${i})">
+      <td style="font-weight:600;">${escapeHtml(r.name)}</td>
+      <td><strong class="${r.o30>10?'c-red':r.o30>5?'c-amber':'c-green'}">${r.o30}</strong></td>
+      <td>${r.appr||'-'}</td>
+      <td>${r.oldest?`<span class="age-pill ${ageCls(r.oldest)}">${r.oldest}d</span>`:'-'}</td>
+    </tr>`;}).join('')}</tbody></table>`:'<div style="padding:14px 16px;color:var(--muted);font-size:12px;">No trades on the current over-30 / approaching set.</div>';
+  const tradeCard=`<div class="card">
+      <div class="card-header"><h3>By Trade</h3><span class="card-meta">${tRows.length} trade${tRows.length===1?'':'s'}${tRows.length>25?' · top 25 shown':''} · a job counts under each listed trade</span></div>
+      <div class="card-body" style="padding:0;">${tradeTable}</div>
+    </div>`;
+
   mc.innerHTML = `
     <div class="print-header"><span class="ph-brand">BROADWAY NATIONAL</span><span class="ph-title">Over-30 Weekly Review · ${document.getElementById('reportDateLabel').textContent}</span></div>
     <div class="page-title screen-title">Over-30 Weekly Review</div>
@@ -2816,6 +2853,7 @@ function renderOver30(mc, agg) {
       <div class="card-body" style="padding:0;">${coordTable}</div>
     </div>
     ${vendorCard}
+    ${tradeCard}
     ${bucketHtml}`;
   renderOver30Trend();
   renderO30Compare();
