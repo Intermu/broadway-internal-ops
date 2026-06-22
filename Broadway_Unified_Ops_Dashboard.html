@@ -2552,6 +2552,7 @@ function renderOver30(mc, agg) {
     </div>
     <div id="o30TrendSlot"></div>
     <div id="o30CompareSlot"></div>
+    <div id="o30AnalyticsSlot"></div>
     <div class="card">
       <div class="card-header"><h3>By Coordinator</h3><span class="card-meta">${over30.length} over 30 · ${approaching.length} approaching${_hasClosed?' · open load + closed pace':''}</span></div>
       <div class="card-body" style="padding:0;">${coordTable}</div>
@@ -2560,6 +2561,7 @@ function renderOver30(mc, agg) {
     ${bucketHtml}`;
   renderOver30Trend();
   renderO30Compare();
+  renderO30Analytics();
   autoLoadClosed();
 }
 
@@ -3618,6 +3620,155 @@ function o30SparkBlock(entries, cur){
   </div>`;
 }
 
+// Division counts for an over-30 snapshot, derived from the stored job IDs (works
+// retroactively on old snapshots since division is a function of the Job ID).
+function _o30DivCounts(ids){
+  let s=0,w=0,p=0;
+  (ids||[]).forEach(function(id){ const d=o30Division({jobId:id}); if(d==='WiFi')w++; else if(d==='Photometrics')p++; else s++; });
+  return {overall:(ids||[]).length, Service:s, WiFi:w, Photometrics:p};
+}
+// Four trajectory sparklines: Overall + the three divisions. WiFi and Photometrics are
+// carve-outs from the over-30 target but tracked here so every over-30 still closes out.
+function o30MultiSparkBlock(entries, cur){
+  const rows=[];
+  (entries||[]).forEach(function(e){ if(e&&e.o30&&Array.isArray(e.o30.ids)) rows.push({dateStr:e.dateStr, ids:e.o30.ids}); });
+  if(rows.length && rows[rows.length-1].dateStr===cur.dateStr) rows[rows.length-1]={dateStr:cur.dateStr, ids:cur.ids};
+  else rows.push({dateStr:cur.dateStr, ids:cur.ids});
+  if(rows.length<2){
+    return '<div style="padding:10px 14px;font-size:12px;color:var(--muted);border-bottom:1px solid var(--border);"><strong style="color:var(--text);">Trajectory:</strong> need at least two audits to chart \u2014 builds as weekly audits load.</div>';
+  }
+  const counts=rows.map(function(r){ return _o30DivCounts(r.ids); });
+  const SERIES=[{key:'overall',lbl:'Overall',color:'#1a5f3e'},{key:'Service',lbl:'Service',color:'#2f6df6'},{key:'WiFi',lbl:'WiFi',color:'#8e44ad'},{key:'Photometrics',lbl:'Photometrics',color:'#d68910'}];
+  const head='<div style="padding:11px 14px 4px;font-size:11px;font-weight:700;color:var(--text);">Over-30 trajectory <span style="font-weight:400;color:var(--muted);">\u00b7 last '+rows.length+' audits \u00b7 WiFi and Photometrics are carve-outs from the target, tracked so nothing slips</span></div>';
+  const body=SERIES.map(function(s){
+    const vals=counts.map(function(c){ return c[s.key]; });
+    const first=vals[0], last=vals[vals.length-1];
+    const dir=last>first?'c-red':last<first?'c-green':'c-amber';
+    const dirTxt=last>first?('\u25b2 +'+(last-first)):last<first?('\u25bc \u2212'+(first-last)):'\u2014 0';
+    return '<div style="display:flex;align-items:center;gap:14px;padding:7px 14px;border-bottom:1px solid var(--border);">'
+      +'<div style="min-width:104px;display:flex;align-items:center;gap:7px;"><span style="width:9px;height:9px;border-radius:2px;background:'+s.color+';display:inline-block;flex:0 0 auto;"></span><span style="font-size:11.5px;font-weight:600;color:var(--text);">'+s.lbl+'</span></div>'
+      +'<div style="flex:1;max-width:300px;">'+o30Sparkline(vals,300,30,s.color)+'</div>'
+      +'<div style="text-align:right;font-family:\'DM Mono\',monospace;min-width:70px;"><span style="font-size:15px;font-weight:700;">'+last+'</span> <span style="font-size:10px;" class="'+dir+'">'+dirTxt+'</span></div>'
+      +'</div>';
+  }).join('');
+  return head+body;
+}
+// ── OVER-30 WEEKLY REVIEW ANALYTICS ─────────────────────────────────────────
+// Six summary views over the live over-30 set, plus two that read the snapshot
+// history (over30-history): status chokepoints, aging depth, staleness, no-next-step,
+// chronic carryover, and per-coordinator week-over-week movement. Division chip aware
+// where it makes sense; movement is reported across all divisions to match stored byCoord.
+function _o30Today(){ const d = window._reportDate ? new Date(window._reportDate) : new Date(); d.setHours(0,0,0,0); return d; }
+function _o30StaleDays(j){ return (j.daysSinceUpdate==null) ? null : j.daysSinceUpdate; }
+
+function o30StatusSection(over30){
+  const pileN = over30.length;
+  const by={};
+  over30.forEach(function(j){ const s=j.status||"(no status)"; const e=by[s]||(by[s]={n:0,amt:0}); e.n++; e.amt+=j.amount; });
+  const rows=Object.keys(by).map(function(s){ return {s:s, n:by[s].n, amt:by[s].amt}; }).sort(function(a,b){ return b.n-a.n||b.amt-a.amt; });
+  const body=rows.map(function(r){
+    const pct=pileN?Math.round(r.n/pileN*100):0;
+    return `<tr><td style="font-weight:600;">${escapeHtml(r.s)}</td><td><strong>${r.n}</strong></td><td><div style="display:flex;align-items:center;gap:7px;"><div style="flex:1;max-width:120px;height:7px;border-radius:4px;background:var(--border);overflow:hidden;"><div style="width:${pct}%;height:100%;background:#2f6df6;"></div></div><span style="font-size:10px;color:var(--muted);">${pct}%</span></div></td><td class="amt">${r.amt>0?fmt$0(r.amt):"-"}</td></tr>`;
+  }).join("");
+  const inner = rows.length ? `<table class="data-table"><thead><tr><th>Status</th><th>Jobs</th><th>Share of pile</th><th>Over-30 $</th></tr></thead><tbody>${body}</tbody></table>` : `<div style="padding:14px 16px;color:var(--muted);font-size:12px;">No over-30 jobs on the current set.</div>`;
+  return `<div class="card"><div class="card-header"><h3>Where they are stuck</h3><span class="card-meta">over-30 jobs by status &middot; the chokepoints</span></div><div class="card-body" style="padding:0;">${inner}</div></div>`;
+}
+
+function o30DepthSection(over30){
+  const tot=over30.length||1;
+  const b1=over30.filter(function(j){ return j.aged>=31&&j.aged<=60; });
+  const b2=over30.filter(function(j){ return j.aged>=61&&j.aged<=90; });
+  const b3=over30.filter(function(j){ return j.aged>90; });
+  function tile(grp,lbl,cls){ const amt=grp.reduce(function(s,j){return s+j.amount;},0); const pct=Math.round(grp.length/tot*100); return `<div class="et"><div class="et-n ${cls}">${grp.length}</div><div class="et-l">${lbl}</div><div style="font-size:10px;color:var(--muted);margin-top:3px;">${fmt$0(amt)} &middot; ${pct}%</div></div>`; }
+  return `<div class="card"><div class="card-header"><h3>Aging depth</h3><span class="card-meta">how old the pile is, not just how big &middot; ${over30.length} over 30</span></div><div class="card-body" style="padding:14px 16px;"><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">${tile(b1,"31&ndash;60 days","")}${tile(b2,"61&ndash;90 days","c-amber")}${tile(b3,"Over 90 days","c-red")}</div></div></div>`;
+}
+
+function _o30ActionRows(list){
+  return list.map(function(j){
+    const sd=_o30StaleDays(j);
+    const dtxt=(sd==null)?`<span class="c-red">never</span>`:(sd>=14?`<span class="c-red">${sd}d</span>`:`<span class="c-amber">${sd}d</span>`);
+    return `<tr><td style="font-weight:600;">${escapeHtml(j.jobId)}</td><td>${escapeHtml(j.coordinator||"-")}</td><td><span class="age-pill ${ageCls(j.aged)}">${j.aged}d</span></td><td>${dtxt}</td><td>${escapeHtml(j.status||"-")}</td></tr>`;
+  }).join("");
+}
+
+function o30StaleSection(over30){
+  const stale7=over30.filter(function(j){ const d=_o30StaleDays(j); return d==null||d>=7; });
+  const stale14=over30.filter(function(j){ const d=_o30StaleDays(j); return d==null||d>=14; });
+  const amt7=stale7.reduce(function(s,j){return s+j.amount;},0);
+  const list=stale7.slice().sort(function(a,b){ const da=_o30StaleDays(a),db=_o30StaleDays(b); const va=(da==null)?1e9:da, vb=(db==null)?1e9:db; return vb-va||b.aged-a.aged; }).slice(0,12);
+  const inner = list.length ? `<table class="data-table"><thead><tr><th>Job #</th><th>Coordinator</th><th>Age</th><th>No update</th><th>Status</th></tr></thead><tbody>${_o30ActionRows(list)}</tbody></table>` : `<div style="padding:14px 16px;color:var(--muted);font-size:12px;">Every over-30 job has been touched in the last week.</div>`;
+  return `<div class="card"><div class="card-header"><h3>Stale over-30</h3><span class="card-meta">${stale7.length} not updated in 7+ days &middot; ${stale14.length} in 14+ days &middot; ${fmt$0(amt7)} exposure</span></div><div class="card-body" style="padding:0;">${inner}</div></div>`;
+}
+
+function o30NoNextSection(over30){
+  const today=_o30Today();
+  const list=over30.filter(function(j){
+    let hasFuture=false;
+    if(j.nextOnsiteDate){ const d=new Date(j.nextOnsiteDate); if(!isNaN(d.getTime()) && d>=today) hasFuture=true; }
+    const sd=_o30StaleDays(j); const stale=(sd==null||sd>=7);
+    return !hasFuture && stale;
+  }).sort(function(a,b){ return b.aged-a.aged; });
+  const amt=list.reduce(function(s,j){return s+j.amount;},0);
+  const top=list.slice(0,12);
+  const inner = top.length ? `<table class="data-table"><thead><tr><th>Job #</th><th>Coordinator</th><th>Age</th><th>No update</th><th>Status</th></tr></thead><tbody>${_o30ActionRows(top)}</tbody></table>` : `<div style="padding:14px 16px;color:var(--muted);font-size:12px;">Every over-30 job has a scheduled onsite or recent activity.</div>`;
+  return `<div class="card"><div class="card-header"><h3>No next step</h3><span class="card-meta">${list.length} over-30 with no future onsite and no recent update &middot; ${fmt$0(amt)} &middot; action needed</span></div><div class="card-body" style="padding:0;">${inner}</div></div>`;
+}
+
+function o30ChronicHtml(entries, over30, curDateStr){
+  const hist=(entries||[]).filter(function(e){ return e&&e.o30&&Array.isArray(e.o30.ids); });
+  let audits=hist.map(function(e){ return {dateStr:e.dateStr, set:new Set(e.o30.ids)}; });
+  const curIds=over30.map(function(j){ return j.jobId; });
+  if(audits.length && audits[audits.length-1].dateStr===curDateStr) audits[audits.length-1]={dateStr:curDateStr,set:new Set(curIds)};
+  else audits.push({dateStr:curDateStr,set:new Set(curIds)});
+  if(audits.length<3) return `<div style="padding:14px 16px;color:var(--muted);font-size:12px;">Need at least three audits on record to flag chronic jobs &mdash; builds as weekly audits load (${audits.length} so far).</div>`;
+  const streaks=over30.map(function(j){ let st=0; for(let i=audits.length-1;i>=0;i--){ if(audits[i].set.has(j.jobId)) st++; else break; } return {j:j, streak:st}; }).filter(function(x){ return x.streak>=3; }).sort(function(a,b){ return b.streak-a.streak||b.j.aged-a.j.aged; });
+  if(!streaks.length) return `<div style="padding:14px 16px;color:var(--muted);font-size:12px;">No job has stayed over-30 across three or more consecutive audits. Good churn.</div>`;
+  const amt=streaks.reduce(function(s,x){ return s+x.j.amount; },0);
+  const top=streaks.slice(0,15);
+  const rows=top.map(function(x){ return `<tr><td style="font-weight:600;">${escapeHtml(x.j.jobId)}</td><td>${escapeHtml(x.j.coordinator||"-")}</td><td><span class="age-pill ${ageCls(x.j.aged)}">${x.j.aged}d</span></td><td><strong class="${x.streak>=5?"c-red":"c-amber"}">${x.streak}</strong></td><td class="amt">${x.j.amount>0?fmt$0(x.j.amount):"-"}</td></tr>`; }).join("");
+  return `<div style="padding:8px 14px 0;font-size:11px;color:var(--muted);">${streaks.length} job${streaks.length===1?"":"s"} over-30 for 3+ straight audits &middot; ${fmt$0(amt)} exposure</div><table class="data-table"><thead><tr><th>Job #</th><th>Coordinator</th><th>Age</th><th>Audits over-30</th><th>Approved $</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function o30CoordMoveHtml(entries, curDateStr){
+  const wow=_o30Pick(entries||[], curDateStr, 7, 4, 13);
+  if(!wow) return `<div style="padding:14px 16px;color:var(--muted);font-size:12px;">No prior-week snapshot in range yet &mdash; movement appears once a second weekly audit is on record.</div>`;
+  const allO30=JOBS.filter(function(j){ return j.aged>30; });
+  const cur={}; allO30.forEach(function(j){ const c=j.coordinator||"(unassigned)"; cur[c]=(cur[c]||0)+1; });
+  const prior=wow.byCoord||{};
+  const names={}; Object.keys(cur).forEach(function(n){names[n]=1;}); Object.keys(prior).forEach(function(n){names[n]=1;});
+  const rows=Object.keys(names).map(function(n){ const c=cur[n]||0; const p=(prior[n]&&prior[n].o30)||0; return {n:n, cur:c, prior:p, d:c-p}; }).filter(function(r){ return r.cur>0||r.prior>0; }).sort(function(a,b){ return Math.abs(b.d)-Math.abs(a.d)||b.cur-a.cur; });
+  const rh=rows.map(function(r){
+    const arrow = r.d>0?`<span class="c-red" style="font-weight:700;">&#9650; +${r.d}</span>`:r.d<0?`<span class="c-green" style="font-weight:700;">&#9660; ${r.d}</span>`:`<span class="c-amber">&mdash; 0</span>`;
+    return `<tr><td style="font-weight:600;">${escapeHtml(r.n)}</td><td>${r.prior}</td><td><strong>${r.cur}</strong></td><td>${arrow}</td></tr>`;
+  }).join("");
+  return `<div style="padding:8px 14px 0;font-size:11px;color:var(--muted);">vs ${wow.dateStr} &middot; all divisions</div><table class="data-table"><thead><tr><th>Coordinator</th><th>Prior</th><th>Now</th><th>Change</th></tr></thead><tbody>${rh}</tbody></table>`;
+}
+
+async function renderO30Analytics(){
+  const slot=document.getElementById("o30AnalyticsSlot"); if(!slot) return;
+  const TYPE=window._o30Type||"";
+  const base=TYPE?JOBS.filter(function(j){return o30Division(j)===TYPE;}):JOBS;
+  const over30=base.filter(function(j){ return j.aged>30; });
+  const curDateStr = window._reportDate ? window._reportDate.toISOString().slice(0,10) : new Date().toISOString().slice(0,10);
+  const placeholder=`<div style="padding:14px 16px;color:var(--muted);font-size:12px;">Loading history&hellip;</div>`;
+  slot.innerHTML = o30StatusSection(over30)
+    + o30DepthSection(over30)
+    + o30StaleSection(over30)
+    + o30NoNextSection(over30)
+    + `<div class="card"><div class="card-header"><h3>Chronic over-30</h3><span class="card-meta">jobs that never leave the pile</span></div><div class="card-body" style="padding:0;" id="o30ChronicBody">${placeholder}</div></div>`
+    + `<div class="card"><div class="card-header"><h3>Coordinator movement</h3><span class="card-meta">week-over-week change in over-30 load</span></div><div class="card-body" style="padding:0;" id="o30CoordMoveBody">${placeholder}</div></div>`;
+  if(window.BROADWAY_SNAPSHOT){
+    const note=`<div style="padding:14px 16px;color:var(--muted);font-size:12px;">History views run in the live dashboard only.</div>`;
+    const c=document.getElementById("o30ChronicBody"); if(c) c.innerHTML=note;
+    const m=document.getElementById("o30CoordMoveBody"); if(m) m.innerHTML=note;
+    return;
+  }
+  let entries=window._o30History;
+  if(!entries){ const res=await bnClientGet("over30-history"); entries=(res&&res.exists&&res.data&&Array.isArray(res.data.entries))?res.data.entries:[]; window._o30History=entries; }
+  const c=document.getElementById("o30ChronicBody"); if(c) c.innerHTML=o30ChronicHtml(entries, over30, curDateStr);
+  const m=document.getElementById("o30CoordMoveBody"); if(m) m.innerHTML=o30CoordMoveHtml(entries, curDateStr);
+}
+
 // Fetch history (cached after first load) and inject the trend card.
 async function renderOver30Trend(){
   let slot = document.getElementById('o30TrendSlot');
@@ -3646,7 +3797,7 @@ async function renderOver30Trend(){
   slot.innerHTML = `<div class="card">
     <div class="card-header"><h3>Trend</h3><span class="card-meta">${entries.length} snapshot${entries.length===1?'':'s'} on record \u00b7 saved automatically on each audit load</span></div>
     <div class="card-body" style="padding:0;">
-      ${o30SparkBlock(entries, cur)}
+      ${o30MultiSparkBlock(entries, cur)}
       ${_o30TrendRow('Week over week', wow, cur)}
       ${_o30TrendRow('Month over month', mom, cur)}
     </div>
