@@ -745,6 +745,18 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible{
 .wb-col-list{width:100%;border-collapse:collapse;font-size:11.5px;}
 .wb-col-list td{padding:3px 8px;border-bottom:1px solid var(--border);vertical-align:top;}
 .wb-col-list td:first-child{color:var(--muted);white-space:nowrap;width:1%;}
+.sv-wrap{position:relative;}
+.sv-menu{position:absolute;top:32px;right:0;width:264px;max-height:380px;overflow-y:auto;background:var(--color-surface);border:1px solid var(--border);border-radius:8px;box-shadow:var(--shadow-md);z-index:200;display:none;padding:5px;}
+.sv-menu.open{display:block;}
+.sv-head{font-size:10px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);padding:5px 7px 6px;}
+.sv-row{display:flex;align-items:center;gap:4px;}
+.sv-item{flex:1;min-width:0;text-align:left;background:none;border:0;border-radius:6px;padding:7px 8px;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:12px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.sv-item:hover{background:var(--color-surface-alt);}
+.sv-del{flex:0 0 auto;background:none;border:0;color:var(--muted);cursor:pointer;font-size:12px;padding:4px 7px;border-radius:6px;line-height:1;}
+.sv-del:hover{color:var(--red);background:var(--color-surface-alt);}
+.sv-empty{font-size:11px;color:var(--muted);padding:7px 8px 9px;line-height:1.5;}
+.sv-save{display:block;width:100%;text-align:left;margin-top:4px;border:0;border-top:1px solid var(--border);background:none;padding:8px 8px 6px;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:12px;font-weight:600;color:var(--green-dk);}
+.sv-save:hover{color:var(--green);}
 </style>
 <style>html.embedded .header,html.embedded .tool-mode-bar{display:none}</style>
 <script>if(window.self!==window.top)document.documentElement.classList.add('embedded');try{if(localStorage.getItem('bn_theme')==='dark')document.documentElement.setAttribute('data-theme','dark');}catch(_){}</script>
@@ -774,6 +786,10 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible{
   <span class="gsearch">
     <input id="gsearch-input" type="text" placeholder="Find a job…" autocomplete="off" oninput="gsearch(this.value)" onfocus="gsearch(this.value)">
     <div class="gsearch-results" id="gsearch-results"></div>
+  </span>
+  <span class="sv-wrap">
+    <button class="gear-btn" id="saved-views-btn" onclick="toggleSavedViewsMenu()" title="Save and recall named views (current view + filters)">📑 Views ▾</button>
+    <div class="sv-menu" id="savedViewsMenu"></div>
   </span>
   <button class="gear-btn" id="pin-view-btn" onclick="togglePinView()" title="Open the Dashboard to this view by default">☆ Pin view</button>
   <button class="gear-btn" id="density-btn" onclick="toggleDensity()" title="Toggle table row density">⊟ Compact</button>
@@ -1829,29 +1845,52 @@ function _isKnownView(v){
 }
 function _parseHash(){
   const raw=(location.hash||'').replace(/^#/,'');
-  if(!raw) return {view:null,o30:null};
-  if(raw.indexOf('=')===-1) return {view:raw,o30:null};
-  const out={view:null,o30:null};
+  const out={view:null,o30:null,filters:{}};
+  if(!raw) return out;
+  if(raw.indexOf('=')===-1){ out.view=raw; return out; }
   raw.split('&').forEach(function(kv){
     const i=kv.indexOf('='); if(i===-1) return;
     const k=kv.slice(0,i), val=decodeURIComponent(kv.slice(i+1));
-    if(k==='view') out.view=val; else if(k==='o30') out.o30=val;
+    if(k==='view') out.view=val;
+    else if(k==='o30') out.o30=val;
+    else if(k.indexOf('f_')===0) out.filters[k.slice(2)]=val;
   });
   return out;
 }
-function _syncHash(){
+// Filter-bar keys carried in the hash (prefixed f_) so a filtered list is shareable.
+var _HASH_FILTER_KEYS=['search','risk','priority','priority2','trade','sub','status','coord'];
+function _filtersEqual(a,b){
+  a=a||{}; b=b||{};
+  return _HASH_FILTER_KEYS.every(function(k){ return (a[k]||'')===(b[k]||''); });
+}
+function _setFiltersFromHash(filters){
+  const base={risk:'', priority:'', priority2:'', trade:'', sub:'', status:'', coord:'', search:''};
+  if(filters) _HASH_FILTER_KEYS.forEach(function(k){ if(filters[k]!=null) base[k]=filters[k]; });
+  window._persistFilters = base;
+}
+function _buildHash(){
   const parts=['view='+currentView];
   if(currentView==='over30-review' && window._o30Type) parts.push('o30='+encodeURIComponent(window._o30Type));
-  const h='#'+parts.join('&');
-  if(location.hash!==h) location.hash=h;
+  const f=window._persistFilters||{};
+  _HASH_FILTER_KEYS.forEach(function(k){ if(f[k]) parts.push('f_'+k+'='+encodeURIComponent(f[k])); });
+  return parts.join('&');
+}
+function _syncHash(replace){
+  const h='#'+_buildHash();
+  // View changes push a history entry (back/forward between views); filter edits
+  // replace silently so high-frequency typing in search doesn't flood history.
+  if(replace){ try{ history.replaceState(null,'',h); }catch(_){ if(location.hash!==h) location.hash=h; } }
+  else if(location.hash!==h){ location.hash=h; }
 }
 function _onHashChange(){
   const h=_parseHash();
   if(!_isKnownView(h.view)) return;
   const sameView = h.view===currentView;
   const sameO30 = (h.o30||'')===(window._o30Type||'');
-  if(sameView && (h.view!=='over30-review' || sameO30)) return;
+  const sameFilters = _filtersEqual(h.filters, window._persistFilters);
+  if(sameView && (h.view!=='over30-review' || sameO30) && sameFilters) return;
   if(h.view==='over30-review') window._o30Type = h.o30||'';
+  _setFiltersFromHash(h.filters);
   const btn=document.querySelector('.nav-btn[data-view="'+h.view.replace(/"/g,'')+'"]');
   nav(h.view, btn||null);
 }
@@ -1861,11 +1900,64 @@ function _applyInitialView(){
   const h=_parseHash();
   if(_isKnownView(h.view)){
     if(h.view==='over30-review' && h.o30!=null) window._o30Type = h.o30;
+    _setFiltersFromHash(h.filters);
     const btn=document.querySelector('.nav-btn[data-view="'+h.view.replace(/"/g,'')+'"]');
     nav(h.view, btn||null);
     return;
   }
   applyPinnedView();
+}
+// ── NAMED SAVED VIEWS (presets) ───────────────────────────────────────
+// A saved view is just a stored hash string (view + over-30 chip + filters).
+// Applying one sets location.hash, which _onHashChange restores. Persisted in
+// localStorage under bn_saved_views as [{name, hash}].
+function _savedViews(){ try{ const a=JSON.parse(localStorage.getItem('bn_saved_views')||'[]'); return Array.isArray(a)?a:[]; }catch(_){ return []; } }
+function _writeSavedViews(a){ try{ localStorage.setItem('bn_saved_views', JSON.stringify(a)); }catch(_){} }
+function renderSavedViewsMenu(){
+  const menu=document.getElementById('savedViewsMenu'); if(!menu) return;
+  const list=_savedViews();
+  let rows;
+  if(!list.length){
+    rows='<div class="sv-empty">No saved views yet. Set up a view with the filters you want, then save it here.</div>';
+  } else {
+    rows=list.map(function(v,i){
+      return '<div class="sv-row">'
+        + '<button class="sv-item" onclick="applySavedView('+i+')" title="'+escapeHtml(v.hash)+'">'+escapeHtml(v.name)+'</button>'
+        + '<button class="sv-del" onclick="deleteSavedView('+i+',event)" aria-label="Delete saved view" title="Delete">✕</button>'
+        + '</div>';
+    }).join('');
+  }
+  menu.innerHTML='<div class="sv-head">Saved views</div>'+rows+'<button class="sv-save" onclick="saveCurrentView()">+ Save current view…</button>';
+}
+function toggleSavedViewsMenu(){
+  const menu=document.getElementById('savedViewsMenu'); if(!menu) return;
+  if(menu.classList.contains('open')){ menu.classList.remove('open'); return; }
+  renderSavedViewsMenu();
+  menu.classList.add('open');
+}
+function closeSavedViewsMenu(){ const m=document.getElementById('savedViewsMenu'); if(m) m.classList.remove('open'); }
+function saveCurrentView(){
+  const name=(prompt('Name this view (saves the current view and its filters):')||'').trim();
+  if(!name) return;
+  const list=_savedViews().filter(function(v){ return v.name!==name; }); // overwrite same name
+  list.push({name:name, hash:_buildHash()});
+  _writeSavedViews(list);
+  renderSavedViewsMenu();
+  toast('Saved view: '+name);
+}
+function applySavedView(i){
+  const v=_savedViews()[i]; if(!v) return;
+  closeSavedViewsMenu();
+  const target='#'+v.hash;
+  if(location.hash===target){ _onHashChange(); } else { location.hash=target; }
+}
+function deleteSavedView(i, ev){
+  if(ev && ev.stopPropagation) ev.stopPropagation();
+  const list=_savedViews(); if(i<0 || i>=list.length) return;
+  const removed=list.splice(i,1);
+  _writeSavedViews(list);
+  renderSavedViewsMenu();
+  toast('Deleted view: '+(removed[0]?removed[0].name:''));
 }
 // Global job search (Phase 1). Find any job by ID, location, coordinator, or FM
 // from any view; a result jumps to that coordinator's view (numeric index only,
@@ -1902,6 +1994,8 @@ function gsearchOpenIdx(idx){
 }
 document.addEventListener('click', e=>{ if(!e.target.closest('.gsearch')){ const b=document.getElementById('gsearch-results'); if(b) b.classList.remove('open'); } });
 document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ const b=document.getElementById('gsearch-results'); if(b) b.classList.remove('open'); } });
+document.addEventListener('click', e=>{ if(!e.target.closest('.sv-wrap')){ closeSavedViewsMenu(); } });
+document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ closeSavedViewsMenu(); } });
 // Keyboard nav (Phase 1): "/" focuses global search; arrows + Enter work the results.
 document.addEventListener('keydown', e=>{
   if(e.key==='/' && !/^(INPUT|TEXTAREA|SELECT)$/.test((e.target&&e.target.tagName)||'')){
@@ -2075,6 +2169,7 @@ function applyFilters(id) {
 function clearFilters() {
   window._persistFilters = {risk:'', priority:'', priority2:'', trade:'', sub:'', status:'', coord:'', search:''};
   restoreFilters();
+  _syncHash(true);
   toast('Filters cleared');
 }
 
@@ -3617,6 +3712,7 @@ refreshCrossToolBtn();
     const dSearch = debounce((inp, tblId) => {
       window._persistFilters.search = inp.value;
       applyFilters(tblId);
+      _syncHash(true);
     }, 200);
 
     mc.addEventListener('input', e => {
@@ -3633,6 +3729,7 @@ refreshCrossToolBtn();
       if (sel.dataset.tblId && sel.dataset.filterType) {
         window._persistFilters[sel.dataset.filterType] = sel.value;
         applyFilters(sel.dataset.tblId);
+        _syncHash(true);
         return;
       }
       // Compare-coord checkboxes
@@ -3655,6 +3752,7 @@ refreshCrossToolBtn();
         const key  = e.target.dataset.filterKey;
         const mode = e.target.dataset.mode;
         if (key) { window._persistFilters[key] = ''; }
+        _syncHash(true);
         // Re-render current view to refresh chips
         render(currentView);
         setTimeout(() => {
