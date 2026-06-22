@@ -1,6 +1,6 @@
 // scripts/migrate-flat-to-client-namespaced.js
 //
-// Copies the four legacy flat blobs to the new client-namespaced paths under
+// Copies the legacy flat snapshot + workbook blobs to the new client-namespaced
 // "pilot". Idempotent: safe to re-run. Does NOT delete the originals — keep
 // them in place until you've cut every HTML over and verified traffic.
 //
@@ -18,10 +18,13 @@ const TARGET_CLIENT = process.env.TARGET_CLIENT || "pilot";
 const DRY_RUN = process.env.DRY_RUN === "1";
 
 // Pairs of [legacy flat blob name, new slot name under clients/{TARGET_CLIENT}/].
-// Note that wo-snapshot-today/previous keep their slot names — the slot is
-// already client-agnostic. Only "pilot-revenue" needs to be renamed to "revenue".
+// The slot names are already client-agnostic, so they carry over unchanged.
+//
+// NOTE: "pilot-revenue" -> "revenue" is intentionally NOT migrated here. The
+// revenue slot was cut over to the client-namespaced path earlier and is now
+// written live to clients/pilot/revenue by the Agent / Dashboard / Diagnostic.
+// Copying the stale flat "pilot-revenue" over it would REGRESS current data.
 const PAIRS = [
-  ["pilot-revenue", "revenue"],
   ["wo-snapshot-today", "wo-snapshot-today"],
   ["wo-snapshot-previous", "wo-snapshot-previous"],
   ["workbook", "workbook"],

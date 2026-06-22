@@ -24,9 +24,9 @@
  *                               classifiers above.
  *
  * Loads as a browser global (window.BN) and as a Node module (module.exports)
- * so the parity regression test can require it. Build-time inlined into tools
- * via BN-CORE sentinels at migration time (mirrors sync-theme.js); until then
- * this file is canonical source only and is not referenced by any tool.
+ * so the parity regression test can require it. Build-time inlined into each
+ * tool's BN-CORE sentinel region by sync-theme.js; the tools' classifiers
+ * delegate to it (single source of truth -- edit here, then run sync-theme.js).
  */
 (function (root) {
   "use strict";

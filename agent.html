@@ -545,6 +545,9 @@ async function bnClientGet(slot){
 async function bnClientPost(slot,data,metadata){
   try{const r=await fetch(`${DATA_API}?key=${encodeURIComponent(slot)}&client=${PILOT_CLIENT}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({data,metadata:metadata||{}})});if(!r.ok)throw 0;return await r.json();}catch(_){return null;}
 }
+async function bnClientDelete(slot){
+  try{await fetch(`${DATA_API}?key=${encodeURIComponent(slot)}&client=${PILOT_CLIENT}`,{method:"DELETE"});return true;}catch(_){return false;}
+}
 
 // ── Snapshot UI helpers ───────────────────────────────────────────────────────
 function setSnapBadge(state, text){
@@ -580,8 +583,8 @@ function renderSnapState({today,previous,source}){
 
 async function fetchServerSnapshots(){
   const [todayRes,prevRes]=await Promise.all([
-    bnDataGet("wo-snapshot-today"),
-    bnDataGet("wo-snapshot-previous"),
+    bnClientGet("wo-snapshot-today"),
+    bnClientGet("wo-snapshot-previous"),
   ]);
   if(!todayRes&&!prevRes)return null;
   return {
@@ -593,7 +596,7 @@ async function fetchServerSnapshots(){
 let loadedPrevSnap=null;
 async function saveSnapshotToServer(snap){
   setSnapBadge("saving","Saving…");
-  const res=await bnDataPost("wo-snapshot-today", snap, {dateStr:snap.dateStr,total:snap.total});
+  const res=await bnClientPost("wo-snapshot-today", snap, {dateStr:snap.dateStr,total:snap.total});
   if(!res){
     setSnapBadge("warn","Server save failed");
     log("⚠ Server snapshot save failed. Falling back to browser storage.");
@@ -646,7 +649,7 @@ async function saveSnapshotToServer(snap){
   if(clearBtn){
     clearBtn.addEventListener("click",async ()=>{
       if(!confirm("Clear server snapshots? This deletes today's and previous snapshots from the data store. Browser cache will also be cleared. This cannot be undone."))return;
-      try{await bnDataDelete("wo-snapshot-today");}catch(e){}
+      try{await bnClientDelete("wo-snapshot-today");}catch(e){}
       loadedPrevSnap=null;
       localStorage.removeItem("bn_prev_snap");
       localStorage.removeItem("bn_today_snap");
@@ -1968,7 +1971,7 @@ async function generateExcel(opts){
       const u8=new Uint8Array(buffer);
       let bin="";for(let i=0;i<u8.length;i++)bin+=String.fromCharCode(u8[i]);
       const b64=btoa(bin);
-      bnDataPost("workbook",{base64:b64,filename:wbFilename},{
+      bnClientPost("workbook",{base64:b64,filename:wbFilename},{
         filename:wbFilename,
         sizeBytes:buffer.byteLength,
         generatedAt:new Date().toISOString(),

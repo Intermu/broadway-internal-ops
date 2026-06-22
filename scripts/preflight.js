@@ -6,7 +6,7 @@
  * commit is a live outage):
  *   1. Inline <script> syntax errors in every tool (node --check).
  *   2. staticwebapp.config.json route order + rolesSource wiring.
- *   3. BN-THEME sentinel balance (so sync-theme.js can run).
+ *   3. BN-THEME / BN-CORE sentinel balance + BN.* consumption guard.
  *   4. CSP presence per tool (advisory).
  * Exits non-zero on any HARD failure (1 or 2). Advisories never fail the gate.
  */
@@ -66,14 +66,22 @@ try {
   else advise("auth.rolesSource is " + JSON.stringify(rs) + " (expected /api/get-roles)");
 } catch (e) { fail("cannot parse staticwebapp.config.json: " + e.message); }
 
-// 3. theme sentinels --------------------------------------------------------
-log("[3] BN-THEME sentinel balance");
+// 3. shared-block sentinels -------------------------------------------------
+log("[3] BN-THEME / BN-CORE sentinel balance");
+const SENTINELS = ["BN-THEME", "BN-CORE"];
+const BN_CALLS = /\bBN\.(division|jobClass|invoicedWifiByPO)\s*\(/;
 for (const f of toolHtml()) {
   const html = fs.readFileSync(path.join(ROOT, f), "utf8");
-  const s = html.indexOf("BN-THEME:START"), e = html.indexOf("BN-THEME:END");
-  if (s < 0 && e < 0) { log("  --    " + f + " (no theme sentinels; not themed)"); continue; }
-  if (s >= 0 && e > s) log("  ok    " + f);
-  else fail(f + " has unbalanced/missing BN-THEME sentinels");
+  for (const label of SENTINELS) {
+    const s = html.indexOf(label + ":START"), e = html.indexOf(label + ":END");
+    if (s < 0 && e < 0) { log("  --    " + f + " (" + label + ": absent)"); continue; }
+    if (s >= 0 && e > s) log("  ok    " + f + " (" + label + ")");
+    else fail(f + " has unbalanced/missing " + label + " sentinels");
+  }
+  // A tool that delegates to window.BN but never inlines bn-core would be a
+  // runtime ReferenceError. Guard the exact failure this migration enables.
+  if (BN_CALLS.test(html) && html.indexOf("BN-CORE:START") < 0)
+    fail(f + " calls BN.* but has no BN-CORE region (window.BN would be undefined)");
 }
 
 // 4. CSP presence (advisory) ------------------------------------------------

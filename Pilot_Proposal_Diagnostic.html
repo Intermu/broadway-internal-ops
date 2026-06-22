@@ -77,7 +77,7 @@
   --text:      #1e293b;
   --muted:     #64748b;
   --bg:        #f0f4f8;
-  /* aliases used by Proposal Diagnostic */
+  /* aliases used by Pilot Proposal Diagnostic */
   --green-darker:#0d3d26;
   --amber-text:  #7d5a00;
   --red-text:    #8b1a1a;
@@ -606,9 +606,9 @@ body{font-family:'DM Sans',sans-serif;background:linear-gradient(135deg,#f0fdf4,
  *                               classifiers above.
  *
  * Loads as a browser global (window.BN) and as a Node module (module.exports)
- * so the parity regression test can require it. Build-time inlined into tools
- * via BN-CORE sentinels at migration time (mirrors sync-theme.js); until then
- * this file is canonical source only and is not referenced by any tool.
+ * so the parity regression test can require it. Build-time inlined into each
+ * tool's BN-CORE sentinel region by sync-theme.js; the tools' classifiers
+ * delegate to it (single source of truth -- edit here, then run sync-theme.js).
  */
 (function (root) {
   "use strict";
