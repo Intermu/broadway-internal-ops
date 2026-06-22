@@ -1,10 +1,12 @@
-/* test-bn-core.js -- proves bn-core.js is behavior-identical to the classifiers
- * currently living inside the tools. Run from repo root:  node scripts/test-bn-core.js
+/* test-bn-core.js -- guards the bn-core consumption boundary. The live tools now
+ * delegate their classifiers to window.BN (bn-core), so this proves the delegation
+ * is wired correctly. Run from repo root:  node scripts/test-bn-core.js
  *
- * Extracts the live functions straight out of the HTML by brace-matching, loads
- * bn-core, and asserts identical output across an edge-case corpus (and, when
- * present, every real Source Job # in a Pilot revenue workbook). Exits non-zero
- * on any mismatch so it can gate a commit.
+ * Extracts the live functions straight out of the HTML by brace-matching, injects
+ * BN, and asserts identical output to bn-core across an edge-case corpus (and, when
+ * present, every real Source Job # in a Pilot revenue workbook). A mismapped
+ * delegator (wrong arg or wrong BN.* fn) fails here. Exits non-zero on any mismatch
+ * so it can gate a commit.
  */
 const fs = require("fs");
 const path = require("path");
@@ -29,7 +31,9 @@ function grabFn(file, name) {
     else if (c === "}") { depth--; if (started && depth === 0) break; }
   }
   // eslint-disable-next-line no-new-func
-  return new Function("return (" + out + ")")();
+  // Live call sites now delegate to bn-core, so the extracted function references
+  // BN; inject it so the delegator resolves (a mismapped delegator fails the asserts).
+  return new Function("BN", "return (" + out + ")")(BN);
 }
 
 const DASH = path.join(ROOT, "Broadway_Unified_Ops_Dashboard.html");

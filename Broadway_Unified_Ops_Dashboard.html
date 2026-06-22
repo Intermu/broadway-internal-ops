@@ -2514,22 +2514,11 @@ function _cdate(v){
   if(/^\d{4}-\d{2}-\d{2}([T ]|$)/.test(s)){ const d=new Date(s); return isNaN(d)?null:d; }
   return parseDateToken(s);
 }
-function _cclass(s){ s=String(s||'').trim();
-  if(/^WI[\s-]*FI/i.test(s)||/^WI\s/i.test(s))return 'wifi';
-  if(/^RF\b/i.test(s))return 'rf';
-  if(/^Q\/?R\b/i.test(s))return 'qr';
-  return 'service';
-}
+function _cclass(s){ return BN.jobClass(s); } // delegates to bn-core (window.BN)
 // Invoiced/closed WiFi rule (per ops): Source PO # contains "-TS" (allowing spaces around the
 // dash and multi-PO cells), starts with "Tech-", or contains "WIFI" (any casing/delimiter).
 // Everything else (plain 12-digit POs, bare numbers) is not WiFi.
-function _closedWifiByPO(po){
-  const s=String(po==null?'':po).trim(); if(!s) return false;
-  if(/wifi/i.test(s)) return true;
-  if(/^tech-/i.test(s)) return true;
-  if(s.replace(/\s*-\s*/g,'-').toUpperCase().indexOf('-TS')!==-1) return true;
-  return false;
-}
+function _closedWifiByPO(po){ return BN.invoicedWifiByPO(po); } // delegates to bn-core (window.BN)
 function parseClosedRevenue(raw){
   const out=[];
   (raw||[]).forEach(r=>{
@@ -2719,12 +2708,7 @@ function renderO30Compare(){
 
 // Over-30 division classifier (scoped to this view): WiFi = Job ID has an iteration of "WiFi";
 // Photometrics = "RF" prefix followed by a PO number (e.g. RF 01766156); everything else = Service.
-function o30Division(j){
-  const id=(j.jobId||'').toUpperCase();
-  if(/WI[\s\-]?FI/.test(id)) return 'WiFi';
-  if(/(?:^|[^A-Z])RF[\s-]*\d/.test(id)) return 'Photometrics';
-  return 'Service';
-}
+function o30Division(j){ return BN.division(j.jobId); } // delegates to bn-core (window.BN)
 // Over-30 type filter (All / WiFi / Photometrics / Service). State lives on window so the
 // chip selection survives a re-render; the setter just re-runs the Over-30 view.
 function setO30Type(t){ window._o30Type = t||''; render('over30-review'); _syncHash(); }
