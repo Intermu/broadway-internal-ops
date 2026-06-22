@@ -3744,6 +3744,76 @@ function o30CoordMoveHtml(entries, curDateStr){
   return `<div style="padding:8px 14px 0;font-size:11px;color:var(--muted);">vs ${wow.dateStr} &middot; all divisions</div><table class="data-table"><thead><tr><th>Coordinator</th><th>Prior</th><th>Now</th><th>Change</th></tr></thead><tbody>${rh}</tbody></table>`;
 }
 
+// Over-30 exposure: headline size + dollars, and which coordinators hold the dollars.
+// Division-chip aware (reads the already-filtered over30 set).
+function o30ExposureSection(over30){
+  const tot=over30.length;
+  const amt=over30.reduce(function(s,j){ return s+(j.amount||0); },0);
+  const avg=tot?amt/tot:0;
+  const by={};
+  over30.forEach(function(j){ const c=j.coordinator||"(unassigned)"; const e=by[c]||(by[c]={n:0,amt:0,oldest:0}); e.n++; e.amt+=(j.amount||0); if(j.aged>e.oldest)e.oldest=j.aged; });
+  const rows=Object.keys(by).map(function(c){ return {c:c, n:by[c].n, amt:by[c].amt, oldest:by[c].oldest}; }).sort(function(a,b){ return b.amt-a.amt||b.n-a.n; });
+  const tiles=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">`
+    +`<div class="et"><div class="et-n">${tot}</div><div class="et-l">Jobs over 30</div></div>`
+    +`<div class="et"><div class="et-n">${fmt$0(amt)}</div><div class="et-l">Approved $ exposure</div></div>`
+    +`<div class="et"><div class="et-n">${fmt$0(avg)}</div><div class="et-l">Avg $ / job</div></div>`
+    +`</div>`;
+  const body=rows.map(function(r){
+    const share=amt?Math.round(r.amt/amt*100):0;
+    return `<tr><td style="font-weight:600;">${escapeHtml(r.c)}</td><td><strong>${r.n}</strong></td><td class="amt">${r.amt>0?fmt$0(r.amt):"-"}</td><td><div style="display:flex;align-items:center;gap:7px;"><div style="flex:1;max-width:120px;height:7px;border-radius:4px;background:var(--border);overflow:hidden;"><div style="width:${share}%;height:100%;background:#1a5f3e;"></div></div><span style="font-size:10px;color:var(--muted);">${share}%</span></div></td><td><span class="age-pill ${ageCls(r.oldest)}">${r.oldest}d</span></td></tr>`;
+  }).join("");
+  const tbl=rows.length?`<table class="data-table"><thead><tr><th>Coordinator</th><th>Jobs</th><th>Over-30 $</th><th>Share of $</th><th>Oldest</th></tr></thead><tbody>${body}</tbody></table>`:`<div style="padding:14px 16px;color:var(--muted);font-size:12px;">No over-30 jobs on the current set.</div>`;
+  return `<div class="card"><div class="card-header"><h3>Over-30 exposure</h3><span class="card-meta">how big the pile is and who is holding the dollars</span></div><div class="card-body" style="padding:0;"><div style="padding:14px 16px 4px;">${tiles}</div>${tbl}</div></div>`;
+}
+
+// Past expected completion: over-30 jobs whose committed ETA is already in the past.
+// Distinct from "no next step" (missing onsite) — this is a date that was set and blown.
+// Division-chip aware. Defensive on date type (live Date vs ISO string after snapshot reload).
+function o30PastDueSection(over30){
+  const today=_o30Today();
+  const list=over30.map(function(j){
+    let d=null;
+    if(j.expectedCompletion){ const t=new Date(j.expectedCompletion); if(!isNaN(t.getTime())) d=t; }
+    if(!d || d>=today) return null;
+    return {j:j, d:d, daysPast:Math.round((today-d)/86400000)};
+  }).filter(function(x){ return x; }).sort(function(a,b){ return b.daysPast-a.daysPast||b.j.aged-a.j.aged; });
+  const amt=list.reduce(function(s,x){ return s+(x.j.amount||0); },0);
+  const top=list.slice(0,12);
+  const fmtD=function(d){ return d.toLocaleDateString("en-US",{month:"short",day:"numeric",year:"2-digit"}); };
+  const rows=top.map(function(x){
+    return `<tr><td style="font-weight:600;">${escapeHtml(x.j.jobId)}</td><td>${escapeHtml(x.j.coordinator||"-")}</td><td><span class="age-pill ${ageCls(x.j.aged)}">${x.j.aged}d</span></td><td>${fmtD(x.d)}</td><td><strong class="${x.daysPast>=30?"c-red":"c-amber"}">${x.daysPast}d</strong></td><td class="amt">${x.j.amount>0?fmt$0(x.j.amount):"-"}</td></tr>`;
+  }).join("");
+  const inner=list.length?`<table class="data-table"><thead><tr><th>Job #</th><th>Coordinator</th><th>Age</th><th>Expected</th><th>Past due</th><th>Approved $</th></tr></thead><tbody>${rows}</tbody></table>`:`<div style="padding:14px 16px;color:var(--muted);font-size:12px;">No over-30 job has a committed completion date in the past &mdash; ETAs are still ahead or none is set.</div>`;
+  return `<div class="card"><div class="card-header"><h3>Past expected completion</h3><span class="card-meta">${list.length} over-30 past a committed ETA &middot; ${fmt$0(amt)} &middot; dates already missed</span></div><div class="card-body" style="padding:0;">${inner}</div></div>`;
+}
+
+// Clearance & churn: vs the prior-week snapshot, how many cleared the pile vs newly
+// crossed 30, plus a clearance rate. Division-chip aware (the Trend card shows the
+// all-divisions count; this respects the chip). Reads snapshot ids, so it's retroactive.
+function o30ClearanceHtml(entries, over30, curDateStr, TYPE){
+  const wow=_o30Pick(entries||[], curDateStr, 7, 4, 13);
+  if(!wow) return `<div style="padding:14px 16px;color:var(--muted);font-size:12px;">No prior-week snapshot in range yet &mdash; clearance appears once a second weekly audit is on record.</div>`;
+  const divOk=function(id){ return TYPE ? (o30Division({jobId:id})===TYPE) : true; };
+  const priorIds=((wow.o30&&wow.o30.ids)?wow.o30.ids:[]).filter(divOk);
+  const curIds=over30.map(function(j){ return j.jobId; });
+  const curSet=new Set(curIds), priorSet=new Set(priorIds);
+  let closed=0, held=0, crossed=0;
+  priorSet.forEach(function(id){ if(curSet.has(id)) held++; else closed++; });
+  curSet.forEach(function(id){ if(!priorSet.has(id)) crossed++; });
+  const net=curIds.length-priorIds.length;
+  const rate=priorIds.length?Math.round(closed/priorIds.length*100):0;
+  const verdict=net<0?`<span class="c-green" style="font-weight:700;">Working it down</span>`:net>0?`<span class="c-red" style="font-weight:700;">Falling behind</span>`:`<span class="c-amber" style="font-weight:700;">Treading water</span>`;
+  const netTxt=net>0?`<span class="c-red" style="font-weight:700;">&#9650; +${net}</span>`:net<0?`<span class="c-green" style="font-weight:700;">&#9660; ${net}</span>`:`<span class="c-amber" style="font-weight:700;">&mdash; 0</span>`;
+  const scope=TYPE?TYPE:"all divisions";
+  const tiles=`<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;">`
+    +`<div class="et"><div class="et-n c-green">${closed}</div><div class="et-l">Cleared</div></div>`
+    +`<div class="et"><div class="et-n c-red">${crossed}</div><div class="et-l">Newly crossed 30</div></div>`
+    +`<div class="et"><div class="et-n">${held}</div><div class="et-l">Still over 30</div></div>`
+    +`<div class="et"><div class="et-n">${rate}%</div><div class="et-l">Clearance rate</div></div>`
+    +`</div>`;
+  return `<div style="padding:10px 14px 4px;font-size:11px;color:var(--muted);">vs ${wow.dateStr} &middot; ${scope} &middot; ${priorIds.length} were over-30 then, ${curIds.length} now &nbsp; ${netTxt} &nbsp; ${verdict}</div><div style="padding:6px 14px 14px;">${tiles}</div>`;
+}
+
 async function renderO30Analytics(){
   const slot=document.getElementById("o30AnalyticsSlot"); if(!slot) return;
   const TYPE=window._o30Type||"";
@@ -3751,20 +3821,25 @@ async function renderO30Analytics(){
   const over30=base.filter(function(j){ return j.aged>30; });
   const curDateStr = window._reportDate ? window._reportDate.toISOString().slice(0,10) : new Date().toISOString().slice(0,10);
   const placeholder=`<div style="padding:14px 16px;color:var(--muted);font-size:12px;">Loading history&hellip;</div>`;
-  slot.innerHTML = o30StatusSection(over30)
+  slot.innerHTML = o30ExposureSection(over30)
+    + o30StatusSection(over30)
     + o30DepthSection(over30)
     + o30StaleSection(over30)
     + o30NoNextSection(over30)
+    + o30PastDueSection(over30)
+    + `<div class="card"><div class="card-header"><h3>Clearance &amp; churn</h3><span class="card-meta">are we working the pile down or treading water</span></div><div class="card-body" style="padding:0;" id="o30ClearBody">${placeholder}</div></div>`
     + `<div class="card"><div class="card-header"><h3>Chronic over-30</h3><span class="card-meta">jobs that never leave the pile</span></div><div class="card-body" style="padding:0;" id="o30ChronicBody">${placeholder}</div></div>`
     + `<div class="card"><div class="card-header"><h3>Coordinator movement</h3><span class="card-meta">week-over-week change in over-30 load</span></div><div class="card-body" style="padding:0;" id="o30CoordMoveBody">${placeholder}</div></div>`;
   if(window.BROADWAY_SNAPSHOT){
     const note=`<div style="padding:14px 16px;color:var(--muted);font-size:12px;">History views run in the live dashboard only.</div>`;
+    const cl=document.getElementById("o30ClearBody"); if(cl) cl.innerHTML=note;
     const c=document.getElementById("o30ChronicBody"); if(c) c.innerHTML=note;
     const m=document.getElementById("o30CoordMoveBody"); if(m) m.innerHTML=note;
     return;
   }
   let entries=window._o30History;
   if(!entries){ const res=await bnClientGet("over30-history"); entries=(res&&res.exists&&res.data&&Array.isArray(res.data.entries))?res.data.entries:[]; window._o30History=entries; }
+  const cl=document.getElementById("o30ClearBody"); if(cl) cl.innerHTML=o30ClearanceHtml(entries, over30, curDateStr, TYPE);
   const c=document.getElementById("o30ChronicBody"); if(c) c.innerHTML=o30ChronicHtml(entries, over30, curDateStr);
   const m=document.getElementById("o30CoordMoveBody"); if(m) m.innerHTML=o30CoordMoveHtml(entries, curDateStr);
 }
