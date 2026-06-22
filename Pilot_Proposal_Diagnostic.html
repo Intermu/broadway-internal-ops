@@ -1053,15 +1053,9 @@ function handleFile(file){
           info.innerHTML = `<span style="color:var(--green-dk);">✅ Legacy file loaded: ${lookupSize} GP records from ${escapeHtml(file.name)}.${DATA && DATA.length ? ' Applying join...' : ' Now drop the new 2026 file to complete analysis.'}</span>`;
           overlay.classList.remove('active');
 
-          // Push to shared Blobs store
-          bnDataPost("pilot-revenue-legacy", {
-            gpLookup: LEGACY_GP,
-            sourceFile: file.name,
-          }, {
-            recordCount: lookupSize,
-            sourceFile: file.name,
-          });
-
+          // GP lookup is not persisted to the shared store yet -- that would need
+          // a 'revenue-gp' slot plus an auto-load reader (a future feature). The
+          // previous flat-key write here was a dead no-op, so it was removed.
           if(DATA && DATA.length){ applyLegacyGPJoin(); }
           return;
         }
