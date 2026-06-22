@@ -730,6 +730,21 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible{
     transition-duration:0.01ms !important;
   }
 }
+.wb-health{background:var(--color-surface);border:1px solid var(--border);border-left-width:4px;border-radius:9px;margin-bottom:14px;overflow:hidden;}
+.wb-health.wb-ok{border-left-color:var(--green);}
+.wb-health.wb-warn{border-left-color:var(--amber);}
+.wb-health.wb-crit{border-left-color:var(--red);}
+.wb-health-head{display:flex;align-items:center;gap:10px;padding:9px 13px;cursor:pointer;user-select:none;}
+.wb-health-ico{font-size:14px;line-height:1;flex:0 0 auto;}
+.wb-health-msg{flex:1;color:var(--text);font-weight:600;font-size:12.5px;}
+.wb-health-msg small{display:block;font-weight:400;color:var(--muted);margin-top:1px;font-size:11px;}
+.wb-health-tog{font-size:11px;color:var(--muted);flex:0 0 auto;}
+.wb-health-body{border-top:1px solid var(--border);background:var(--color-surface-alt);padding:10px 13px;display:none;}
+.wb-health.open .wb-health-body{display:block;}
+.wb-health-meta{color:var(--muted);font-size:11px;margin-bottom:8px;}
+.wb-col-list{width:100%;border-collapse:collapse;font-size:11.5px;}
+.wb-col-list td{padding:3px 8px;border-bottom:1px solid var(--border);vertical-align:top;}
+.wb-col-list td:first-child{color:var(--muted);white-space:nowrap;width:1%;}
 </style>
 <style>html.embedded .header,html.embedded .tool-mode-bar{display:none}</style>
 <script>if(window.self!==window.top)document.documentElement.classList.add('embedded');try{if(localStorage.getItem('bn_theme')==='dark')document.documentElement.setAttribute('data-theme','dark');}catch(_){}</script>
@@ -2023,6 +2038,7 @@ function render(view) {
         <button class="empty-cta" id="emptyCtaBtn">Choose File</button>
         <div class="empty-foot">Reference views (Status SLA Guide, Trade Tier SLA) are available in the sidebar without data.</div>
       </div>`;
+    _injectWbHealth(mc);
     return;
   }
 
@@ -2052,6 +2068,7 @@ function render(view) {
   else if(view==='compare-coords') renderCompareCoords(mc, agg);
   else if(view==='sla-guide') renderSlaGuide(mc);
   else if(view==='trade-tiers') renderTradeTiers(mc);
+  _injectWbHealth(mc);
 }
 
 // ── OVERVIEW ─────────────────────────────────────────────────────────────
@@ -3032,6 +3049,94 @@ function daysSince(dt) {
 // Current workbook name (for export filename)
 let CURRENT_FILE = 'Broadway_Unified_Ops.xlsx';
 
+// ── WORKBOOK HEALTH (ingestion diagnostics) ────────────────────────
+// Built additively from the rows handleFile already parsed; never changes parse
+// behavior. Surfaces silent ingestion failures (e.g. a column rename that drops
+// every row) as a visible banner instead of a quiet zero. Column presence mirrors
+// getCol (case-insensitive, trimmed). Only drop reason in handleFile is empty Job ID.
+function buildWbHealth(raw, sheetName, fileName, parsedCount){
+  const total = raw.length;
+  const headers = total ? Object.keys(raw[0]) : [];
+  const hset = headers.map(function(k){ return k.toLowerCase().trim(); });
+  function match(aliases){
+    for(const a of aliases){ const i = hset.indexOf(a.toLowerCase().trim()); if(i!==-1) return headers[i]; }
+    return null;
+  }
+  let blank=0, noId=0;
+  raw.forEach(function(r){
+    const hasContent = Object.keys(r).some(function(k){ return String(r[k]==null?"":r[k]).trim()!==""; });
+    if(!hasContent){ blank++; return; }
+    if(!String(getCol(r,"Job ID","Source Job #")||"").trim()) noId++;
+  });
+  const contentRows = total - blank;
+  const cols = [
+    {label:"Job ID", aliases:["Job ID","Source Job #"], level:"crit"},
+    {label:"Coordinator", aliases:["Assigned To"], level:"warn"},
+    {label:"Status", aliases:["Status Category","Status"], level:"warn"},
+    {label:"Age (days)", aliases:["Aged (Days)","# Days"], level:"warn"},
+    {label:"Approved $", aliases:["Approved_Amount","Approved Amount","Amount","Client DNE","Client DNE ($)"], level:"warn"},
+    {label:"Staleness", aliases:["Latest Update","Last Updated","Last Note Date","Last Note","Days Since Update"], level:"warn"},
+    {label:"Expected completion", aliases:["Expected Completion Date","Expected Completion"], level:"info"},
+    {label:"Next onsite", aliases:["Next Onsite Date","Next Onsite"], level:"info"},
+    {label:"Time in status", aliases:["Time in Status (hrs.)","Status Hrs.","Status (hrs.)"], level:"info"}
+  ].map(function(c){ c.matched = match(c.aliases); return c; });
+  const missingWarn = cols.filter(function(c){ return !c.matched && c.level==="warn"; });
+  const jobIdCol = cols[0].matched;
+  let sev = "ok";
+  if((contentRows>0 && parsedCount===0) || !jobIdCol) sev="crit";
+  else if(noId>0 || missingWarn.length) sev="warn";
+  return {sheetName:sheetName, fileName:fileName, contentRows:contentRows, parsed:parsedCount,
+          dropped:noId, headerCount:headers.length, cols:cols, missingWarn:missingWarn,
+          jobIdCol:jobIdCol, sev:sev};
+}
+
+function wbHealthHtml(h){
+  const ico = h.sev==="crit"?"\u26d4":h.sev==="warn"?"\u26a0\ufe0f":"\u2705";
+  let msg, sub;
+  if(h.sev==="crit"){
+    msg = h.jobIdCol ? "Workbook problem \u2014 0 of "+h.contentRows+" rows loaded"
+                     : "Workbook problem \u2014 no Job ID column found";
+    sub = h.jobIdCol ? "Every row was skipped for a missing Job ID. Check the export."
+                     : "Looked for a Job ID or Source Job # column. Check the export headers.";
+  } else if(h.sev==="warn"){
+    const bits=[];
+    if(h.dropped>0) bits.push(h.dropped+" row"+(h.dropped===1?"":"s")+" skipped (no Job ID)");
+    if(h.missingWarn.length) bits.push("missing: "+h.missingWarn.map(function(c){return c.label;}).join(", "));
+    msg = "Loaded with warnings \u2014 "+h.parsed+" of "+h.contentRows+" rows";
+    sub = bits.join(" \u00b7 ");
+  } else {
+    msg = "Workbook loaded cleanly \u2014 "+h.parsed+" job"+(h.parsed===1?"":"s");
+    sub = h.contentRows+" rows \u00b7 "+h.headerCount+" columns \u00b7 all key columns matched";
+  }
+  const rows = h.cols.map(function(c){
+    let st;
+    if(c.matched) st = '<span class="c-green">\u2713 '+escapeHtml(c.matched)+'</span>';
+    else if(c.level==="crit") st = '<span class="c-red">\u2717 missing</span>';
+    else if(c.level==="warn") st = '<span class="c-amber">\u2014 missing</span>';
+    else st = '<span style="color:var(--muted);">\u2014 not provided</span>';
+    return "<tr><td>"+escapeHtml(c.label)+"</td><td>"+st+"</td></tr>";
+  }).join("");
+  const open = h.sev==="ok" ? "" : " open";
+  return '<div class="wb-health wb-'+h.sev+open+'" id="wbHealthBanner">'
+    + '<div class="wb-health-head" onclick="this.parentNode.classList.toggle(\'open\')">'
+    +   '<span class="wb-health-ico">'+ico+'</span>'
+    +   '<span class="wb-health-msg">'+escapeHtml(msg)+(sub?"<small>"+escapeHtml(sub)+"</small>":"")+'</span>'
+    +   '<span class="wb-health-tog">details \u25be</span>'
+    + '</div>'
+    + '<div class="wb-health-body">'
+    +   '<div class="wb-health-meta">Sheet \u201c'+escapeHtml(h.sheetName)+'\u201d \u00b7 '+escapeHtml(h.fileName)+' \u00b7 '+h.contentRows+' rows \u2192 '+h.parsed+' loaded'+(h.dropped>0?' \u00b7 '+h.dropped+' skipped':'')+'</div>'
+    +   '<table class="wb-col-list"><tbody>'+rows+'</tbody></table>'
+    + '</div>'
+  + '</div>';
+}
+
+function _injectWbHealth(mc){
+  if(!mc || !window._wbHealth) return;
+  const existing = document.getElementById("wbHealthBanner");
+  if(existing) existing.remove();
+  mc.insertAdjacentHTML("afterbegin", wbHealthHtml(window._wbHealth));
+}
+
 function handleFile(file) {
   if(!file) return;
   setDashState('processing');
@@ -3098,6 +3203,7 @@ function handleFile(file) {
           expectedCompletion: parseExcelDate(getCol(r,'Expected Completion Date','Expected Completion'))
         };
       }).filter(j=>j.jobId);
+      window._wbHealth = buildWbHealth(raw, sheetName, file.name, JOBS.length);
       // Apply any mgmt-notes edits persisted in this session
       applyEditsToJobs();
       // Try to load YTD from KPI sheet
