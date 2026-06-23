@@ -721,6 +721,18 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible{
   .data-table tbody tr:hover td:first-child{background:var(--color-surface-faint);}
 }
 
+/* ── mobile pass: rescue clipped scoreboard tables + collapse modal tile grid ── */
+@media(max-width:900px){
+  /* Raw .data-tables (Coordinator Scoreboard, By-Trade/Vendor, closed-pace cards) sit directly inside
+     a clipping .card; give their card-body a horizontal scroller so wide columns stay reachable. This
+     also activates the sticky first-column rule above, which needs a scroll container to do anything. */
+  .card-body:has(> table.data-table){overflow-x:auto;-webkit-overflow-scrolling:touch;}
+}
+@media(max-width:600px){
+  /* Entity-modal summary tiles (coordinator / vendor / trade drilldown): 4-up is unreadable on a phone. */
+  .em-tiles{grid-template-columns:repeat(2,1fr);}
+}
+
 /* ═══════════════════════════════════════════════════════════════
    REDUCED MOTION
 ═══════════════════════════════════════════════════════════════ */
@@ -1437,7 +1449,7 @@ function openEntityModal(kind, idx){
         + '<td class="amt">'+(+j.amount>0?fmt$0(j.amount):'-')+'</td>'
         + '<td>'+other+'</td></tr>';
     }).join('');
-    invSection = '<table class="data-table em-table"><thead><tr><th>Job #</th><th>Completed</th><th>Days to complete</th><th>Inv $</th><th>'+invOther+'</th></tr></thead><tbody>'+invRows+'</tbody></table>'
+    invSection = '<div class="table-scroll-wrap"><div class="table-scroll-hint">\u2194 Scroll for more columns</div><table class="data-table em-table"><thead><tr><th>Job #</th><th>Completed</th><th>Days to complete</th><th>Inv $</th><th>'+invOther+'</th></tr></thead><tbody>'+invRows+'</tbody></table></div>'
       + (closed.length>CAP ? '<div class="em-foot">Showing '+CAP+' of '+closed.length+' (most recent).</div>' : '');
   }
   box.innerHTML =
@@ -1448,7 +1460,7 @@ function openEntityModal(kind, idx){
     + '<div class="em-tiles">'+tiles+'</div>'
     + kindCtrl
     + '<div class="em-seclbl">Open work <span class="n">\u00b7 '+open.length+' '+(open.length===1?'job':'jobs')+' \u00b7 click a row to open the job</span></div>'
-    + '<table class="data-table em-table"><thead><tr><th>Job #</th><th>Status</th><th>Age</th><th>Approved $</th><th>'+otherCol+'</th></tr></thead><tbody>'+openRows+'</tbody></table>'
+    + '<div class="table-scroll-wrap"><div class="table-scroll-hint">\u2194 Scroll for more columns</div><table class="data-table em-table"><thead><tr><th>Job #</th><th>Status</th><th>Age</th><th>Approved $</th><th>'+otherCol+'</th></tr></thead><tbody>'+openRows+'</tbody></table></div>'
     + '<div class="em-seclbl">Invoiced \u2014 completed'+(hasClosed?' <span class="n">\u00b7 '+closed.length+' '+(closed.length===1?'job':'jobs')+(window._closedSource?' \u00b7 '+escapeHtml(window._closedSource):'')+'</span>':'')+'</div>'
     + invSection
     + '</div>';
