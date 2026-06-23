@@ -3903,6 +3903,47 @@ async function bnClientPost(slot,data,metadata){
   try{const r=await fetch(`${DATA_API}?key=${encodeURIComponent(slot)}&client=${O30_CLIENT}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({data,metadata})});if(!r.ok)throw 0;return await r.json();}catch(_){return null;}
 }
 
+// ── Per-client config (slot: "config") ───────────────────────────────────────
+// Foundation for client-specific behavior (Pilot vs CAP vs Primark). The runtime
+// source of truth is the data-store "config" slot; this baked-in default is the
+// zero-config fallback so nothing breaks before the slot is seeded. Values mirror
+// constants currently hardcoded across the tools — migrate consumers onto
+// window._clientConfig.* one at a time (additive, per-consumer).
+const DEFAULT_CLIENT_CONFIG = {
+  _about: "Fallback only. Runtime source of truth is the data-store 'config' slot (clients/<client>/config).",
+  client: O30_CLIENT,
+  displayName: "Pilot Travel Centers",
+  brands: ["PFJ", "Flying J", "Pilot"],
+  over30: { threshold: 30, approachingBand: [20, 30], historyCap: 60 },
+  proposal: {
+    turnaroundDays: 7,
+    exclusionValue: "Exclusion",
+    carveOuts: { wifiPrefixes: ["WI", "WiFi", "Wi-Fi"], rfPrefixes: ["RF"], qrPrefixes: ["Q", "R"] }
+  },
+  priorityVocab: ["P1", "P2", "P3", "P4", "Red", "Yellow", "Blue"]
+};
+// Available immediately as defaults; loadClientConfig() overlays the blob once fetched.
+window._clientConfig = DEFAULT_CLIENT_CONFIG;
+function _cfgMerge(base, over){
+  if(!over || typeof over!=='object') return base;
+  const out = Array.isArray(base) ? base.slice() : Object.assign({}, base);
+  for(const k in over){
+    if(over[k] && typeof over[k]==='object' && !Array.isArray(over[k]) && base && typeof base[k]==='object' && !Array.isArray(base[k]))
+      out[k] = _cfgMerge(base[k], over[k]);
+    else out[k] = over[k];
+  }
+  return out;
+}
+// Safe before the slot exists server-side: bnClientGet returns null on 400/404
+// and we keep the defaults. No tool consumes this yet — wiring consumers
+// (Diagnostic 7-day target, over-30 threshold, carve-outs) is the next step.
+async function loadClientConfig(){
+  let fetched = null;
+  try{ const res = await bnClientGet("config"); if(res && res.exists && res.data) fetched = res.data; }catch(_){}
+  window._clientConfig = _cfgMerge(DEFAULT_CLIENT_CONFIG, fetched);
+  return window._clientConfig;
+}
+
 // Upsert a snapshot for the current audit date. Fire-and-forget from handleFile.
 // Only saves real uploaded data — sample/baked-in JOBS never pollute history.
 async function saveOver30Snapshot(){
@@ -4316,6 +4357,7 @@ autoLoadClosed();
 // Load durable per-Job-ID working notes (slot: job-notes; localStorage fallback).
 loadJobNotes();
 loadVendorKinds();
+loadClientConfig();
 
 // ── SECTION 8: INIT ──────────────────────────────────────────────────────
 // Default the header date to today. handleFile() will overwrite with the
