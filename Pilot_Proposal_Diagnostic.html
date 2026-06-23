@@ -1140,13 +1140,7 @@ function handleFile(file){
 
 // ─── BROADWAY DATA STORE CLIENT ───────────────────────────────────────────
 const DATA_API = "/api/data-store";
-async function bnDataGet(key){
-  try{const r=await fetch(`${DATA_API}?key=${encodeURIComponent(key)}`);if(!r.ok)throw 0;return await r.json();}catch(_){return null;}
-}
-async function bnDataPost(key,data,metadata){
-  try{const r=await fetch(`${DATA_API}?key=${encodeURIComponent(key)}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({data,metadata:metadata||{}})});if(!r.ok)throw 0;return await r.json();}catch(_){return null;}
-}
-// Client-namespaced variants (modern path): clients/pilot/<slot>.
+// Client-namespaced data store (clients/pilot/<slot>).
 const PILOT_CLIENT = "pilot";
 async function bnClientGet(slot){
   try{const r=await fetch(`${DATA_API}?key=${encodeURIComponent(slot)}&client=${PILOT_CLIENT}`);if(!r.ok)throw 0;return await r.json();}catch(_){return null;}

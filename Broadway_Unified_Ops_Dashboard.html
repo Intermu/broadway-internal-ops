@@ -3977,9 +3977,6 @@ refreshCrossToolBtn();
 
 // ── BROADWAY DATA STORE CLIENT ────────────────────────────────────────────
 const DATA_API = "/api/data-store";
-async function bnDataGet(key){
-  try{const r=await fetch(`${DATA_API}?key=${encodeURIComponent(key)}`);if(!r.ok)throw 0;return await r.json();}catch(_){return null;}
-}
 
 // ── OVER-30 HISTORY (Azure Blob via /api/data-store, slot: over30-history) ──
 const O30_CLIENT = "pilot";

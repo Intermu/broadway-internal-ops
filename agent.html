@@ -513,31 +513,7 @@ a:focus-visible,button:focus-visible,[tabindex]:focus-visible{
 // ── Broadway shared data store (Azure Blob via /api/data-store) ──────────────
 const DATA_API = "/api/data-store";
 
-async function bnDataGet(key){
-  try{
-    const res=await fetch(`${DATA_API}?key=${encodeURIComponent(key)}`,{method:"GET"});
-    if(!res.ok)throw new Error("HTTP "+res.status);
-    return await res.json();
-  }catch(err){return null;}
-}
-
-async function bnDataPost(key, data, metadata){
-  try{
-    const res=await fetch(`${DATA_API}?key=${encodeURIComponent(key)}`,{
-      method:"POST",
-      headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({data,metadata:metadata||{}}),
-    });
-    if(!res.ok)throw new Error("HTTP "+res.status);
-    return await res.json();
-  }catch(err){return null;}
-}
-
-async function bnDataDelete(key){
-  try{await fetch(`${DATA_API}?key=${encodeURIComponent(key)}`,{method:"DELETE"});return true;}catch(_){return false;}
-}
-
-// Client-namespaced variants (modern path): clients/pilot/<slot>.
+// Client-namespaced data store (clients/pilot/<slot>).
 const PILOT_CLIENT = "pilot";
 async function bnClientGet(slot){
   try{const r=await fetch(`${DATA_API}?key=${encodeURIComponent(slot)}&client=${PILOT_CLIENT}`);if(!r.ok)throw 0;return await r.json();}catch(_){return null;}
@@ -835,6 +811,40 @@ function handleYtdFile(file){
 
 const TODAY=new Date();
 const TODAY_STR=TODAY.toLocaleDateString("en-US",{weekday:"long",month:"2-digit",day:"2-digit",year:"numeric"}).replace(",","");
+
+// ── Unattended snapshot capture ───────────────────────────────────────
+// If a fresh workbook (generated today) is sitting in the data store but
+// today's snapshot hasn't been captured yet, run the normal pipeline once on
+// load so the day's snapshot saves itself — no manual upload needed. This is
+// the unattended-capture path that pairs with the daily WO auto-export:
+// whoever opens the agent first on a day with fresh data triggers the capture.
+//   • Freshness guard: only captures from a workbook generated TODAY (local),
+//     so a stale workbook can never fabricate a today-dated snapshot.
+//   • Dedup guard: skips if today's snapshot is already saved.
+// Reuses processData() verbatim, so there is zero parsing/metric duplication.
+(async function autoCaptureSnapshot(){
+  try{
+    const wbRes = await bnClientGet("workbook");
+    if(!wbRes || !wbRes.exists || !wbRes.data || !wbRes.data.base64) return;
+
+    const gen = wbRes.metadata && wbRes.metadata.generatedAt;
+    if(!gen) return;
+    const todayKey = new Date().toLocaleDateString("en-US");
+    if(new Date(gen).toLocaleDateString("en-US") !== todayKey) return;
+
+    const snapRes = await bnClientGet("wo-snapshot-today");
+    if(snapRes && snapRes.exists && snapRes.data && snapRes.data.dateStr === TODAY_STR) return;
+
+    const bin = atob(wbRes.data.base64);
+    const u8 = new Uint8Array(bin.length);
+    for(let i=0;i<bin.length;i++) u8[i] = bin.charCodeAt(i);
+    const wb = XLSX.read(u8, {type:"array"});
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    if(!ws) return;
+    log("🔄 Auto-loading today's workbook from the data store to capture the daily snapshot…");
+    processData(XLSX.utils.sheet_to_json(ws, {defval:""}), (wbRes.data.filename || "workbook.xlsx"));
+  }catch(_){ /* never block boot on auto-capture */ }
+})();
 const DAY_STR=TODAY.toLocaleDateString("en-US",{weekday:"long"});
 const DATE_STR=TODAY.toLocaleDateString("en-US",{month:"2-digit",day:"2-digit",year:"numeric"});
 document.getElementById("ts").textContent=`Today: ${DAY_STR}, ${DATE_STR}`;

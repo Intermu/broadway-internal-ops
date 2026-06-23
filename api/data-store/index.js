@@ -9,13 +9,6 @@ const VALID_SLOTS = ["revenue", "wo-snapshot-today", "wo-snapshot-previous", "wo
 // Each onboarded client gets one string here. Onboarding Wendy's = add "wendys".
 const VALID_CLIENTS = ["pilot"];
 
-// Legacy flat-key support: requests without a 'client' param fall through to
-// the old top-level blob names so the frontends keep working during rollout.
-// Remove this block after every HTML is updated and you've verified traffic
-// has fully cut over (check App Insights for any GET /api/data-store calls
-// without a 'client' param; once that count hits zero for ~24h, delete).
-const LEGACY_KEYS = ["pilot-revenue", "wo-snapshot-today", "wo-snapshot-previous", "workbook"];
-
 // ── Role gating ──────────────────────────────────────────────────────────
 // Slots holding financial data (GP / revenue) require Operations Manager (L4)
 // or above to READ. Everything else stays at the broadway_employee gate that
@@ -23,9 +16,9 @@ const LEGACY_KEYS = ["pilot-revenue", "wo-snapshot-today", "wo-snapshot-previous
 // route checks are convenience only — this is the real boundary.
 // NOTE: "revenue" is intentionally NOT in this list -- coordinators are meant
 // to read the monthly revenue numbers (approved by Mike, 2026-06), so it stays
-// at the broadway_employee gate. The legacy "pilot-revenue" flat key and the
-// "revenue-gp" GP lookup remain Operations Manager (L4)+ only.
-const FINANCIAL_SLOTS = ["pilot-revenue", "revenue-gp"];
+// at the broadway_employee gate. The "revenue-gp" GP lookup remains Operations
+// Manager (L4)+ only.
+const FINANCIAL_SLOTS = ["revenue-gp"];
 const ROLE_LEVELS = ["ops_coordinator", "lead_ops_coordinator", "ops_supervisor", "ops_manager", "dir_ops", "vp_ops"];
 const MIN_FINANCIAL_LEVEL = 4; // ops_manager
 
@@ -116,13 +109,12 @@ async function deleteBlob(container, name) {
 }
 
 // Resolve incoming request params into a validated { client, slot, blobName }
-// triple, or return an error response object to send back. Centralized so the
-// legacy and modern paths share validation behavior.
+// triple, or return an error response object to send back.
 function resolveTarget(params) {
   const slot = params.key;
   const client = params.client;
 
-  // Modern path: both params present and both allowlisted.
+  // Both params required, and both must be allowlisted.
   if (client) {
     if (!VALID_CLIENTS.includes(client)) {
       return { error: { status: 400, body: { error: `Unknown client '${client}'` } } };
@@ -133,16 +125,10 @@ function resolveTarget(params) {
     return { client, slot, name: blobName(client, slot) };
   }
 
-  // Legacy path: only the old flat keys, no client namespace.
-  // Resolves to the same blob name as before, preserving existing behavior.
-  if (LEGACY_KEYS.includes(slot)) {
-    return { client: null, slot, name: slot, legacy: true };
-  }
-
   return {
     error: {
       status: 400,
-      body: { error: "Missing 'client' query param, or 'key' is not a valid legacy key" },
+      body: { error: "Missing 'client' query param" },
     },
   };
 }
@@ -154,7 +140,6 @@ module.exports = async function (context, req) {
     const action = params.action;
 
     // ── list action ─────────────────────────────────────────────────────
-    // /api/data-store?action=list                  → legacy: lists flat keys
     // /api/data-store?action=list&client=pilot     → lists this client's slots
     if (action === "list") {
       if (params.client) {
@@ -179,21 +164,7 @@ module.exports = async function (context, req) {
         return;
       }
 
-      // Legacy list — pre-rollout frontends call this with no client param.
-      const out = {};
-      await Promise.all(
-        LEGACY_KEYS.map(async (k) => {
-          const blob = container.getBlockBlobClient(k);
-          try {
-            const props = await blob.getProperties();
-            out[k] = { exists: true, ...(props.metadata || {}) };
-          } catch (err) {
-            if (err.statusCode === 404) out[k] = { exists: false };
-            else throw err;
-          }
-        })
-      );
-      context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: out };
+      context.res = { status: 400, headers: { "Content-Type": "application/json" }, body: { error: "Missing 'client' query param" } };
       return;
     }
 
@@ -236,8 +207,8 @@ module.exports = async function (context, req) {
       // date, archive the existing one as "previous" first. Per-client because
       // both blobs are scoped under the same client prefix.
       if (slot === "wo-snapshot-today") {
-        const todayName = client ? blobName(client, "wo-snapshot-today") : "wo-snapshot-today";
-        const previousName = client ? blobName(client, "wo-snapshot-previous") : "wo-snapshot-previous";
+        const todayName = blobName(client, "wo-snapshot-today");
+        const previousName = blobName(client, "wo-snapshot-previous");
         const existing = await readBlob(container, todayName);
         if (
           existing.exists &&
@@ -254,7 +225,7 @@ module.exports = async function (context, req) {
 
       let extra = {};
       if (slot === "wo-snapshot-today") {
-        const previousName = client ? blobName(client, "wo-snapshot-previous") : "wo-snapshot-previous";
+        const previousName = blobName(client, "wo-snapshot-previous");
         const prev = await readBlob(container, previousName);
         extra.previous = prev.exists ? prev.data : null;
       }
@@ -267,7 +238,7 @@ module.exports = async function (context, req) {
       // Deleting today's snapshot also clears the rotated "previous" copy,
       // since "previous" without "today" is a confusing partial state.
       if (slot === "wo-snapshot-today") {
-        const previousName = client ? blobName(client, "wo-snapshot-previous") : "wo-snapshot-previous";
+        const previousName = blobName(client, "wo-snapshot-previous");
         await deleteBlob(container, previousName);
       }
       context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { ok: true } };
