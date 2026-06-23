@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Broadway National — Coordinator Check-In &amp; OM Bonus</title>
+<title>Broadway National — Coordinator Check-In</title>
 <!--
   Runtime SWA tool. Two views over one data source:
     • Coordinator Check-In  — per-coordinator SVC-015 scorecard (from the `revenue` blob),
@@ -123,17 +123,12 @@ body{margin:0;font-family:var(--sans);background:var(--bg);color:var(--ink);font
 </style>
 </head>
 <body>
-<div class="app-header">
-  <span class="logo">broadway national</span>
-  <h1>Coordinator Check-In &amp; OM Bonus</h1>
-  <span class="sub" id="hdrSub"></span>
-</div>
 <div id="healthBanner" class="warn">Loading data from the ops data store…</div>
 <div class="layout">
   <nav class="sidebar">
     <div class="sb-title">Team</div>
     <button class="nav-btn" id="nav-overview" onclick="showView('overview',null,this)"><span>📊 Team Overview</span></button>
-    <button class="nav-btn" id="nav-bonus" onclick="showView('bonus',null,this)"><span>🎯 OM Bonus</span></button>
+    <button class="nav-btn" id="nav-bonus" style="display:none" onclick="showView('bonus',null,this)"><span>🎯 OM Bonus</span></button>
     <div class="sb-title">Coordinators</div>
     <div id="coordButtons"></div>
   </nav>
@@ -151,6 +146,11 @@ window.BN = window.BN || {};
 /* ============================ CONFIG ============================ */
 const CLIENT = "pilot";
 const DATA_API = "/api/data-store";
+// OM Bonus is the Operations Manager's incentive — NOT coordinators'. Only these signed-in
+// emails (lowercased) ever see the OM Bonus view; everyone else (coordinators) never does.
+// Fail-closed: if the /.auth/me check fails or the email isn't listed, it stays hidden.
+const OM_BONUS_EMAILS = ["mnajarro@broadwaynational.com"];
+let IS_OM = false;
 const CFG = {
   over30Days: 30,            // "% of completed jobs taking 30+ days"
   under15Days: 15,           // "% of completed jobs completed within 15 days"
@@ -352,7 +352,7 @@ function showView(type, param, btn){
   document.querySelectorAll('.nav-btn,.coord-btn').forEach(b=>b.classList.remove('active'));
   if(btn) btn.classList.add('active');
   if(type==='overview') renderOverview();
-  else if(type==='bonus') renderBonus();
+  else if(type==='bonus'){ if(!IS_OM){ showView('overview',null,document.getElementById('nav-overview')); return; } renderBonus(); }
   else if(type==='coord') renderCoord(COORD_ORDER[parseInt(param)]);
 }
 
@@ -703,7 +703,7 @@ function setHealth(){
   if(WB_META.filename) parts.push(`open queue ${WB_META.filename} (${JOBS.length} jobs)`);
   if(!REVENUE && !JOBS.length){ b.className='err'; b.textContent='No data found in the store. Run the Ops Agent / revenue ingest first.'; return; }
   b.className='ok'; b.textContent='Synced from data store · '+parts.join(' · ');
-  document.getElementById('hdrSub').textContent = REV_META.period||'';
+  const hs=document.getElementById('hdrSub'); if(hs) hs.textContent = REV_META.period||'';
 }
 
 /* ============================ BOOT ============================ */
@@ -720,6 +720,13 @@ function setHealth(){
   }
   if(ciEnv && ciEnv.data) CHECKINS = ciEnv.data;
   if(omEnv && omEnv.data) OMBONUS = omEnv.data;
+  // Identity gate: reveal the OM Bonus view only to the Operations Manager (see OM_BONUS_EMAILS).
+  try{
+    const me = await fetch('/.auth/me').then(r=>r.ok?r.json():null).catch(()=>null);
+    const email = me && me.clientPrincipal && me.clientPrincipal.userDetails;
+    IS_OM = !!email && OM_BONUS_EMAILS.includes(String(email).toLowerCase());
+  }catch(_){ IS_OM = false; }
+  if(IS_OM){ const nb=document.getElementById('nav-bonus'); if(nb) nb.style.display=''; }
   setHealth();
   buildSidebar();
   document.getElementById('nav-overview').classList.add('active');

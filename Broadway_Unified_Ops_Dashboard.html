@@ -167,6 +167,11 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .data-mode-badge.real{background:#dcfce7;color:#14532d;border:1px solid #86efac;}
 .toggle-banner-btn{background:transparent;border:1px solid var(--border);border-radius:5px;padding:4px 9px;font-size:11px;color:var(--muted);cursor:pointer;transition:all .15s;margin-left:auto;}
 .toggle-banner-btn:hover{border-color:var(--green);color:var(--color-brand-ink);}
+/* data-health banner dismiss ("hide for good") */
+.wb-health-hide{background:transparent;border:none;color:var(--muted);font-size:11px;cursor:pointer;text-decoration:underline;margin-left:10px;padding:0;font-family:inherit;}
+.wb-health-hide:hover{color:var(--color-brand-ink);}
+.wb-health-hidden{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--muted);background:var(--color-surface-alt);border:1px solid var(--border);border-radius:7px;padding:5px 12px;margin:0 0 10px;cursor:pointer;width:max-content;}
+.wb-health-hidden:hover{border-color:var(--color-warning-border);color:var(--color-warning-text);}
 
 /* ─── EMPTY DASHBOARD STATE — shown until a workbook is uploaded ─── */
 .empty-dashboard{max-width:560px;margin:60px auto;padding:48px 36px;text-align:center;background:var(--color-surface);border:2px dashed var(--border);border-radius:14px;}
@@ -3425,6 +3430,38 @@ function buildWbHealth(raw, sheetName, fileName, parsedCount){
           jobIdCol:jobIdCol, sev:sev};
 }
 
+// ── Data-health banner: "hide for good" (per-warning signature, localStorage) ──
+// Signature is stable across daily files (ignores filename + row counts) but changes
+// if severity, column mapping, missing columns, or dropped-row state changes — so a
+// genuinely new/different warning still surfaces.
+function _wbHealthSig(h){
+  if(!h) return '';
+  const cols=(h.cols||[]).map(function(c){return c.label+'='+(c.matched||('!'+(c.level||'opt')));}).join('|');
+  const miss=(h.missingWarn||[]).map(function(c){return c.label;}).sort().join(',');
+  return h.sev+'::'+cols+'::'+(h.dropped>0?'drop':'nodrop')+'::'+miss;
+}
+function _wbHealthDismissed(){
+  try{return new Set(JSON.parse(localStorage.getItem('bn_wbhealth_dismissed')||'[]'));}catch(_){return new Set();}
+}
+function _wbHealthSaveDismissed(set){
+  try{localStorage.setItem('bn_wbhealth_dismissed',JSON.stringify([...set].slice(-20)));}catch(_){}
+}
+function _dismissWbHealth(e){
+  if(e){e.stopPropagation();}
+  const sig=_wbHealthSig(window._wbHealth); if(!sig) return;
+  const set=_wbHealthDismissed(); set.add(sig); _wbHealthSaveDismissed(set);
+  const b=document.getElementById('wbHealthBanner'), mc=b&&b.parentNode;
+  if(b) b.remove();
+  if(mc) _injectWbHealth(mc);
+  toast('Data-health warnings hidden — returns only if the warning changes');
+}
+function _unhideWbHealth(e){
+  if(e){e.stopPropagation();}
+  const set=_wbHealthDismissed(); set.delete(_wbHealthSig(window._wbHealth)); _wbHealthSaveDismissed(set);
+  const b=document.getElementById('wbHealthBanner'), mc=b&&b.parentNode;
+  if(b) b.remove();
+  if(mc) _injectWbHealth(mc);
+}
 function wbHealthHtml(h){
   const ico = h.sev==="crit"?"\u26d4":h.sev==="warn"?"\u26a0\ufe0f":"\u2705";
   let msg, sub;
@@ -3457,6 +3494,7 @@ function wbHealthHtml(h){
     +   '<span class="wb-health-ico">'+ico+'</span>'
     +   '<span class="wb-health-msg">'+escapeHtml(msg)+(sub?"<small>"+escapeHtml(sub)+"</small>":"")+'</span>'
     +   '<span class="wb-health-tog">details \u25be</span>'
+    +   (h.sev==='warn' ? '<button class="wb-health-hide" onclick="_dismissWbHealth(event)">hide for good</button>' : '')
     + '</div>'
     + '<div class="wb-health-body">'
     +   '<div class="wb-health-meta">Sheet \u201c'+escapeHtml(h.sheetName)+'\u201d \u00b7 '+escapeHtml(h.fileName)+' \u00b7 '+h.contentRows+' rows \u2192 '+h.parsed+' loaded'+(h.dropped>0?' \u00b7 '+h.dropped+' skipped':'')+'</div>'
@@ -3469,6 +3507,11 @@ function _injectWbHealth(mc){
   if(!mc || !window._wbHealth) return;
   const existing = document.getElementById("wbHealthBanner");
   if(existing) existing.remove();
+  const h = window._wbHealth;
+  if(h.sev==='warn' && _wbHealthDismissed().has(_wbHealthSig(h))){
+    mc.insertAdjacentHTML("afterbegin", '<div class="wb-health-hidden" id="wbHealthBanner" onclick="_unhideWbHealth(event)" title="Show data-health details for this load">\u26a0\ufe0f data-health warnings hidden \u00b7 show</div>');
+    return;
+  }
   mc.insertAdjacentHTML("afterbegin", wbHealthHtml(window._wbHealth));
 }
 
