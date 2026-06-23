@@ -109,6 +109,9 @@ body{margin:0;font-family:var(--sans);background:var(--bg);color:var(--ink);font
 .bonus-table td,.bonus-table th{padding:7px 10px;border-bottom:1px solid #f1f5f9}
 .bonus-table th{font-size:11px;text-transform:uppercase;color:var(--muted);text-align:left}
 .bonus-table input{width:120px;padding:5px 8px;border:1.5px solid var(--border);border-radius:6px;font-family:var(--mono);font-size:12px}
+.bonus-guide{font-size:11px;color:var(--muted);font-family:var(--mono);line-height:1.55;padding:10px 16px;border-top:1px solid #f1f5f9}
+.bonus-guide .step-payout{font-weight:700;color:var(--green-d)}
+.elig-note{font-size:11px;color:var(--muted);line-height:1.7;margin-top:14px;padding:12px 16px;background:#f8fafc;border:1px solid var(--border);border-radius:9px}
 .auto-cell{font-family:var(--mono);color:var(--green-d);font-weight:600}
 .payout-final{background:linear-gradient(135deg,var(--green-d),var(--green-dd));color:#fff;border-radius:var(--radius);padding:18px 22px;display:flex;align-items:center;justify-content:space-between;margin-top:8px}
 .payout-final .pf-val{font-size:30px;font-weight:700;font-family:var(--mono)}
@@ -586,7 +589,9 @@ function renderBonus(){
       <div class="card-body" style="padding:0;overflow-x:auto">
         <table class="bonus-table"><thead><tr><th>Month</th><th>Headcount</th><th>Team GP$</th><th>GP$ / head</th></tr></thead><tbody id="b-months"></tbody>
         <tfoot><tr><td><strong>Monthly Avg</strong></td><td class="auto-cell" id="b-avg-hc"></td><td class="auto-cell" id="b-avg-gp"></td><td class="auto-cell" id="b-avg-gph"></td></tr></tfoot></table>
-      </div></div>
+      </div>
+      <div class="bonus-guide"><strong>GP$/head payout: <span class="step-payout" id="b-gph-payout">—</span></strong> &nbsp;·&nbsp; &lt;$36K avg = 0% · $36K = 50% · $40K = 100% · $42K = 125% · $44K+ = 150%</div>
+    </div>
 
     <div class="card"><div class="card-header"><h3>Step 3 — Operational Metrics (35%)</h3><span class="ch-meta">Current YTD auto from live data · enter prior-year baseline</span></div>
       <div class="card-body" style="padding:0;overflow-x:auto">
@@ -595,31 +600,40 @@ function renderBonus(){
           <tr><td>Over-30 % (lower better)</td><td><input class="bonus-input" id="b-prior-o30" type="number" step="0.001" value="${OMBONUS.priorOver30}"></td><td class="auto-cell" id="b-cur-o30"></td><td class="auto-cell" id="b-imp-o30"></td></tr>
           <tr><td><strong>Average Improvement (pp)</strong></td><td></td><td></td><td class="auto-cell" id="b-imp-avg"></td></tr>
         </tbody></table>
-      </div></div>
+      </div>
+      <div class="bonus-guide"><strong>Operational payout: <span class="step-payout" id="b-op-payout">—</span></strong> &nbsp;·&nbsp; &lt;9% = 0% · 9% = 50% · 10% = 100% · 10.5% = 120% · 11%+ = 150% &nbsp;·&nbsp; Company targets: 78.3% under-15 · 12.5% over-30 · goal ≈10pp avg improvement</div>
+    </div>
 
     <div class="card"><div class="card-header"><h3>Step 4 — Same Store Sales (25%)</h3><span class="ch-meta">Current revenue auto-filled (period) · enter plan-year revenue</span></div>
       <div class="card-body"><div class="form-row form-row-3">
         <div class="form-group"><label>Plan-Year Revenue</label><input class="bonus-input" id="b-sss-plan" type="number" value="${OMBONUS.sssPlan}"></div>
         <div class="form-group"><label>Current YTD Revenue</label><input class="bonus-input" id="b-sss-cur" type="number" value="${OMBONUS.sssCurrent}"></div>
         <div class="form-group"><label>Growth %</label><input class="bonus-input" id="b-sss-growth" disabled></div>
-      </div></div></div>
+      </div>
+      <div class="bonus-guide"><strong>Same-store-sales payout: <span class="step-payout" id="b-sss-payout">—</span></strong> &nbsp;·&nbsp; Miss plan = 0% · Hit plan = 100% · +5% = 125% · +10%+ = 150% (cap) &nbsp;·&nbsp; growth target set individually with leadership</div>
+      </div></div>
 
     <div class="card"><div class="card-header"><h3>Step 5 — MBOs (5%)</h3></div><div class="card-body">
       <div class="form-row form-row-3" id="b-mbo">
         ${['Team Accountability &amp; Standards','1:1 Meetings','Client Satisfaction','Work Order Accuracy','Vendor Network Support'].map((o,i)=>
           `<label class="radio-pill" style="justify-content:flex-start"><input type="checkbox" class="b-mbo-chk" data-i="${i}" ${OMBONUS.mbo[i]?'checked':''}> ${o}</label>`).join('')}
-      </div></div></div>
+      </div>
+      <div class="bonus-guide"><strong>MBO payout: <span class="step-payout" id="b-mbo-payout">—</span></strong> &nbsp;·&nbsp; <span id="b-mbo-hit">—</span> · each objective weighted equally · all 5 = 100%</div>
+      </div></div>
 
     <div class="card"><div class="card-header"><h3>Step 6 — Company Performance Multiplier</h3></div><div class="card-body">
       <div class="form-row"><div class="form-group"><label>Company Performance vs Plan (e.g. 1.00)</label><input class="bonus-input" id="b-company" type="number" step="0.01" value="${OMBONUS.companyEst}"></div>
-      <div class="form-group"><label>Multiplier (floor 50% / max 150%)</label><input class="bonus-input" id="b-mult" disabled></div></div></div></div>
+      <div class="form-group"><label>Multiplier (floor 50% / max 150%)</label><input class="bonus-input" id="b-mult" disabled></div></div>
+      <div class="bonus-guide"><strong>Company multiplier</strong> &nbsp;·&nbsp; &lt;95% of plan = floor 50% · 100% = 100% · 105% = 120% · 110%+ = 150% &nbsp;·&nbsp; final multiplier set by finance at year-end</div>
+    </div></div>
 
     <div class="card"><div class="card-header"><h3>Estimated Bonus Summary</h3></div><div class="card-body" style="padding:0;overflow-x:auto">
       <table class="bonus-table"><thead><tr><th>Component</th><th>Weight</th><th>Payout %</th><th>Bonus $</th></tr></thead><tbody id="b-summary"></tbody></table>
     </div></div>
     <div class="payout-final"><div><div style="font-size:12px;opacity:.85;text-transform:uppercase;letter-spacing:.5px">Estimated Final Bonus</div><div style="font-size:11px;opacity:.8" id="b-vs-target"></div></div><div class="pf-val" id="b-final">—</div></div>
     <div style="display:flex;gap:10px;margin-top:14px"><button class="btn btn-save" onclick="saveBonus()">Save Assumptions</button></div>
-    <div class="section-note" style="margin-top:14px">Current YTD throughput and team GP$/revenue are derived from the live <code>revenue</code> blob (${esc(REV_META.period||'')}). Prior-year baselines, monthly headcount, the SSS plan, MBOs, and the company estimate are your inputs and persist to the data store. Final multiplier is set by finance at year-end.</div>`;
+    <div class="section-note" style="margin-top:14px">Current YTD throughput and team GP$/revenue are derived from the live <code>revenue</code> blob (${esc(REV_META.period||'')}). Prior-year baselines, monthly headcount, the SSS plan, MBOs, and the company estimate are your inputs and persist to the data store. Final multiplier is set by finance at year-end.</div>
+    <div class="elig-note"><strong>⚠️ Eligibility reminders:</strong> Must be actively employed at payout · Not in bottom 10% on performance &amp; culture · Not on active PIP · GP$ per Head must not decline &gt;20% YOY · Bonuses paid within 90 days of year-end close</div>`;
   // wire inputs
   renderBonusMonths();
   ['b-base','b-targetpct','b-prior-u15','b-prior-o30','b-sss-plan','b-sss-cur','b-company'].forEach(id=>{ const el=document.getElementById(id); if(el) el.addEventListener('input',recalcBonus); });
@@ -657,6 +671,7 @@ function recalcBonus(){
   const avgGph = avgHc>0?avgGp/avgHc:0;
   setTxt('b-avg-hc', n?avgHc.toFixed(1):'—'); setTxt('b-avg-gp', fmt$(avgGp)); setTxt('b-avg-gph', avgHc>0?fmt$(avgGph):'—');
   const gpHeadP = gpHeadPayout(avgGph);
+  setTxt('b-gph-payout', avgHc>0?fmtPct(gpHeadP*100,0):'—');
   // Step 3: improvement
   const curU15=OMBONUS.currentUnder15, curO30=OMBONUS.currentOver30;
   setTxt('b-cur-u15', fmtPct(curU15*100)); setTxt('b-cur-o30', fmtPct(curO30*100));
@@ -665,12 +680,15 @@ function recalcBonus(){
   setTxt('b-imp-u15', fmtPct(impU15*100)); setTxt('b-imp-o30', fmtPct(impO30*100));
   const impAvg = impU15*0.5 + impO30*0.5; setTxt('b-imp-avg', fmtPct(impAvg*100));
   const opP = opPayout(impAvg);
+  setTxt('b-op-payout', fmtPct(opP*100,0));
   // Step 4: SSS
   const growth = OMBONUS.sssPlan>0 ? (OMBONUS.sssCurrent-OMBONUS.sssPlan)/OMBONUS.sssPlan : 0;
   const sssEl=document.getElementById('b-sss-growth'); if(sssEl) sssEl.value=fmtPct(growth*100);
   const sssP = sssPayout(growth);
+  setTxt('b-sss-payout', fmtPct(sssP*100,0));
   // Step 5: MBO
   const mboP = OMBONUS.mbo.reduce((s,x)=>s+x,0)/5;
+  setTxt('b-mbo-payout', fmtPct(mboP*100,0)); setTxt('b-mbo-hit', OMBONUS.mbo.reduce((s,x)=>s+x,0)+' of 5 hit');
   // Step 6: multiplier
   const mult = companyMultiplier(OMBONUS.companyEst);
   const multEl=document.getElementById('b-mult'); if(multEl) multEl.value=fmtPct(mult*100,0);
