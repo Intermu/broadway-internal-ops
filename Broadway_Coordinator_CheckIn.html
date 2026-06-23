@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Broadway National — Coordinator Check-In &amp; OM Bonus</title>
+<!--
+  Runtime SWA tool. Two views over one data source:
+    • Coordinator Check-In  — per-coordinator SVC-015 scorecard (from the `revenue` blob),
+      operational queue (from the `workbook` blob), and a persisted weekly check-in form.
+    • OM Bonus              — team-level bonus estimator mirroring BNG_OM_Bonus_Calculator_2026,
+      with the data-derived inputs auto-filled from `revenue` and the assumptions editable + persisted.
+  Definitions are sourced from the SOPs (SVC-015), the Status Efficiency Guideline, and the OM
+  bonus calculator. Financial figures (GP$, Revenue, GP%) are validated exact against the blob's
+  own aggregation. Over-30s / Under-15s are computed as % of completed jobs by calendar `# Days`
+  and are CONFIG-driven (CFG.over30Days / CFG.under15Days) so the rule is a one-line change if
+  Analytics computes them on a different basis.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"
+        integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw"
+        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<style>
+/* BN-THEME:START */
+:root{
+  --bg:#eef2f5; --card:#ffffff; --border:#e2e8f0; --ink:#1f2937; --muted:#64748b;
+  --green:#2ECC71; --green-d:#1a5f3e; --green-dd:#0d3d26;
+  --blue:#2563eb; --amber:#f39c12; --red:#e74c3c; --radius:9px;
+  --sans:'DM Sans',system-ui,sans-serif; --mono:'DM Mono',ui-monospace,monospace;
+}
+/* BN-THEME:END */
+*{box-sizing:border-box}
+body{margin:0;font-family:var(--sans);background:var(--bg);color:var(--ink);font-size:14px}
+.app-header{background:linear-gradient(135deg,var(--green-d),var(--green-dd));color:#fff;padding:14px 22px;display:flex;align-items:center;gap:14px}
+.app-header h1{font-size:17px;font-weight:700;margin:0;letter-spacing:.2px}
+.app-header .logo{font-family:var(--mono);font-weight:600;background:rgba(255,255,255,.12);padding:4px 10px;border-radius:6px;font-size:13px}
+.app-header .sub{margin-left:auto;font-size:12px;opacity:.85;font-family:var(--mono)}
+#healthBanner{padding:8px 22px;font-size:12px;font-family:var(--mono);border-bottom:1px solid var(--border)}
+#healthBanner.ok{background:#ecfdf3;color:#0f7a3d}
+#healthBanner.warn{background:#fef3c7;color:#92580a}
+#healthBanner.err{background:#fde8e8;color:#9b1c1c}
+.layout{display:flex;min-height:calc(100vh - 96px)}
+.sidebar{width:248px;flex:0 0 248px;background:var(--card);border-right:1px solid var(--border);padding:14px 10px;overflow-y:auto}
+.sb-title{font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);font-weight:700;margin:14px 8px 6px}
+.nav-btn,.coord-btn{display:flex;justify-content:space-between;align-items:center;width:100%;text-align:left;background:none;border:1px solid transparent;border-radius:7px;padding:8px 10px;margin-bottom:3px;cursor:pointer;font-family:var(--sans);font-size:13px;color:var(--ink)}
+.nav-btn:hover,.coord-btn:hover{background:#f1f5f9}
+.nav-btn.active,.coord-btn.active{background:#e8f5ee;border-color:#bfe6cf;color:var(--green-d);font-weight:600}
+.coord-btn .cb-jobs{font-size:11px;color:var(--muted);font-family:var(--mono)}
+.main{flex:1;padding:20px 24px;overflow-x:auto}
+.page-title{font-size:20px;font-weight:700;margin-bottom:2px}
+.page-sub{font-size:12px;color:var(--muted);font-family:var(--mono);margin-bottom:16px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:16px;overflow:hidden}
+.card-header{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--border)}
+.card-header h3{font-size:14px;margin:0;font-weight:700}
+.card-header .ch-meta{font-size:11px;color:var(--muted)}
+.card-body{padding:14px 16px}
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px}
+.kpi-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px}
+.kc-label{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:700}
+.kc-value{font-size:24px;font-weight:700;font-family:var(--mono);margin:4px 0}
+.kc-sub{font-size:11px;color:var(--muted)}
+.data-table{width:100%;border-collapse:collapse;font-size:12.5px}
+.data-table th{text-align:left;padding:8px 10px;background:#f8fafc;border-bottom:1px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);white-space:nowrap}
+.data-table td{padding:8px 10px;border-bottom:1px solid #f1f5f9;vertical-align:top}
+.data-table tr:hover td{background:#fafcff}
+.num{font-family:var(--mono)}
+.badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap}
+.b-green{background:#e8f5ee;color:#0f7a3d}.b-amber{background:#fef3c7;color:#92580a}.b-red{background:#fde8e8;color:#9b1c1c}
+.b-blue{background:#e6effd;color:#1d4ed8}.b-gray{background:#f1f5f9;color:#475569}
+.pill{display:inline-block;padding:2px 8px;border-radius:6px;font-size:11px;font-family:var(--mono);font-weight:600}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--border);margin-bottom:14px;flex-wrap:wrap}
+.tab-btn{background:none;border:none;border-bottom:2px solid transparent;padding:8px 12px;cursor:pointer;font-family:var(--sans);font-size:13px;color:var(--muted)}
+.tab-btn.active{color:var(--green-d);border-bottom-color:var(--green);font-weight:600}
+.tab-pane{display:none}.tab-pane.active{display:block}
+.scorecard{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+.kpi-tile{border:1px solid var(--border);border-radius:var(--radius);padding:14px;background:var(--card)}
+.kpi-tile .t-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+.kpi-tile .t-val{font-size:26px;font-weight:700;font-family:var(--mono);margin:6px 0 2px}
+.kpi-tile .t-meta{font-size:11px;color:var(--muted)}
+.kpi-tile .t-bar{height:6px;border-radius:4px;background:#eef2f5;margin-top:8px;overflow:hidden}
+.kpi-tile .t-bar span{display:block;height:100%}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+.form-row-3{grid-template-columns:1fr 1fr 1fr}
+.form-group label{display:block;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px}
+.form-group input,.form-group textarea,.form-group select{width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:7px;font-family:var(--sans);font-size:13px}
+.form-group input.num,.bonus-input{font-family:var(--mono)}
+.radio-group{display:flex;gap:6px;flex-wrap:wrap}
+.radio-pill{border:1.5px solid var(--border);border-radius:7px;padding:6px 10px;font-size:12px;cursor:pointer;display:inline-flex;align-items:center;gap:5px}
+.radio-pill input{width:auto;margin:0}
+.radio-pill.sel-m{border-color:var(--green);background:#e8f5ee}
+.radio-pill.sel-p{border-color:var(--amber);background:#fef3c7}
+.radio-pill.sel-n{border-color:var(--red);background:#fde8e8}
+.btn{border:none;border-radius:7px;padding:9px 16px;font-family:var(--sans);font-size:13px;font-weight:600;cursor:pointer}
+.btn-save{background:var(--green-d);color:#fff}.btn-print{background:#f1f5f9;color:var(--ink)}
+.section-note{font-size:12px;background:#f8fafc;border:1px solid var(--border);border-radius:7px;padding:10px 12px;margin-bottom:12px}
+.bonus-table{width:100%;border-collapse:collapse;font-size:13px}
+.bonus-table td,.bonus-table th{padding:7px 10px;border-bottom:1px solid #f1f5f9}
+.bonus-table th{font-size:11px;text-transform:uppercase;color:var(--muted);text-align:left}
+.bonus-table input{width:120px;padding:5px 8px;border:1.5px solid var(--border);border-radius:6px;font-family:var(--mono);font-size:12px}
+.auto-cell{font-family:var(--mono);color:var(--green-d);font-weight:600}
+.payout-final{background:linear-gradient(135deg,var(--green-d),var(--green-dd));color:#fff;border-radius:var(--radius);padding:18px 22px;display:flex;align-items:center;justify-content:space-between;margin-top:8px}
+.payout-final .pf-val{font-size:30px;font-weight:700;font-family:var(--mono)}
+.toast{position:fixed;bottom:20px;right:20px;background:var(--green-d);color:#fff;padding:12px 18px;border-radius:8px;font-size:13px;opacity:0;transform:translateY(8px);transition:.25s;pointer-events:none;z-index:50}
+.toast.show{opacity:1;transform:translateY(0)}
+.empty{text-align:center;padding:40px;color:var(--muted)}
+.saved-checkin{border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;margin-bottom:10px}
+.sc-header{display:flex;justify-content:space-between;align-items:center}
+.sc-date{font-size:11px;color:var(--muted);font-family:var(--mono)}
+.sc-badges{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+@media(max-width:820px){.layout{flex-direction:column}.sidebar{width:100%;flex:none;border-right:none;border-bottom:1px solid var(--border)}.form-row,.form-row-3{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="app-header">
+  <span class="logo">broadway national</span>
+  <h1>Coordinator Check-In &amp; OM Bonus</h1>
+  <span class="sub" id="hdrSub"></span>
+</div>
+<div id="healthBanner" class="warn">Loading data from the ops data store…</div>
+<div class="layout">
+  <nav class="sidebar">
+    <div class="sb-title">Team</div>
+    <button class="nav-btn" id="nav-overview" onclick="showView('overview',null,this)"><span>📊 Team Overview</span></button>
+    <button class="nav-btn" id="nav-bonus" onclick="showView('bonus',null,this)"><span>🎯 OM Bonus</span></button>
+    <div class="sb-title">Coordinators</div>
+    <div id="coordButtons"></div>
+  </nav>
+  <main class="main" id="mainContent"><div class="empty">Loading…</div></main>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* BN-CORE:START */
+/* Minimal inlined helpers. Onboards to sync-theme: this region is replaced wholesale by the
+   canonical bn-core.js once this file is added to sync-theme.js TARGETS. */
+window.BN = window.BN || {};
+/* BN-CORE:END */
+
+/* ============================ CONFIG ============================ */
+const CLIENT = "pilot";
+const DATA_API = "/api/data-store";
+const CFG = {
+  over30Days: 30,            // "% of completed jobs taking 30+ days"
+  under15Days: 15,           // "% of completed jobs completed within 15 days"
+  targets: { under15Pct: 78.3, over30Pct: 12.5 },   // company targets (OM calculator)
+  gp: { goalPct: 35, minPct: 33, bandPct: 30 },      // SOP standard 30–35%
+  // SVC-015 incentive weights + minimums (coordinator scorecard, descriptive)
+  svc015: {
+    weights: { gpHead:0.35, revenue:0.20, over30:0.25, under15:0.20 },
+    min: { revenuePerMo:300000, over30Pct:20, under15Pct:60 }
+  },
+  // exclude these W/O Types from throughput KPIs if ever needed (currently none — see flag in notes)
+  throughputExcludeWOTypes: []
+};
+// SLA per-status max hours — Status Efficiency Guideline (matches Dashboard SLA_THRESH).
+const SLA_THRESH = {'Pending Dispatch':8,'Recruiting Vendor':48,'Vendor Compliance':48,'Pending Schedule':48,'Clocked Out: Complete':24,'Vendor Proposal Required':48,'Supplier Proposal Pending':48,'Vendor Proposal Received':8,'Pending Proposal Review':4,'Internal Proposal Approved':2,'Internal Proposal Rejected':8,'Preparing Client Proposal':8,'Proposal Approved':2,'Proposal Rejected':24,'Clocked Out: In Progress':8,'Recall':8,'ATF Prep':8,'ATF Submitted':8,'ATF Approved':8,'Need Material':96};
+const isSlaViol = j => { const t = SLA_THRESH[j.status]; return !!t && j.statusHrs > t; };
+const PLACEHOLDER_AMTS = [2500,1500,1350,1200,1000,800,750,650,600,550,500,350,2,1,0];
+const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+/* ============================ STATE ============================ */
+let REVENUE = null;     // {rows, ytd, ...}
+let COORD = {};         // per-coordinator scorecard, keyed by name
+let JOBS = [];          // open-queue jobs (from workbook)
+let OPEN_BY_COORD = {}; // open jobs grouped by coordinator
+let CHECKINS = {};      // {coordName: [entries]}
+let OMBONUS = null;     // persisted OM bonus assumptions
+let COORD_ORDER = [];   // index-based routing
+let WB_META = {}, REV_META = {};
+
+/* ============================ HELPERS ============================ */
+function fmt$(n){ return '$' + Math.round(Number(n)||0).toLocaleString('en-US'); }
+function fmtPct(n,d=1){ return (Number(n)||0).toFixed(d) + '%'; }
+function getCol(row, ...aliases){
+  const keys = Object.keys(row);
+  for(const a of aliases){
+    const f = keys.find(k => k.toLowerCase().trim() === a.toLowerCase().trim());
+    if(f !== undefined && row[f] !== '' && row[f] != null) return row[f];
+  }
+  return '';
+}
+function parseExcelDate(v){
+  if(!v && v !== 0) return null;
+  if(v instanceof Date) return isNaN(v) ? null : v;
+  if(typeof v === 'number'){ const e = new Date(Date.UTC(1899,11,30)); return new Date(e.getTime()+v*86400000); }
+  const d = new Date(String(v)); return isNaN(d) ? null : d;
+}
+function num(v){ if(v==null||v==='') return 0; if(typeof v==='number') return v; const n=parseFloat(String(v).replace(/[$,\s]/g,'')); return isNaN(n)?0:n; }
+function toast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),3000); }
+function riskBadge(r){ if(r==='HIGH RISK') return '<span class="badge b-red">HIGH RISK</span>'; if(r==='WATCH') return '<span class="badge b-amber">WATCH</span>'; return '<span class="badge b-green">OK</span>'; }
+function statusBadge(s){ const c=(s||'').includes('Clocked Out')||s==='On-Site'?'b-green':(s||'').includes('Proposal')||s==='Scheduled'?'b-blue':(s||'').includes('Pending')||(s||'').includes('Waiting')?'b-amber':'b-gray'; return `<span class="badge ${c}">${esc(s)}</span>`; }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m])); }
+
+/* ============================ DATA STORE ============================ */
+async function bnClientGet(key){
+  try{ const r = await fetch(`${DATA_API}?key=${encodeURIComponent(key)}&client=${CLIENT}`); if(!r.ok) throw 0; return await r.json(); }catch(_){ return null; }
+}
+async function bnClientPost(key, data, metadata){
+  try{
+    const r = await fetch(`${DATA_API}?key=${encodeURIComponent(key)}&client=${CLIENT}`,{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ data, metadata: metadata||{} })
+    });
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    return await r.json();
+  }catch(err){ return null; }
+}
+
+/* ============================ WORKBOOK PARSE (open queue) ============================ */
+function parseWorkbook(input){
+  const b64 = typeof input === 'string' ? input : (input && input.base64) || '';
+  if(!b64) return [];
+  const wb = XLSX.read(b64, { type:'base64', cellDates:true });
+  const sheet = wb.SheetNames.find(n=>n==='Raw Data') || wb.SheetNames.find(n=>n.startsWith('WO Audit')) || wb.SheetNames[0];
+  const raw = XLSX.utils.sheet_to_json(wb.Sheets[sheet], { defval:'', raw:false });
+  return raw.map(r=>{
+    let amt = num(getCol(r,'Approved_Amount','Approved Amount','Amount','Client DNE','Client DNE ($)'));
+    if(PLACEHOLDER_AMTS.indexOf(amt) !== -1) amt = 0;
+    return {
+      jobId: String(getCol(r,'Job ID','Source Job #')||'').trim(),
+      coordinator: String(getCol(r,'Assigned To')||'').trim(),
+      status: String(getCol(r,'Status Category','Status')||'').trim(),
+      amount: Math.round(amt*100)/100,
+      aged: parseInt(getCol(r,'Aged (Days)','# Days'))||0,
+      statusHrs: parseFloat(getCol(r,'Time in Status (hrs.)','Status Hrs.','Status (hrs.)'))||0,
+      risk: String(getCol(r,'Risk Flag')||'OK').trim(),
+      fm: String(getCol(r,'FM')||'').trim(),
+      location: String(getCol(r,'Location','Location #')||'').trim(),
+      notes: String(getCol(r,'Notes')||'').trim()
+    };
+  }).filter(j=>j.jobId);
+}
+
+/* ============================ COORDINATOR SCORECARD (from revenue) ============================ */
+function buildCoordScorecard(rows){
+  const monthsPresent = new Set(rows.map(r=>{ const d=parseExcelDate(r['Inv Date']); return d? d.getUTCFullYear()+'-'+(d.getUTCMonth()+1):null; }).filter(Boolean));
+  const monthCount = Math.max(1, monthsPresent.size);
+  const g = {};
+  rows.forEach(r=>{
+    const name = String(r['Assigned To']||'(unassigned)').trim();
+    const o = g[name] || (g[name] = { name, jobs:0, rev:0, gp:0, over30:0, under15:0, days:0, metSla:0, slaKnown:0 });
+    o.jobs++; o.rev += num(r['Inv Revenue']); o.gp += num(r['GP $']);
+    const d = num(r['# Days']); o.days += d;
+    if(d >= CFG.over30Days) o.over30++;
+    if(d <= CFG.under15Days) o.under15++;
+    const ms = r['Met SLA?'];
+    if(ms!=null && ms!==''){ o.slaKnown++; if(String(ms).toLowerCase().startsWith('y')||ms===true) o.metSla++; }
+  });
+  const out = {};
+  Object.values(g).forEach(o=>{
+    out[o.name] = {
+      name:o.name, completed:o.jobs, monthCount,
+      revPerMo:o.rev/monthCount, gpPerMo:o.gp/monthCount,
+      revTotal:o.rev, gpTotal:o.gp,
+      gpPct: o.rev>0 ? o.gp/o.rev*100 : 0,
+      over30Pct: o.jobs>0 ? o.over30/o.jobs*100 : 0,
+      under15Pct: o.jobs>0 ? o.under15/o.jobs*100 : 0,
+      metSlaPct: o.slaKnown>0 ? o.metSla/o.slaKnown*100 : null,
+      avgDays: o.jobs>0 ? o.days/o.jobs : 0
+    };
+  });
+  return out;
+}
+
+/* ============================ TEAM ROLLUP (for OM bonus auto-fill) ============================ */
+function buildTeamRollup(rows){
+  // team current YTD throughput
+  const n = rows.length || 1;
+  const over30 = rows.filter(r=>num(r['# Days'])>=CFG.over30Days).length;
+  const under15 = rows.filter(r=>num(r['# Days'])<=CFG.under15Days).length;
+  // team GP$ and revenue by invoice month
+  const byMonth = {};   // 'YYYY-MM' -> {gp, rev}
+  rows.forEach(r=>{
+    const d = parseExcelDate(r['Inv Date']); if(!d) return;
+    const k = d.getUTCFullYear()+'-'+String(d.getUTCMonth()+1).padStart(2,'0');
+    const m = byMonth[k] || (byMonth[k]={gp:0,rev:0,monthIdx:d.getUTCMonth()});
+    m.gp += num(r['GP $']); m.rev += num(r['Inv Revenue']);
+  });
+  return {
+    currentUnder15Pct: under15/n*100,
+    currentOver30Pct: over30/n*100,
+    totalRev: rows.reduce((s,r)=>s+num(r['Inv Revenue']),0),
+    totalGp: rows.reduce((s,r)=>s+num(r['GP $']),0),
+    byMonth
+  };
+}
+
+/* ============================ OM BONUS PAYOUT CURVES (exact from calculator) ============================ */
+function gpHeadPayout(x){ // avg GP$/head
+  if(!(x>0)) return 0;
+  if(x<36000) return 0;
+  if(x<38000) return 0.5 +(x-36000)/2000*0.25;
+  if(x<40000) return 0.75+(x-38000)/2000*0.25;
+  if(x<42000) return 1.0 +(x-40000)/2000*0.25;
+  if(x<44000) return 1.25+(x-42000)/2000*0.25;
+  return 1.5;
+}
+function opPayout(x){ // avg improvement (decimal)
+  if(!(x>0)) return 0;
+  if(x<0.09) return 0;
+  if(x<0.095) return 0.5 +(x-0.09)/0.005*0.25;
+  if(x<0.10)  return 0.75+(x-0.095)/0.005*0.25;
+  if(x<0.105) return 1.0 +(x-0.10)/0.005*0.2;
+  if(x<0.11)  return 1.2 +(x-0.105)/0.005*0.3;
+  return 1.5;
+}
+function sssPayout(g){ // growth (decimal)
+  if(!(g>=0)) return 0;
+  if(g<0.05) return 1 + (g/0.05)*0.25;
+  if(g<0.10) return 1.25 + ((g-0.05)/0.05)*0.25;
+  return 1.5;
+}
+function companyMultiplier(c){
+  if(c<0.95) return 0.5;
+  if(c<0.98) return 0.65+(c-0.95)/0.03*0.2;
+  if(c<1.0)  return 0.85+(c-0.98)/0.02*0.15;
+  if(c<1.05) return 1.0 +(c-1.0)/0.05*0.2;
+  if(c<1.1)  return 1.2 +(c-1.05)/0.05*0.3;
+  return 1.5;
+}
+
+/* ============================ SIDEBAR ============================ */
+function buildSidebar(){
+  const wrap = document.getElementById('coordButtons');
+  // union of coordinators that have completed work (scorecard) and/or open jobs
+  const names = new Set([...Object.keys(COORD), ...Object.keys(OPEN_BY_COORD)]);
+  // keep only real coordinators (exclude obvious non-coordinator buckets)
+  const EXCLUDE = new Set(['Team T','Mike Najarro','(unassigned)']);
+  COORD_ORDER = [...names].filter(n=>!EXCLUDE.has(n)).sort();
+  wrap.innerHTML = COORD_ORDER.map((name,i)=>{
+    const c = COORD[name];
+    const open = (OPEN_BY_COORD[name]||[]).length;
+    const meta = c ? `${c.completed} done` : `${open} open`;
+    return `<button class="coord-btn" id="coord-${i}" onclick="showView('coord','${i}',this)"><span>${esc(name)}</span><span class="cb-jobs">${meta}</span></button>`;
+  }).join('');
+}
+
+/* ============================ VIEW ROUTER ============================ */
+function showView(type, param, btn){
+  document.querySelectorAll('.nav-btn,.coord-btn').forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  if(type==='overview') renderOverview();
+  else if(type==='bonus') renderBonus();
+  else if(type==='coord') renderCoord(COORD_ORDER[parseInt(param)]);
+}
+
+/* ============================ TEAM OVERVIEW ============================ */
+function renderOverview(){
+  const team = buildTeamRollup(REVENUE.rows);
+  const scored = Object.values(COORD).filter(c=>!['Team T','Mike Najarro','(unassigned)'].includes(c.name)).sort((a,b)=>b.revPerMo-a.revPerMo);
+  const rows = scored.map(c=>`<tr>
+    <td><strong>${esc(c.name)}</strong></td>
+    <td class="num">${c.completed}</td>
+    <td class="num">${fmt$(c.revPerMo)}</td>
+    <td class="num">${fmt$(c.gpPerMo)}</td>
+    <td><span class="badge ${c.gpPct>=CFG.gp.goalPct?'b-green':c.gpPct>=CFG.gp.bandPct?'b-amber':'b-red'}">${fmtPct(c.gpPct)}</span></td>
+    <td><span class="badge ${c.over30Pct<=CFG.targets.over30Pct?'b-green':'b-amber'}">${fmtPct(c.over30Pct)}</span></td>
+    <td><span class="badge ${c.under15Pct>=CFG.targets.under15Pct?'b-green':'b-amber'}">${fmtPct(c.under15Pct)}</span></td>
+  </tr>`).join('');
+  document.getElementById('mainContent').innerHTML = `
+    <div class="page-title">Team Overview</div>
+    <div class="page-sub">Completed/invoiced ${esc(REV_META.period||'')} · open queue ${esc(WB_META.filename||'')}</div>
+    <div class="kpi-grid">
+      <div class="kpi-card"><div class="kc-label">Team Revenue (period)</div><div class="kc-value" style="color:var(--blue)">${fmt$(team.totalRev)}</div><div class="kc-sub">${REVENUE.rows.length} completed jobs</div></div>
+      <div class="kpi-card"><div class="kc-label">Team GP$ (period)</div><div class="kc-value" style="color:var(--green-d)">${fmt$(team.totalGp)}</div><div class="kc-sub">GP% ${fmtPct(team.totalRev>0?team.totalGp/team.totalRev*100:0)}</div></div>
+      <div class="kpi-card"><div class="kc-label">Under-15s</div><div class="kc-value" style="color:${team.currentUnder15Pct>=CFG.targets.under15Pct?'var(--green-d)':'var(--amber)'}">${fmtPct(team.currentUnder15Pct)}</div><div class="kc-sub">target ${CFG.targets.under15Pct}%</div></div>
+      <div class="kpi-card"><div class="kc-label">Over-30s</div><div class="kc-value" style="color:${team.currentOver30Pct<=CFG.targets.over30Pct?'var(--green-d)':'var(--amber)'}">${fmtPct(team.currentOver30Pct)}</div><div class="kc-sub">target ${CFG.targets.over30Pct}%</div></div>
+    </div>
+    <div class="card">
+      <div class="card-header"><h3>Coordinator Scorecard (SVC-015)</h3><span class="ch-meta">Click a coordinator for the weekly check-in</span></div>
+      <div class="card-body" style="padding:0;overflow-x:auto">
+        <table class="data-table">
+          <thead><tr><th>Coordinator</th><th>Completed</th><th>Rev / mo</th><th>GP$ / mo</th><th>GP%</th><th>Over-30s</th><th>Under-15s</th></tr></thead>
+          <tbody>${rows || `<tr><td colspan="7" class="empty">No completed-revenue data.</td></tr>`}</tbody>
+        </table>
+      </div>
+    </div>
+    <div class="section-note">Financials (Revenue, GP$, GP%) are computed from the completed/invoiced export and validated exact. Over-30s / Under-15s are % of completed jobs by calendar days (CFG.over30Days / CFG.under15Days); targets shown are the company targets from the OM bonus plan.</div>`;
+}
+
+/* ============================ COORDINATOR VIEW ============================ */
+function renderCoord(name){
+  if(!name) return;
+  const c = COORD[name];
+  const open = OPEN_BY_COORD[name] || [];
+  const over30 = open.filter(j=>j.aged>30);
+  const stalled = open.filter(j=>j.statusHrs>200);
+  const highRisk = open.filter(j=>j.risk==='HIGH RISK');
+  const viols = open.filter(isSlaViol);
+  const myCheckins = CHECKINS[name] || [];
+  const scoreCards = c ? `
+    <div class="scorecard" style="margin-bottom:16px">
+      ${kpiTile('Rev / mo', fmt$(c.revPerMo), `period total ${fmt$(c.revTotal)}`, c.revPerMo>=CFG.svc015.min.revenuePerMo?'var(--green)':'var(--amber)', Math.min(100,c.revPerMo/CFG.svc015.min.revenuePerMo*100))}
+      ${kpiTile('GP$ / mo', fmt$(c.gpPerMo), `GP% ${fmtPct(c.gpPct)}`, c.gpPct>=CFG.gp.goalPct?'var(--green)':c.gpPct>=CFG.gp.bandPct?'var(--amber)':'var(--red)', Math.min(100,c.gpPct))}
+      ${kpiTile('Over-30s', fmtPct(c.over30Pct), `target ≤${CFG.targets.over30Pct}% · ${c.completed} done`, c.over30Pct<=CFG.targets.over30Pct?'var(--green)':'var(--amber)', Math.min(100,c.over30Pct))}
+      ${kpiTile('Under-15s', fmtPct(c.under15Pct), `target ≥${CFG.targets.under15Pct}%`, c.under15Pct>=CFG.targets.under15Pct?'var(--green)':'var(--amber)', Math.min(100,c.under15Pct))}
+    </div>` : `<div class="section-note">No completed/invoiced jobs for ${esc(name)} in ${esc(REV_META.period||'this period')} — operational queue only.</div>`;
+  document.getElementById('mainContent').innerHTML = `
+    <div class="page-title">${esc(name)}</div>
+    <div class="page-sub">SVC-015 scorecard (completed) + operational queue (open)</div>
+    ${scoreCards}
+    <div class="tabs">
+      <button class="tab-btn active" onclick="switchTab(this,'tab-open')">Open Jobs (${open.length})</button>
+      <button class="tab-btn" onclick="switchTab(this,'tab-over30')">Over-30 (${over30.length})</button>
+      <button class="tab-btn" onclick="switchTab(this,'tab-stalled')">Stalled (${stalled.length})</button>
+      <button class="tab-btn" onclick="switchTab(this,'tab-checkin')">Check-In Form</button>
+      <button class="tab-btn" onclick="switchTab(this,'tab-history')">History (${myCheckins.length})</button>
+    </div>
+    <div id="tab-open" class="tab-pane active">${jobTable(open)}</div>
+    <div id="tab-over30" class="tab-pane">${jobTable(over30)}</div>
+    <div id="tab-stalled" class="tab-pane">${jobTable(stalled)}</div>
+    <div id="tab-checkin" class="tab-pane">${checkinForm(name, c, {open,over30,highRisk,viols})}</div>
+    <div id="tab-history" class="tab-pane">${historyHtml(name)}</div>`;
+  radioInit(document.getElementById('mainContent'));
+  const btn = document.getElementById('saveCheckinBtn'); if(btn) btn.onclick = ()=>saveCheckin(name, c, {open,over30,highRisk});
+}
+function kpiTile(label,val,meta,color,barPct){
+  return `<div class="kpi-tile"><div class="t-label">${label}</div><div class="t-val">${val}</div><div class="t-meta">${meta}</div><div class="t-bar"><span style="width:${Math.max(2,barPct||0)}%;background:${color}"></span></div></div>`;
+}
+function switchTab(btn,id){
+  btn.parentElement.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.tab-pane').forEach(p=>p.classList.remove('active'));
+  btn.classList.add('active'); document.getElementById(id).classList.add('active');
+}
+function jobTable(jobs){
+  if(!jobs.length) return `<div class="empty">No jobs in this category.</div>`;
+  const rows = jobs.map(j=>`<tr>
+    <td><span class="pill b-gray">${esc(j.jobId)}</span></td>
+    <td>${statusBadge(j.status)}</td>
+    <td><span class="badge ${j.aged>=90?'b-red':j.aged>=30?'b-amber':'b-green'}">${j.aged}d</span></td>
+    <td class="num">${j.amount>0?fmt$(j.amount):'—'}</td>
+    <td>${riskBadge(j.risk)}${isSlaViol(j)?' <span class="badge b-red">SLA</span>':''}</td>
+    <td class="num">${Math.round(j.statusHrs)}h</td>
+    <td>${esc(j.fm)}</td>
+    <td style="max-width:280px">${esc(j.notes)||'—'}</td>
+  </tr>`).join('');
+  return `<div style="overflow-x:auto"><table class="data-table">
+    <thead><tr><th>Job ID</th><th>Status</th><th>Age</th><th>Approved $</th><th>Risk</th><th>Hrs in Status</th><th>FM</th><th>Notes</th></tr></thead>
+    <tbody>${rows}</tbody></table></div>`;
+}
+
+/* ============================ CHECK-IN FORM (persisted) ============================ */
+function checkinForm(name, c, q){
+  const today = new Date().toISOString().split('T')[0];
+  const liveSla = q.open.length ? Math.round((q.open.length - q.viols.length)/q.open.length*100) : 100;
+  return `<div>
+    <div class="section-note"><strong>Live (open queue):</strong> ${q.open.length} open · ${q.over30.length} over-30 · ${q.highRisk.length} HIGH RISK · ${q.viols.length} SLA breaches (${liveSla}% within status guideline)
+      ${c?` &nbsp;|&nbsp; <strong>Performance (completed):</strong> GP% ${fmtPct(c.gpPct)} · Over-30s ${fmtPct(c.over30Pct)} · Under-15s ${fmtPct(c.under15Pct)}`:''}</div>
+    <div class="form-row form-row-3">
+      <div class="form-group"><label>Check-In Date</label><input type="date" id="ci-date" value="${today}"></div>
+      <div class="form-group"><label>Week #</label><input type="number" id="ci-week" min="1" max="52" placeholder="e.g. 26"></div>
+      <div class="form-group"><label>Manager</label><input type="text" id="ci-manager" placeholder="Your name"></div>
+    </div>
+    ${ciSection('Over-30 Management','o30','blockers (top aging jobs) / committed actions',['On Track','At Risk','Critical'])}
+    ${ciSection('HIGH RISK Jobs','risk','top HIGH RISK jobs and escalation plan',['Managed','Escalated','Unresolved'])}
+    ${ciSection('Gross Profit','gp','low-GP jobs, recovery actions',['On Target','Below Goal','Below Min'])}
+    ${ciSection('Throughput (Under-15 / Over-30)','tp','what is helping or hurting completion speed',['On Track','At Risk','Off Track'])}
+    <div class="form-group" style="margin-bottom:12px"><label>Agreed Actions for Next Week</label>
+      ${[1,2,3].map(i=>`<div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:8px;margin-bottom:6px">
+        <input type="text" id="act${i}" placeholder="Action ${i}${i===3?' (optional)':''}">
+        <input type="text" id="act${i}own" placeholder="Owner">
+        <input type="date" id="act${i}due"></div>`).join('')}
+    </div>
+    <div class="form-group" style="margin-bottom:14px"><label>Overall Assessment</label>
+      <div class="radio-group" id="rg-overall">
+        <label class="radio-pill"><input type="radio" name="overall-status" value="On Track"> On Track</label>
+        <label class="radio-pill"><input type="radio" name="overall-status" value="At Risk"> At Risk</label>
+        <label class="radio-pill"><input type="radio" name="overall-status" value="Off Track"> Off Track</label>
+      </div>
+    </div>
+    <div style="display:flex;gap:10px">
+      <button class="btn btn-save" id="saveCheckinBtn">Save Check-In</button>
+      <button class="btn btn-print" onclick="window.print()">Print</button>
+    </div>
+  </div>`;
+}
+function ciSection(title,key,placeholder,opts){
+  const map = {0:'Meeting',1:'Partial',2:'Not Met'};
+  return `<div class="card"><div class="card-header"><h3>${title}</h3></div><div class="card-body">
+    <div class="form-row">
+      <div class="form-group"><label>Notes</label><textarea id="ci-${key}-notes" rows="2" placeholder="${placeholder}"></textarea></div>
+      <div class="form-group"><label>Status</label><div class="radio-group" id="rg-${key}">
+        ${opts.map((o,i)=>`<label class="radio-pill"><input type="radio" name="${key}-status" value="${map[i]}"> ${o}</label>`).join('')}
+      </div></div>
+    </div></div></div>`;
+}
+function radioInit(root){
+  root.querySelectorAll('.radio-pill input').forEach(r=>{
+    r.addEventListener('change',()=>{
+      const grp=r.closest('.radio-group');
+      grp.querySelectorAll('.radio-pill').forEach(l=>l.classList.remove('sel-m','sel-p','sel-n'));
+      const lbl=r.closest('.radio-pill'), v=r.value;
+      lbl.classList.add(v==='Meeting'||v==='On Track'||v==='Managed'||v==='On Target'?'sel-m':v==='Partial'||v==='At Risk'||v==='Escalated'||v==='Below Goal'?'sel-p':'sel-n');
+    });
+    if(r.checked) r.dispatchEvent(new Event('change'));
+  });
+}
+async function saveCheckin(name, c, q){
+  const v=id=>document.getElementById(id)?.value?.trim()||'';
+  const r=n=>{const el=document.querySelector(`input[name="${n}"]:checked`); return el?el.value:null;};
+  const entry = {
+    name, date:v('ci-date'), week:v('ci-week'), manager:v('ci-manager'),
+    snapshot: c ? {gpPct:+c.gpPct.toFixed(1), over30Pct:+c.over30Pct.toFixed(1), under15Pct:+c.under15Pct.toFixed(1), revPerMo:Math.round(c.revPerMo), completed:c.completed} : null,
+    openSnapshot: {open:q.open.length, over30:q.over30.length, highRisk:q.highRisk.length},
+    o30:{status:r('o30-status'),notes:v('ci-o30-notes')},
+    risk:{status:r('risk-status'),notes:v('ci-risk-notes')},
+    gp:{status:r('gp-status'),notes:v('ci-gp-notes')},
+    tp:{status:r('tp-status'),notes:v('ci-tp-notes')},
+    overall:r('overall-status'),
+    actions:[1,2,3].map(i=>({action:v('act'+i),owner:v('act'+i+'own'),due:v('act'+i+'due')})).filter(a=>a.action),
+    savedAt:new Date().toISOString()
+  };
+  if(!CHECKINS[name]) CHECKINS[name]=[];
+  CHECKINS[name].unshift(entry);
+  const res = await bnClientPost('checkin', CHECKINS, {coordinators:String(Object.keys(CHECKINS).length)});
+  toast(res ? `Check-in saved for ${name}` : `Saved locally — store write failed (retry)`);
+  // refresh history tab count
+  renderCoord(name);
+}
+function historyHtml(name){
+  const list = CHECKINS[name] || [];
+  if(!list.length) return `<div class="empty">No check-ins recorded yet for ${esc(name)}.</div>`;
+  const cls=s=>s==='Meeting'||s==='On Track'||s==='Managed'||s==='On Target'?'b-green':s==='Partial'||s==='At Risk'||s==='Escalated'||s==='Below Goal'?'b-amber':'b-red';
+  return list.map(ci=>`<div class="saved-checkin">
+    <div class="sc-header"><div><strong>${esc(ci.name)}</strong> <span class="sc-date">${esc(ci.date)} · Week ${esc(ci.week||'?')} · ${esc(ci.manager||'N/A')}</span></div>
+      <span class="badge ${cls(ci.overall)}">${esc(ci.overall||'?')}</span></div>
+    <div class="sc-badges">
+      ${ci.o30?.status?`<span class="badge ${cls(ci.o30.status)}">Over-30: ${esc(ci.o30.status)}</span>`:''}
+      ${ci.risk?.status?`<span class="badge ${cls(ci.risk.status)}">Risk: ${esc(ci.risk.status)}</span>`:''}
+      ${ci.gp?.status?`<span class="badge ${cls(ci.gp.status)}">GP: ${esc(ci.gp.status)}</span>`:''}
+      ${ci.tp?.status?`<span class="badge ${cls(ci.tp.status)}">Throughput: ${esc(ci.tp.status)}</span>`:''}
+    </div>
+    ${ci.snapshot?`<div style="margin-top:8px;font-size:11px;color:var(--muted);font-family:var(--mono)">GP% ${ci.snapshot.gpPct} · Over-30s ${ci.snapshot.over30Pct} · Under-15s ${ci.snapshot.under15Pct} · ${fmt$(ci.snapshot.revPerMo)}/mo</div>`:''}
+    ${ci.actions?.length?`<div style="margin-top:8px;font-size:12px"><strong>Actions:</strong> ${ci.actions.map(a=>`${esc(a.action)}${a.owner?' ('+esc(a.owner)+(a.due?', '+esc(a.due):'')+')':''}`).join(' · ')}</div>`:''}
+  </div>`).join('');
+}
+
+/* ============================ OM BONUS VIEW ============================ */
+function defaultBonus(team){
+  // auto-fill the data-derived inputs; assumptions get sensible defaults the OM can edit
+  const monthRows = MONTHS.map((m,i)=>{
+    const key = '2026-'+String(i+1).padStart(2,'0');
+    const md = team.byMonth[key];
+    return { month:m, headcount:'', teamGp: md? Math.round(md.gp):'' };
+  });
+  return {
+    base:75000, targetPct:0.20,
+    months:monthRows,
+    priorUnder15:0.712, priorOver30:0.661,
+    currentUnder15:+(team.currentUnder15Pct/100).toFixed(4), currentOver30:+(team.currentOver30Pct/100).toFixed(4),
+    sssPlan:10000000, sssCurrent:Math.round(team.totalRev),
+    mbo:[1,1,1,1,1], companyEst:1.0
+  };
+}
+function renderBonus(){
+  const team = buildTeamRollup(REVENUE.rows);
+  if(!OMBONUS) OMBONUS = defaultBonus(team);
+  // always refresh the data-derived current throughput + current SSS from live data
+  OMBONUS.currentUnder15 = +(team.currentUnder15Pct/100).toFixed(4);
+  OMBONUS.currentOver30  = +(team.currentOver30Pct/100).toFixed(4);
+  // auto-fill team GP$ per month for months with data (keep user headcount entries)
+  MONTHS.forEach((m,i)=>{ const md=team.byMonth['2026-'+String(i+1).padStart(2,'0')]; if(md){ OMBONUS.months[i].teamGp=Math.round(md.gp); } });
+  document.getElementById('mainContent').innerHTML = `
+    <div class="page-title">OM Bonus Estimator</div>
+    <div class="page-sub">Mirrors the 2026 OM bonus plan · auto-filled from live revenue · assumptions are editable &amp; saved</div>
+    <div class="card"><div class="card-header"><h3>Step 1 — Compensation</h3></div><div class="card-body">
+      <div class="form-row form-row-3">
+        <div class="form-group"><label>Base Salary</label><input class="bonus-input" id="b-base" type="number" value="${OMBONUS.base}"></div>
+        <div class="form-group"><label>Target Bonus %</label><input class="bonus-input" id="b-targetpct" type="number" step="0.01" value="${OMBONUS.targetPct}"></div>
+        <div class="form-group"><label>Target / Max $</label><input class="bonus-input" id="b-targetdisp" disabled value=""></div>
+      </div></div></div>
+
+    <div class="card"><div class="card-header"><h3>Step 2 — GP$ per Headcount (35%)</h3><span class="ch-meta">Team GP$ auto-filled · enter month-end headcount (excl. you)</span></div>
+      <div class="card-body" style="padding:0;overflow-x:auto">
+        <table class="bonus-table"><thead><tr><th>Month</th><th>Headcount</th><th>Team GP$</th><th>GP$ / head</th></tr></thead><tbody id="b-months"></tbody>
+        <tfoot><tr><td><strong>Monthly Avg</strong></td><td class="auto-cell" id="b-avg-hc"></td><td class="auto-cell" id="b-avg-gp"></td><td class="auto-cell" id="b-avg-gph"></td></tr></tfoot></table>
+      </div></div>
+
+    <div class="card"><div class="card-header"><h3>Step 3 — Operational Metrics (35%)</h3><span class="ch-meta">Current YTD auto from live data · enter prior-year baseline</span></div>
+      <div class="card-body" style="padding:0;overflow-x:auto">
+        <table class="bonus-table"><thead><tr><th>Metric</th><th>Prior Year</th><th>Current YTD</th><th>Improvement</th></tr></thead><tbody>
+          <tr><td>Under-15 % (higher better)</td><td><input class="bonus-input" id="b-prior-u15" type="number" step="0.001" value="${OMBONUS.priorUnder15}"></td><td class="auto-cell" id="b-cur-u15"></td><td class="auto-cell" id="b-imp-u15"></td></tr>
+          <tr><td>Over-30 % (lower better)</td><td><input class="bonus-input" id="b-prior-o30" type="number" step="0.001" value="${OMBONUS.priorOver30}"></td><td class="auto-cell" id="b-cur-o30"></td><td class="auto-cell" id="b-imp-o30"></td></tr>
+          <tr><td><strong>Average Improvement (pp)</strong></td><td></td><td></td><td class="auto-cell" id="b-imp-avg"></td></tr>
+        </tbody></table>
+      </div></div>
+
+    <div class="card"><div class="card-header"><h3>Step 4 — Same Store Sales (25%)</h3><span class="ch-meta">Current revenue auto-filled (period) · enter plan-year revenue</span></div>
+      <div class="card-body"><div class="form-row form-row-3">
+        <div class="form-group"><label>Plan-Year Revenue</label><input class="bonus-input" id="b-sss-plan" type="number" value="${OMBONUS.sssPlan}"></div>
+        <div class="form-group"><label>Current YTD Revenue</label><input class="bonus-input" id="b-sss-cur" type="number" value="${OMBONUS.sssCurrent}"></div>
+        <div class="form-group"><label>Growth %</label><input class="bonus-input" id="b-sss-growth" disabled></div>
+      </div></div></div>
+
+    <div class="card"><div class="card-header"><h3>Step 5 — MBOs (5%)</h3></div><div class="card-body">
+      <div class="form-row form-row-3" id="b-mbo">
+        ${['Team Accountability &amp; Standards','1:1 Meetings','Client Satisfaction','Work Order Accuracy','Vendor Network Support'].map((o,i)=>
+          `<label class="radio-pill" style="justify-content:flex-start"><input type="checkbox" class="b-mbo-chk" data-i="${i}" ${OMBONUS.mbo[i]?'checked':''}> ${o}</label>`).join('')}
+      </div></div></div>
+
+    <div class="card"><div class="card-header"><h3>Step 6 — Company Performance Multiplier</h3></div><div class="card-body">
+      <div class="form-row"><div class="form-group"><label>Company Performance vs Plan (e.g. 1.00)</label><input class="bonus-input" id="b-company" type="number" step="0.01" value="${OMBONUS.companyEst}"></div>
+      <div class="form-group"><label>Multiplier (floor 50% / max 150%)</label><input class="bonus-input" id="b-mult" disabled></div></div></div></div>
+
+    <div class="card"><div class="card-header"><h3>Estimated Bonus Summary</h3></div><div class="card-body" style="padding:0;overflow-x:auto">
+      <table class="bonus-table"><thead><tr><th>Component</th><th>Weight</th><th>Payout %</th><th>Bonus $</th></tr></thead><tbody id="b-summary"></tbody></table>
+    </div></div>
+    <div class="payout-final"><div><div style="font-size:12px;opacity:.85;text-transform:uppercase;letter-spacing:.5px">Estimated Final Bonus</div><div style="font-size:11px;opacity:.8" id="b-vs-target"></div></div><div class="pf-val" id="b-final">—</div></div>
+    <div style="display:flex;gap:10px;margin-top:14px"><button class="btn btn-save" onclick="saveBonus()">Save Assumptions</button></div>
+    <div class="section-note" style="margin-top:14px">Current YTD throughput and team GP$/revenue are derived from the live <code>revenue</code> blob (${esc(REV_META.period||'')}). Prior-year baselines, monthly headcount, the SSS plan, MBOs, and the company estimate are your inputs and persist to the data store. Final multiplier is set by finance at year-end.</div>`;
+  // wire inputs
+  renderBonusMonths();
+  ['b-base','b-targetpct','b-prior-u15','b-prior-o30','b-sss-plan','b-sss-cur','b-company'].forEach(id=>{ const el=document.getElementById(id); if(el) el.addEventListener('input',recalcBonus); });
+  document.querySelectorAll('.b-mbo-chk').forEach(c=>c.addEventListener('change',recalcBonus));
+  recalcBonus();
+}
+function renderBonusMonths(){
+  document.getElementById('b-months').innerHTML = OMBONUS.months.map((m,i)=>`<tr>
+    <td>${m.month}</td>
+    <td><input class="bonus-input b-hc" data-i="${i}" type="number" min="0" value="${m.headcount}"></td>
+    <td><input class="bonus-input b-gp" data-i="${i}" type="number" value="${m.teamGp}"></td>
+    <td class="auto-cell b-gph" data-i="${i}"></td></tr>`).join('');
+  document.querySelectorAll('.b-hc,.b-gp').forEach(el=>el.addEventListener('input',recalcBonus));
+}
+function recalcBonus(){
+  const g=id=>parseFloat(document.getElementById(id)?.value);
+  OMBONUS.base=g('b-base')||0; OMBONUS.targetPct=g('b-targetpct')||0;
+  OMBONUS.priorUnder15=g('b-prior-u15')||0; OMBONUS.priorOver30=g('b-prior-o30')||0;
+  OMBONUS.sssPlan=g('b-sss-plan')||0; OMBONUS.sssCurrent=g('b-sss-cur')||0; OMBONUS.companyEst=g('b-company')||0;
+  document.querySelectorAll('.b-hc').forEach(el=>OMBONUS.months[+el.dataset.i].headcount = el.value===''?'':(+el.value));
+  document.querySelectorAll('.b-gp').forEach(el=>OMBONUS.months[+el.dataset.i].teamGp = el.value===''?'':(+el.value));
+  OMBONUS.mbo = [...document.querySelectorAll('.b-mbo-chk')].map(c=>c.checked?1:0);
+
+  const target$ = OMBONUS.base*OMBONUS.targetPct, max$ = target$*1.5;
+  document.getElementById('b-targetdisp').value = `${fmt$(target$)} / ${fmt$(max$)}`;
+  // Step 2: GP$/head per month + average
+  let hcSum=0,gpSum=0,n=0;
+  OMBONUS.months.forEach((m,i)=>{
+    const gph = (m.headcount && m.teamGp!=='') ? m.teamGp/m.headcount : null;
+    const cell=document.querySelector(`.b-gph[data-i="${i}"]`); if(cell) cell.textContent = gph!=null?fmt$(gph):'—';
+    if(m.headcount){ hcSum+=+m.headcount; n++; }
+    if(m.teamGp!=='') gpSum+=+m.teamGp;
+  });
+  const avgHc = n?hcSum/n:0, monthsWithGp = OMBONUS.months.filter(m=>m.teamGp!=='').length||1, avgGp=gpSum/monthsWithGp;
+  const avgGph = avgHc>0?avgGp/avgHc:0;
+  setTxt('b-avg-hc', n?avgHc.toFixed(1):'—'); setTxt('b-avg-gp', fmt$(avgGp)); setTxt('b-avg-gph', avgHc>0?fmt$(avgGph):'—');
+  const gpHeadP = gpHeadPayout(avgGph);
+  // Step 3: improvement
+  const curU15=OMBONUS.currentUnder15, curO30=OMBONUS.currentOver30;
+  setTxt('b-cur-u15', fmtPct(curU15*100)); setTxt('b-cur-o30', fmtPct(curO30*100));
+  const impU15 = OMBONUS.priorUnder15>0 ? (curU15-OMBONUS.priorUnder15)/OMBONUS.priorUnder15 : 0;
+  const impO30 = OMBONUS.priorOver30>0 ? (OMBONUS.priorOver30-curO30)/OMBONUS.priorOver30 : 0; // decrease = improvement
+  setTxt('b-imp-u15', fmtPct(impU15*100)); setTxt('b-imp-o30', fmtPct(impO30*100));
+  const impAvg = impU15*0.5 + impO30*0.5; setTxt('b-imp-avg', fmtPct(impAvg*100));
+  const opP = opPayout(impAvg);
+  // Step 4: SSS
+  const growth = OMBONUS.sssPlan>0 ? (OMBONUS.sssCurrent-OMBONUS.sssPlan)/OMBONUS.sssPlan : 0;
+  const sssEl=document.getElementById('b-sss-growth'); if(sssEl) sssEl.value=fmtPct(growth*100);
+  const sssP = sssPayout(growth);
+  // Step 5: MBO
+  const mboP = OMBONUS.mbo.reduce((s,x)=>s+x,0)/5;
+  // Step 6: multiplier
+  const mult = companyMultiplier(OMBONUS.companyEst);
+  const multEl=document.getElementById('b-mult'); if(multEl) multEl.value=fmtPct(mult*100,0);
+  // Summary
+  const comps=[
+    ['GP$ per Headcount',0.35,gpHeadP],
+    ['Operational Metrics',0.35,opP],
+    ['Same Store Sales',0.25,sssP],
+    ['MBOs',0.05,mboP]
+  ];
+  const earned$ = comps.reduce((s,[_,w,p])=>s + target$*w*p, 0);
+  document.getElementById('b-summary').innerHTML = comps.map(([lbl,w,p])=>
+    `<tr><td>${lbl}</td><td class="num">${(w*100).toFixed(0)}%</td><td class="num">${fmtPct(p*100,0)}</td><td class="num">${fmt$(target$*w*p)}</td></tr>`).join('')
+    + `<tr><td><strong>Earned (before multiplier)</strong></td><td></td><td class="num">${fmtPct(comps.reduce((s,[_,w,p])=>s+w*p,0)*100,0)}</td><td class="num"><strong>${fmt$(earned$)}</strong></td></tr>`;
+  const final$ = Math.min(earned$*mult, max$);
+  setTxt('b-final', fmt$(final$));
+  setTxt('b-vs-target', `${fmt$(target$)} target · ${target$>0?fmtPct((final$-target$)/target$*100,0):'—'} vs target · ${fmtPct(mult*100,0)} multiplier applied`);
+}
+function setTxt(id,v){ const el=document.getElementById(id); if(el) el.textContent=v; }
+async function saveBonus(){
+  const res = await bnClientPost('om-bonus', OMBONUS, {savedAt:new Date().toISOString()});
+  toast(res ? 'Bonus assumptions saved' : 'Save failed — retry');
+}
+
+/* ============================ HEALTH BANNER ============================ */
+function setHealth(){
+  const b=document.getElementById('healthBanner');
+  const parts=[];
+  if(REV_META.period) parts.push(`revenue ${REV_META.period} (${REVENUE?REVENUE.rows.length:0} jobs)`);
+  if(WB_META.filename) parts.push(`open queue ${WB_META.filename} (${JOBS.length} jobs)`);
+  if(!REVENUE && !JOBS.length){ b.className='err'; b.textContent='No data found in the store. Run the Ops Agent / revenue ingest first.'; return; }
+  b.className='ok'; b.textContent='Synced from data store · '+parts.join(' · ');
+  document.getElementById('hdrSub').textContent = REV_META.period||'';
+}
+
+/* ============================ BOOT ============================ */
+(async function boot(){
+  const [wbEnv, revEnv, ciEnv, omEnv] = await Promise.all([
+    bnClientGet('workbook'), bnClientGet('revenue'), bnClientGet('checkin'), bnClientGet('om-bonus')
+  ]);
+  if(revEnv && revEnv.data){ REVENUE = revEnv.data; REV_META = revEnv.metadata||{}; COORD = buildCoordScorecard(REVENUE.rows||[]); }
+  if(wbEnv && wbEnv.data){
+    WB_META = wbEnv.metadata||{};
+    try{ JOBS = parseWorkbook(wbEnv.data); }catch(e){ console.error('workbook parse failed',e); JOBS=[]; }
+    OPEN_BY_COORD = {};
+    JOBS.forEach(j=>{ (OPEN_BY_COORD[j.coordinator] = OPEN_BY_COORD[j.coordinator]||[]).push(j); });
+  }
+  if(ciEnv && ciEnv.data) CHECKINS = ciEnv.data;
+  if(omEnv && omEnv.data) OMBONUS = omEnv.data;
+  setHealth();
+  buildSidebar();
+  document.getElementById('nav-overview').classList.add('active');
+  renderOverview();
+})();
+</script>
+</body>
+</html>
