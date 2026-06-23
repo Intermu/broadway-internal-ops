@@ -684,7 +684,7 @@ function classifyJob(row){
 // WiFi, RF, and Q/R have multi-stage workflows (equipment shipping, multi-trip
 // retrofits, quote-revise loops) that can't reasonably be held to 7 days.
 function isMeasured(category){ return category === 'service'; }
-const TARGET_DAYS = 7;
+let TARGET_DAYS = 7;
 
 // Parse "$16,556.07" (string) or 16556.07 (number) → 16556.07
 function parseMoney(v){
@@ -1110,12 +1110,26 @@ async function bnClientGet(slot){
 async function bnClientPost(slot,data,metadata){
   try{const r=await fetch(`${DATA_API}?key=${encodeURIComponent(slot)}&client=${PILOT_CLIENT}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({data,metadata:metadata||{}})});if(!r.ok)throw 0;return await r.json();}catch(_){return null;}
 }
+// Per-client config consumer (slot: "config"). The Diagnostic reads only the
+// proposal turnaround target today; it falls back to the baked-in 7-day default
+// when the slot is absent or unseeded. When more tools consume config, this
+// loader graduates into bn-core.js (shared) instead of living per-file.
+async function loadClientConfig(){
+  try{
+    const res = await bnClientGet("config");
+    const cfg = (res && res.exists && res.data) ? res.data : null;
+    window._clientConfig = cfg || {};
+    const t = cfg && cfg.proposal && Number(cfg.proposal.turnaroundDays);
+    if(Number.isFinite(t) && t > 0) TARGET_DAYS = t;
+  }catch(_){ /* keep the 7-day default */ }
+}
 
 // On page load, auto-load the shared monthly revenue file (client=pilot,
 // slot 'revenue') — the same raw Work Order Report rows the Dashboard persists —
 // and run them through the normal parse pipeline so the Diagnostic shows the
 // latest data on open without re-uploading.
 (async function autoLoadRevenue(){
+  await loadClientConfig();   // resolve the per-client proposal target before any analysis runs
   const result = await bnClientGet("revenue");
   if(!result || !result.exists || !result.data) return;
   const rows = Array.isArray(result.data.rows) ? result.data.rows
