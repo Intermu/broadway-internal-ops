@@ -1,6 +1,6 @@
 /* bn-core.js -- Broadway National internal ops suite, shared client core.
  *
- * SINGLE SOURCE OF TRUTH for job classification. Historically each tool carried
+ * SINGLE SOURCE OF TRUTH for job classification and per-client config. Historically each tool carried
  * its own copy of these rules and they drifted (three near-identical classifiers
  * across the Dashboard and the Diagnostic), which is the root cause of the
  * "looks fine but mis-buckets / drops rows" class of bug. Centralize here.
@@ -22,6 +22,13 @@
  *                               Source PO # (-TS / Tech- / WIFI), NOT the job
  *                               number. Intentionally different from the two
  *                               classifiers above.
+ *
+ *   BN.DEFAULT_CLIENT_CONFIG    canonical per-client defaults (over-30 threshold,
+ *   BN.mergeConfig(base, over)  proposal target, carve-out prefixes, brands).
+ *                               Pages fetch the data-store "config" slot and
+ *                               overlay it via mergeConfig; partial blobs only
+ *                               override the keys they set. Not a classifier --
+ *                               grouped here so every tool reads one definition.
  *
  * Loads as a browser global (window.BN) and as a Node module (module.exports)
  * so the parity regression test can require it. Build-time inlined into each
@@ -64,6 +71,43 @@
     if (/^tech-/i.test(s)) return true;
     if (s.replace(/\s*-\s*/g, "-").toUpperCase().indexOf("-TS") !== -1) return true;
     return false;
+  };
+
+  // ── CLIENT CONFIG ───────────────────────────────────────────────
+  // Per-client settings (Pilot vs CrossAmerica vs Primark). These are the
+  // canonical defaults; the runtime source of truth is the data-store "config"
+  // slot (clients/<client>/config). Pages overlay that blob on top of these via
+  // BN.mergeConfig so a partial blob only changes the keys it sets. Values mirror
+  // constants historically hardcoded across the tools; migrate consumers onto
+  // window._clientConfig.* one at a time.
+  BN.DEFAULT_CLIENT_CONFIG = {
+    _about: "Fallback only. Runtime source of truth is the data-store 'config' slot (clients/<client>/config).",
+    client: "pilot",
+    displayName: "Pilot Travel Centers",
+    brands: ["PFJ", "Flying J", "Pilot"],
+    over30: { threshold: 30, approachingBand: [20, 30], historyCap: 60 },
+    proposal: {
+      turnaroundDays: 7,
+      exclusionValue: "Exclusion",
+      carveOuts: { wifiPrefixes: ["WI", "WiFi", "Wi-Fi"], rfPrefixes: ["RF"], qrPrefixes: ["Q", "R"] }
+    },
+    priorityVocab: ["P1", "P2", "P3", "P4", "Red", "Yellow", "Blue"]
+  };
+
+  // Deep-overlay `over` onto `base`: nested plain objects merge recursively;
+  // arrays and scalars are replaced wholesale. Returns a new object (inputs are
+  // not mutated). A null/undefined `over` yields `base` unchanged.
+  BN.mergeConfig = function (base, over) {
+    if (!over || typeof over !== "object") return base;
+    var out = Array.isArray(base) ? base.slice() : Object.assign({}, base);
+    for (var k in over) {
+      if (!Object.prototype.hasOwnProperty.call(over, k)) continue;
+      if (over[k] && typeof over[k] === "object" && !Array.isArray(over[k]) &&
+          base && typeof base[k] === "object" && !Array.isArray(base[k]))
+        out[k] = BN.mergeConfig(base[k], over[k]);
+      else out[k] = over[k];
+    }
+    return out;
   };
 
   if (typeof module !== "undefined" && module.exports) module.exports = BN;
