@@ -19,6 +19,7 @@ const SOURCES = [
 const TARGETS = [
   "Broadway_Unified_Ops_Dashboard.html",
   "Pilot_Proposal_Diagnostic.html",
+  "Broadway_Coordinator_CheckIn.html",
   // add tools here as they opt in (must contain the relevant sentinels):
   // "agent.html",
 ];

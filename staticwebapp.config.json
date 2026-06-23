@@ -44,6 +44,10 @@
     "allowedRoles": ["broadway_employee"]
   },
   {
+    "route": "/Broadway_Coordinator_CheckIn.html",
+    "allowedRoles": ["broadway_employee"]
+  },
+  {
     "route": "/*",
     "allowedRoles": ["broadway_employee"]
   }

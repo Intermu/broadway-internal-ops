@@ -30,6 +30,17 @@
   --sans:'DM Sans',system-ui,sans-serif; --mono:'DM Mono',ui-monospace,monospace;
 }
 /* BN-THEME:END */
+/* Bridge this tool's token names onto the canonical bn-theme.css tokens (synced into BN-THEME above).
+   Fallbacks keep the tool styled before the first `node sync-theme.js` run. Outside the sentinels so sync never touches it. */
+:root{
+  --card: var(--color-surface, #ffffff);
+  --ink: var(--color-text, #1f2937);
+  --green-d: var(--color-primary, #1a5f3e);
+  --green-dd: var(--color-primary-strong, #0d3d26);
+  --radius: var(--radius-lg, 9px);
+  --sans: var(--font-sans, 'DM Sans', system-ui, sans-serif);
+  --mono: var(--font-mono, 'DM Mono', ui-monospace, monospace);
+}
 *{box-sizing:border-box}
 body{margin:0;font-family:var(--sans);background:var(--bg);color:var(--ink);font-size:14px}
 .app-header{background:linear-gradient(135deg,var(--green-d),var(--green-dd));color:#fff;padding:14px 22px;display:flex;align-items:center;gap:14px}
