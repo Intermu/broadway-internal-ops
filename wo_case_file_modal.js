@@ -8,13 +8,16 @@
  *   - Every hook is wrapped in try/catch and fails to a no-op, so a failure here
  *     can never break the job modal or the rest of the dashboard.
  *
- * WHAT IT DOES:
- *   - When a job modal opens, it appends a "WO Case File" section showing that
- *     WO's saved Full Audit (base) + Recent Updates (newest first), plus a small
- *     capture box to paste a new Audit/Update note for that job.
- *   - Data lives in the data-store "wo-audit" slot: clients/pilot/wo-audit
- *     = { v:1, items:{ "<tracking>": { tracking, wo, title, sub, base:{text,ts}|null, updates:[{text,ts,win}] } } }
- *     WO Audit notes set .base; Recent Update notes append to .updates[].
+ * STYLING: uses the dashboard's own CSS variables (--color-surface,
+ *   --color-surface-alt, --border, --text, --muted, --green, --green-dk) and
+ *   mirrors the modal's .jn-doc-card / .jm-section-label look so the section
+ *   reads as native chrome rather than a bolted-on panel. The section sits
+ *   below .job-modal-body as a padded, bounded-scroll panel with the capture
+ *   box pinned at the bottom.
+ *
+ * DATA: clients/pilot/wo-audit slot via /api/data-store (read-modify-write).
+ *   { v:1, items:{ "<tracking>": { tracking, wo, title, sub, base:{text,ts}|null, updates:[{text,ts,win}] } } }
+ *   WO Audit notes set .base; Recent Update notes append to .updates[].
  * ========================================================================== */
 (function () {
   'use strict';
@@ -25,58 +28,65 @@
   var STORE = { v: 1, items: {} };
   var loaded = false, loadingPromise = null, lastIds = [];
 
-  // ---------- styles (all namespaced bwncf-, scoped to our section) ----------
+  // ---------- styles (namespaced bwncf-, built on the dashboard's variables) ----------
   function injectCss() {
     if (document.getElementById('bwncf-style')) return;
     var st = document.createElement('style'); st.id = 'bwncf-style';
     st.textContent = [
-      ".bwncf-sec{margin-top:18px;border-top:1px solid #e2e8f0;padding-top:14px;font-family:'DM Sans',system-ui,sans-serif;}",
-      ".bwncf-sec-h{display:flex;align-items:center;gap:10px;font:700 11px 'DM Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:#1a5f3e;margin:0 0 10px;}",
-      ".bwncf-sec-h .bwncf-pill{margin-left:auto;font:700 10px 'DM Mono',monospace;color:#0d3d26;background:#d9f2e3;border:1px solid #bfe6cf;border-radius:999px;padding:2px 9px;letter-spacing:.3px;}",
-      ".bwncf-sec-h .bwncf-pill.warn{color:#8a5a14;background:#fff7ec;border-color:#f2dcbd;}",
-      ".bwncf-card{border:1px solid #e2e8f0;border-radius:9px;overflow:hidden;margin:0 0 12px;background:#fff;}",
-      ".bwncf-meta{display:flex;gap:8px;align-items:center;padding:8px 13px;background:#fafcfb;border-bottom:1px solid #eef2f4;font:600 11px 'DM Mono',monospace;color:#7c8c83;}",
-      ".bwncf-meta .bwncf-dot{width:6px;height:6px;border-radius:50%;background:#2ECC71;}",
-      ".bwncf-meta .bwncf-age{margin-left:auto;color:#9aa7a0;}",
-      ".bwncf-doc{padding:14px 16px;color:#26302b;font:14px/1.6 'DM Sans',system-ui,sans-serif;}",
+      // section chrome
+      ".bwncf-sec{border-top:1px solid var(--border);padding:12px 18px 14px;background:var(--color-surface);font-family:'DM Sans',system-ui,sans-serif;flex:0 0 auto;display:flex;flex-direction:column;min-height:0;max-height:40vh;}",
+      ".bwncf-sec-h{display:flex;align-items:center;gap:10px;margin:0 0 9px;flex:0 0 auto;}",
+      ".bwncf-label{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:700;}",
+      ".bwncf-pill{margin-left:auto;font:700 9px 'DM Mono',monospace;letter-spacing:.4px;text-transform:uppercase;color:var(--green-dk,#0d3d26);background:rgba(46,204,113,.14);border:1px solid rgba(46,204,113,.4);border-radius:999px;padding:3px 9px;}",
+      ".bwncf-pill.warn{color:#8a5a14;background:#fff7ec;border-color:#f2dcbd;}",
+      ".bwncf-pill.new{color:#fff;background:var(--green);border-color:var(--green);}",
+      ".bwncf-scroll{flex:1 1 auto;overflow-y:auto;min-height:0;display:flex;flex-direction:column;gap:10px;}",
+      // cards (mirror .jn-doc-card)
+      ".bwncf-card{background:var(--color-surface-alt,#f8fafc);border:1px solid var(--border);border-radius:8px;overflow:hidden;}",
+      ".bwncf-meta{display:flex;align-items:center;gap:8px;padding:7px 12px;border-bottom:1px solid var(--border);font:700 10px 'DM Mono',monospace;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;}",
+      ".bwncf-meta .bwncf-dot{width:6px;height:6px;border-radius:50%;background:var(--green);flex:0 0 auto;}",
+      ".bwncf-meta .bwncf-age{margin-left:auto;text-transform:none;letter-spacing:0;font-weight:600;color:#9aa7b3;}",
+      // rendered note body
+      ".bwncf-doc{padding:11px 13px;color:var(--text);font:13px/1.55 'DM Sans',system-ui,sans-serif;}",
       ".bwncf-doc>:first-child{margin-top:0;}.bwncf-doc>:last-child{margin-bottom:0;}",
-      ".bwncf-doc p{margin:0 0 9px;}.bwncf-doc strong{font-weight:700;color:#0d3d26;}",
-      ".bwncf-title{font:800 16px/1.2 'DM Sans',sans-serif;color:#0d3d26;margin:0 0 3px;}",
-      ".bwncf-sub{font:600 11px 'DM Mono',monospace;color:#7c8c83;margin:0 0 12px;}",
-      ".bwncf-h{display:flex;align-items:center;gap:9px;margin:18px 0 9px;font:700 11px 'DM Mono',monospace;color:#1a5f3e;text-transform:uppercase;letter-spacing:.1em;}",
-      ".bwncf-h::after{content:'';flex:1;height:1px;background:linear-gradient(90deg,#d6e6dd,transparent);}",
+      ".bwncf-doc p{margin:0 0 8px;}.bwncf-doc strong{font-weight:700;color:var(--green-dk,#0d3d26);}",
+      ".bwncf-title{font:800 14px/1.25 'DM Sans',sans-serif;color:var(--text);margin:0 0 3px;}",
+      ".bwncf-sub{font:600 10px 'DM Mono',monospace;color:var(--muted);margin:0 0 10px;}",
+      ".bwncf-h{display:flex;align-items:center;gap:8px;margin:14px 0 7px;font:700 10px 'DM Mono',monospace;color:var(--green-dk,#0d3d26);text-transform:uppercase;letter-spacing:.1em;}",
+      ".bwncf-h::after{content:'';flex:1;height:1px;background:var(--border);}",
       ".bwncf-doc>.bwncf-h:first-child,.bwncf-doc>.bwncf-title:first-child{margin-top:0;}",
-      ".bwncf-status{background:linear-gradient(135deg,#f1f9f4,#eaf5ef);border:1px solid #d3e8dc;border-left:4px solid #2ECC71;border-radius:9px;padding:11px 14px;margin:0 0 6px;font-size:13.5px;line-height:1.5;color:#234034;}",
-      ".bwncf-flag{display:grid;grid-template-columns:24px 1fr;gap:10px;align-items:start;margin:7px 0;padding:9px 12px;background:#fff8ee;border:1px solid #f0ddbe;border-left:3px solid #e08a1e;border-radius:9px;font-size:13px;line-height:1.45;color:#5a4012;}",
-      ".bwncf-flag .bwncf-fn{font:700 10px 'DM Mono',monospace;color:#b9740f;background:#fbeacb;border-radius:6px;width:24px;height:20px;display:flex;align-items:center;justify-content:center;}",
+      ".bwncf-status{background:rgba(46,204,113,.08);border:1px solid rgba(46,204,113,.28);border-left:3px solid var(--green);border-radius:7px;padding:9px 12px;margin:0 0 6px;font-size:12.5px;line-height:1.5;color:var(--text);}",
+      ".bwncf-flag{display:grid;grid-template-columns:22px 1fr;gap:9px;align-items:start;margin:6px 0;padding:8px 11px;background:#fff8ee;border:1px solid #f0ddbe;border-left:3px solid #e08a1e;border-radius:7px;font-size:12.5px;line-height:1.45;color:#5a4012;}",
+      ".bwncf-flag .bwncf-fn{font:700 9px 'DM Mono',monospace;color:#b9740f;background:#fbeacb;border-radius:5px;width:22px;height:18px;display:flex;align-items:center;justify-content:center;}",
       ".bwncf-flag.hot{background:#fdece9;border-color:#f1cabf;border-left-color:#c0392b;color:#6e2018;}",
       ".bwncf-flag.hot .bwncf-fn{color:#fff;background:#c0392b;}",
-      ".bwncf-vend{margin:7px 0;padding:9px 13px;background:#fff;border:1px solid #e4ece7;border-radius:9px;font-size:13px;line-height:1.45;color:#2a3530;}",
-      ".bwncf-vend strong{color:#0d3d26;}",
-      ".bwncf-tl{display:flex;flex-direction:column;margin:7px 0 11px;border:1px solid #e7eee9;border-radius:10px;overflow:hidden;}",
-      ".bwncf-tlrow{display:grid;grid-template-columns:78px 1fr;gap:12px;padding:7px 12px;border-bottom:1px solid #f1f5f2;font-size:13px;line-height:1.4;}",
-      ".bwncf-tlrow:last-child{border-bottom:none;}.bwncf-tlrow:nth-child(even){background:#fafcfb;}",
-      ".bwncf-tldate{font:700 10px 'DM Mono',monospace;color:#1a5f3e;white-space:nowrap;padding-top:1px;}",
-      ".bwncf-tltext{color:#2a3530;min-width:0;}",
+      ".bwncf-vend{margin:6px 0;padding:8px 11px;background:var(--color-surface,#fff);border:1px solid var(--border);border-radius:7px;font-size:12.5px;line-height:1.45;color:var(--text);}",
+      ".bwncf-vend strong{color:var(--green-dk,#0d3d26);}",
+      ".bwncf-tl{display:flex;flex-direction:column;margin:6px 0 10px;border:1px solid var(--border);border-radius:8px;overflow:hidden;}",
+      ".bwncf-tlrow{display:grid;grid-template-columns:70px 1fr;gap:11px;padding:6px 11px;border-bottom:1px solid var(--border);font-size:12.5px;line-height:1.4;}",
+      ".bwncf-tlrow:last-child{border-bottom:none;}.bwncf-tlrow:nth-child(even){background:rgba(0,0,0,.015);}",
+      ".bwncf-tldate{font:700 10px 'DM Mono',monospace;color:var(--green-dk,#0d3d26);white-space:nowrap;padding-top:1px;}",
+      ".bwncf-tltext{color:var(--text);min-width:0;}",
       ".bwncf-tlrow.hot{background:#fdece9;}.bwncf-tlrow.hot .bwncf-tldate{color:#c0392b;}",
-      ".bwncf-ol{margin:6px 0 11px;padding-left:0;list-style:none;counter-reset:bwncf;}",
-      ".bwncf-ol li{position:relative;counter-increment:bwncf;padding:4px 0 4px 30px;line-height:1.45;border-bottom:1px solid #f3f6f4;}",
+      ".bwncf-ol{margin:5px 0 10px;padding-left:0;list-style:none;counter-reset:bwncf;}",
+      ".bwncf-ol li{position:relative;counter-increment:bwncf;padding:4px 0 4px 28px;line-height:1.45;border-bottom:1px solid var(--border);font-size:12.5px;}",
       ".bwncf-ol li:last-child{border-bottom:none;}",
-      ".bwncf-ol li::before{content:counter(bwncf);position:absolute;left:0;top:4px;width:20px;height:20px;border-radius:6px;background:#e8f3ed;color:#1a5f3e;font:700 10px 'DM Mono',monospace;display:flex;align-items:center;justify-content:center;}",
-      ".bwncf-empty{border:1px dashed #cdd9d2;border-radius:9px;padding:13px;color:#78909c;font-size:13px;}",
-      ".bwncf-cap{margin-top:10px;border:1px solid #e2e8f0;border-radius:9px;padding:11px 13px;background:#fbfdfc;}",
-      ".bwncf-cap textarea{width:100%;box-sizing:border-box;min-height:64px;border:1px solid #dde6e1;border-radius:8px;padding:9px 11px;font:12px/1.5 'DM Mono',monospace;color:#1f2a24;background:#fff;resize:vertical;outline:none;}",
-      ".bwncf-cap textarea:focus{border-color:#2ECC71;box-shadow:0 0 0 3px rgba(46,204,113,.16);}",
+      ".bwncf-ol li::before{content:counter(bwncf);position:absolute;left:0;top:4px;width:19px;height:19px;border-radius:6px;background:rgba(46,204,113,.14);color:var(--green-dk,#0d3d26);font:700 9px 'DM Mono',monospace;display:flex;align-items:center;justify-content:center;}",
+      ".bwncf-empty{color:var(--muted);font-size:12.5px;line-height:1.5;padding:1px 2px 2px;}",
+      // capture (pinned below the scroll)
+      ".bwncf-cap{flex:0 0 auto;margin-top:10px;background:var(--color-surface-alt,#f8fafc);border:1px solid var(--border);border-radius:8px;padding:10px 12px;}",
+      ".bwncf-cap textarea{width:100%;box-sizing:border-box;min-height:54px;border:1px solid var(--border);border-radius:7px;padding:8px 10px;font:12px/1.5 'DM Mono',monospace;color:var(--text);background:var(--color-surface,#fff);resize:vertical;outline:none;}",
+      ".bwncf-cap textarea:focus{border-color:var(--green);box-shadow:0 0 0 3px rgba(46,204,113,.16);}",
       ".bwncf-caprow{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px;}",
-      ".bwncf-info{flex:1;min-width:150px;font:600 11px 'DM Mono',monospace;color:#7c8c83;}",
-      ".bwncf-seg{display:inline-flex;background:#eef3f0;border:1px solid #e1e9e4;border-radius:8px;padding:2px;gap:2px;}",
-      ".bwncf-seg button{border:none;background:transparent;padding:5px 11px;border-radius:6px;font:600 10px 'DM Mono',monospace;color:#5a6b62;cursor:pointer;}",
-      ".bwncf-seg button.on{background:#fff;color:#1a5f3e;box-shadow:0 1px 3px rgba(13,38,26,.12);}",
-      ".bwncf-btn{padding:7px 14px;border:none;border-radius:7px;cursor:pointer;font:600 12px 'DM Sans',sans-serif;}",
-      ".bwncf-btn.p{color:#fff;background:linear-gradient(135deg,#1a5f3e,#0d3d26);}",
-      ".bwncf-btn.p:disabled{opacity:.45;cursor:default;}",
-      ".bwncf-msg{font:600 11px 'DM Mono',monospace;margin-top:7px;min-height:13px;}",
-      ".bwncf-msg.ok{color:#1a5f3e;}.bwncf-msg.err{color:#c0392b;}.bwncf-msg.mut{color:#9aa7a0;}"
+      ".bwncf-info{flex:1;min-width:140px;font:600 10px 'DM Mono',monospace;color:var(--muted);}",
+      ".bwncf-seg{display:inline-flex;background:var(--color-surface,#fff);border:1px solid var(--border);border-radius:7px;padding:2px;gap:2px;}",
+      ".bwncf-seg button{border:none;background:transparent;padding:5px 10px;border-radius:5px;font:600 10px 'DM Mono',monospace;color:var(--muted);cursor:pointer;}",
+      ".bwncf-seg button.on{background:rgba(46,204,113,.14);color:var(--green-dk,#0d3d26);}",
+      ".bwncf-btn{padding:6px 14px;border:none;border-radius:7px;cursor:pointer;font:700 11px 'DM Sans',sans-serif;}",
+      ".bwncf-btn.p{color:#fff;background:var(--green);}",
+      ".bwncf-btn.p:disabled{opacity:.4;cursor:default;}",
+      ".bwncf-msg{font:600 10px 'DM Mono',monospace;margin-top:6px;min-height:12px;}",
+      ".bwncf-msg.ok{color:var(--green-dk,#0d3d26);}.bwncf-msg.err{color:#c0392b;}.bwncf-msg.mut{color:var(--muted);}"
     ].join('\n');
     document.head.appendChild(st);
   }
@@ -113,12 +123,13 @@
     var l2 = (nonEmpty[1] && nonEmpty[1].indexOf('|') >= 0) ? nonEmpty[1] : '';
     var trkM = norm.match(/TRACKING\s*#?\s*([0-9]{5,})/i);
     var woM = norm.match(/\bWO\s+([A-Za-z]?-?\d[\w-]*)/);
+    var winM = norm.match(/last\s+(\d+)\s+days/i);
     return {
       tracking: trkM ? trkM[1] : '',
       wo: woM ? woM[1] : '',
       title: l1, sub: l2,
       isUpdate: /RECENT ACTIVITY/i.test(norm),
-      win: (norm.match(/last\s+(\d+)\s+days/i) || [])[1] ? parseInt((norm.match(/last\s+(\d+)\s+days/i) || [])[1], 10) : 7,
+      win: winM ? parseInt(winM[1], 10) : 7,
       text: norm.trim()
     };
   }
@@ -244,54 +255,49 @@
       try { key = saveParsedNote(parsed, kind, identity.tracking || identity.wo); }
       catch (e) { msg.className = 'bwncf-msg err'; msg.textContent = e.message || String(e); save.disabled = false; return; }
       saveStore().then(function () { msg.className = 'bwncf-msg ok'; msg.textContent = 'Saved.'; ta.value = ''; parsed = null; if (onSaved) onSaved(key); })
-        .catch(function (err) { msg.className = 'bwncf-msg err'; msg.textContent = String(err.message || err); loadStore(true).catch(function () {}); });
+        .catch(function (err) { msg.className = 'bwncf-msg err'; msg.textContent = String(err.message || err); save.disabled = false; loadStore(true).catch(function () {}); });
     });
     return wrap;
   }
 
-  // ---------- render the section into a container ----------
-  function renderInto(sec, rec, identity, onSaved) {
-    // header pill
-    var us = updatesSince(rec);
-    var pill = el('span', 'bwncf-pill' + (rec ? '' : ' warn'), rec ? (rec.base ? (us ? (us + ' new') : 'on file') : 'updates only') : 'none on file');
-    sec.appendChild(pill);
-
-    if (rec && rec.base) {
-      var bc = el('div', 'bwncf-card');
-      var bm = el('div', 'bwncf-meta'); bm.appendChild(el('span', 'bwncf-dot')); bm.appendChild(el('span', null, 'Full Audit')); bm.appendChild(el('span', 'bwncf-age', 'captured ' + fmtDate(rec.base.ts)));
-      bc.appendChild(bm);
-      var bd = el('div', 'bwncf-doc'); renderCaseFile(bd, rec.base.text); bc.appendChild(bd);
-      sec.appendChild(bc);
-    }
-    var ups = rec ? (rec.updates || []).slice().sort(function (a, b) { return b.ts - a.ts; }) : [];
-    ups.forEach(function (u) {
-      var uc = el('div', 'bwncf-card');
-      var um = el('div', 'bwncf-meta'); um.appendChild(el('span', 'bwncf-dot')); um.appendChild(el('span', null, 'Recent Update \u00b7 last ' + (u.win || 7) + ' days')); um.appendChild(el('span', 'bwncf-age', fmtDate(u.ts) + ' \u00b7 ' + fmtRel(u.ts)));
-      uc.appendChild(um);
-      var ud = el('div', 'bwncf-doc'); renderCaseFile(ud, u.text); uc.appendChild(ud);
-      sec.appendChild(uc);
-    });
-    if (!rec || (!rec.base && !ups.length)) {
-      sec.appendChild(el('div', 'bwncf-empty', 'No case file saved for this WO yet \u2014 paste a WO Audit or Recent Update note below to start one.'));
-    }
-    sec.appendChild(captureBox(identity, onSaved));
+  // ---------- build the section ----------
+  function cardEl(metaLabel, age, text) {
+    var c = el('div', 'bwncf-card');
+    var m = el('div', 'bwncf-meta');
+    m.appendChild(el('span', 'bwncf-dot'));
+    m.appendChild(el('span', null, metaLabel));
+    m.appendChild(el('span', 'bwncf-age', age));
+    c.appendChild(m);
+    var d = el('div', 'bwncf-doc'); renderCaseFile(d, text); c.appendChild(d);
+    return c;
   }
-
-  // ---------- job-modal hook ----------
+  function setPill(pill, rec) {
+    var us = updatesSince(rec);
+    if (!rec) { pill.className = 'bwncf-pill warn'; pill.textContent = 'None on file'; }
+    else if (us) { pill.className = 'bwncf-pill new'; pill.textContent = us + ' new'; }
+    else { pill.className = 'bwncf-pill'; pill.textContent = rec.base ? 'On file' : 'Updates only'; }
+  }
   function buildSection(box) {
     var ids = lastIds.slice(); ids.push(box.textContent || '');
     var rec = findRecord(ids);
     var identity = identityFor(ids);
-    var sec = document.createElement('div'); sec.id = 'bwncf-sec'; sec.className = 'bwncf-sec';
-    var h = el('div', 'bwncf-sec-h', 'WO Case File'); sec.appendChild(h);
-    renderInto(sec, rec, identity, function () {
-      // re-render after a save so the new note shows immediately
-      var existing = box.querySelector('#bwncf-sec'); if (existing) existing.remove();
-      injectPanel();
-    });
+    var sec = el('div', 'bwncf-sec'); sec.id = 'bwncf-sec';
+    var h = el('div', 'bwncf-sec-h');
+    h.appendChild(el('span', 'bwncf-label', 'WO Case File'));
+    var pill = el('span', 'bwncf-pill'); h.appendChild(pill);
+    setPill(pill, rec);
+    sec.appendChild(h);
+    var scroll = el('div', 'bwncf-scroll'); sec.appendChild(scroll);
+    if (rec && rec.base) scroll.appendChild(cardEl('Full Audit', 'captured ' + fmtDate(rec.base.ts), rec.base.text));
+    var ups = rec ? (rec.updates || []).slice().sort(function (a, b) { return b.ts - a.ts; }) : [];
+    ups.forEach(function (u) { scroll.appendChild(cardEl('Recent Update \u00b7 last ' + (u.win || 7) + ' days', fmtDate(u.ts) + ' \u00b7 ' + fmtRel(u.ts), u.text)); });
+    if (!rec || (!rec.base && !ups.length)) scroll.appendChild(el('div', 'bwncf-empty', 'No audit or updates saved for this WO yet \u2014 paste one below to start the case file.'));
+    sec.appendChild(captureBox(identity, function () { var ex = box.querySelector('#bwncf-sec'); if (ex) ex.remove(); injectPanel(); }));
     return sec;
   }
-  function modalOpen(ov) { return ov && (ov.offsetParent !== null || getComputedStyle(ov).display !== 'none'); }
+
+  // ---------- job-modal hook ----------
+  function modalOpen(ov) { return ov && (ov.classList.contains('open') || ov.offsetParent !== null || getComputedStyle(ov).display !== 'none'); }
   function injectPanel() {
     var box = document.getElementById('jobModalBox');
     var ov = document.getElementById('jobModalOverlay');
