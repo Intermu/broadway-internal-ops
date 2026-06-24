@@ -842,7 +842,7 @@ const TODAY_STR=TODAY.toLocaleDateString("en-US",{weekday:"long",month:"2-digit"
     const ws = wb.Sheets[wb.SheetNames[0]];
     if(!ws) return;
     log("🔄 Auto-loading today's workbook from the data store to capture the daily snapshot…");
-    processData(XLSX.utils.sheet_to_json(ws, {defval:""}), (wbRes.data.filename || "workbook.xlsx"));
+    await processDataWithSchema(XLSX.utils.sheet_to_json(ws, {defval:""}), (wbRes.data.filename || "workbook.xlsx"));
   }catch(_){ /* never block boot on auto-capture */ }
 })();
 const DAY_STR=TODAY.toLocaleDateString("en-US",{weekday:"long"});
@@ -1147,14 +1147,14 @@ function handleFile(file){
   showProcessing('wo','Reading sheet');
   log(`Loading: ${file.name}`);
   const reader=new FileReader();
-  reader.onload=e=>{
+  reader.onload=async e=>{
     try {
       const wb=XLSX.read(e.target.result,{type:"array"});
       const ws=wb.Sheets[wb.SheetNames[0]];
       if(!ws){ showError('wo',"This file looks empty","No sheets were found in the workbook"); return; }
       const detail = document.getElementById('wo-processing-detail');
       if(detail) detail.textContent = 'Computing metrics';
-      processData(XLSX.utils.sheet_to_json(ws,{defval:""}),file.name);
+      await processDataWithSchema(XLSX.utils.sheet_to_json(ws,{defval:""}),file.name);
       // processData runs the success path inline; we trigger panel success once it returns
       _woLastFilename = file.name;
     } catch(err){
@@ -1167,18 +1167,132 @@ function handleFile(file){
 }
 let _woLastFilename = '';
 
+// ── Phase 2: schema-agnostic column resolution ──────────────────────
+// Canonical field → ordered header names it may appear under in a WO export.
+// getField() resolves a row value through this map (header-presence: the first
+// alias that's an actual column wins), so every variant a Pilot/Umbrava export
+// has used maps to one internal field. _inferredAliases holds LLM-suggested
+// mappings for headers this static map doesn't know yet; it's repopulated per
+// upload by maybeInferSchema() and consulted first.
+const WO_ALIASES = {
+  "Job ID": ["Source Job #","Job ID"],
+  "Status": ["Status"],
+  "City": ["City"],
+  "State": ["State"],
+  "Location": ["Location #","Location"],
+  "Aged": ["# Days","Aged (Days)","Aged"],
+  "FM": ["FM"],
+  "Assigned To": ["Assigned To"],
+  "Notes": ["Notes"],
+  "Amount": ["Client DNE","Amount"],
+  "Status Hrs": ["Time in Status (hrs.)","Status (hrs.)","Status Hrs.","Status Hrs"],
+  "Approved_Flag": ["Approved_Flag","Approved Flag"],
+  "Approved_Amount": ["Approved_Amount","Amount_Num","Client DNE","Amount"],
+  "Mgmt Assist Needed": ["Mgmt Assist Needed"],
+  "Mgmt Notes": ["Mgmt Notes"],
+  "Last Reviewed By": ["Last Reviewed By","Team Update"],
+  "Last Updated": ["Last Updated"],
+  "Last Note Date": ["Last Note Date"],
+  "Next Onsite Date": ["Next Onsite Date"],
+  "Expected Completion Date": ["Expected Completion Date","Expected Completion"],
+  "Escalation Priority": ["Escalation Priority"],
+  "Project Type": ["Project Type"],
+  "Days Since Update": ["Days Since Update"],
+  "Priority": ["Priority"],
+  "Trades": ["Trades"],
+  "Vendors": ["Vendor(s)","Vendors"],
+};
+
+// Metric-critical fields worth asking the inferer about when the static map
+// can't find them. Conservative on purpose so auto-apply only ever touches
+// fields that drive metrics (over-30, SLA, $ buckets, attribution, staleness).
+const INFERABLE = ["Job ID","Status","Aged","Status Hrs","Amount","Assigned To","Last Note Date","Expected Completion Date"];
+
+// LLM-inferred canonical→header overrides for the current file. Reset per run.
+let _inferredAliases = {};
+
+// Which actual column a canonical field lives in for this row: inferred mapping
+// wins, then the first static alias that is present as a column.
+function woHeader(r, canonical){
+  const inf = _inferredAliases[canonical];
+  if(inf && (inf in r)) return inf;
+  const aliases = WO_ALIASES[canonical] || [];
+  for(const h of aliases){ if(h in r) return h; }
+  return null;
+}
+function getField(r, canonical){
+  const h = woHeader(r, canonical);
+  return h===null ? "" : r[h];
+}
+
+// Phase 2: when the static map can't place a metric-critical field, ask the
+// /api/infer-schema Function (Sonnet) to map it to one of the file's real
+// headers. Auto-applies suggestions at confidence ≥ 0.9 that point at a header
+// we actually sent. Degrades to exactly the Phase-1 behavior (field stays
+// unmapped, usual missing-column warning) if the Function is down or unsure.
+async function maybeInferSchema(raw){
+  _inferredAliases = {};
+  if(!raw || !raw.length) return;
+  const headers = Object.keys(raw[0] || {});
+  const headerSet = new Set(headers);
+  const unmapped = INFERABLE.filter(c => !(WO_ALIASES[c]||[]).some(a => headerSet.has(a)));
+  if(!unmapped.length) return;
+
+  const samples = {};
+  for(const h of headers){
+    const vals = [];
+    for(let i=0;i<raw.length && vals.length<2;i++){
+      const v = raw[i][h];
+      if(v!==undefined && v!==null && String(v).trim()!=="") vals.push(String(v).slice(0,40));
+    }
+    if(vals.length) samples[h] = vals;
+  }
+
+  try{
+    const res = await fetch("/api/infer-schema", {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({ unmapped, headers, samples }),
+    });
+    if(!res.ok) throw new Error("HTTP "+res.status);
+    const out = await res.json();
+    const maps = (out && Array.isArray(out.mappings)) ? out.mappings : [];
+    const applied = [];
+    for(const m of maps){
+      if(!m || !m.canonical || !m.header) continue;
+      if(!INFERABLE.includes(m.canonical)) continue;
+      if(!headerSet.has(m.header)) continue;
+      if(typeof m.confidence === "number" && m.confidence < 0.9) continue;
+      _inferredAliases[m.canonical] = m.header;
+      applied.push(`${m.canonical} ← "${m.header}"`);
+    }
+    if(applied.length) log("🧠 Auto-mapped unrecognized columns — " + applied.join("  ·  "));
+    const still = unmapped.filter(c => !_inferredAliases[c]);
+    if(still.length) log(`⚠ Couldn't map: ${still.join(", ")} — those metrics may read blank. Check the column names in this export.`);
+  }catch(_){
+    log("⚠ Schema auto-mapping unavailable — using standard column names. Unrecognized: " + unmapped.join(", "));
+  }
+}
+
+// All WO uploads (manual + unattended auto-capture) flow through here so the
+// schema inference runs once before the synchronous pipeline.
+async function processDataWithSchema(raw, fname){
+  await maybeInferSchema(raw);
+  processData(raw, fname);
+}
+
 function processData(raw,fname){
   df=raw.map(r=>{
-    // Split "Location #" — new format embeds brand: "PFJ 0620, Flying J"
+    // Split the location field — new format embeds brand: "PFJ 0620, Flying J"
     // Old format was just the location number. Both supported.
-    const locRaw = String(r["Location #"]||r["Location"]||"").trim();
+    const locRaw = String(getField(r,"Location")||"").trim();
     const locParts = locRaw.split(/,\s*/);
     const locNum = locParts[0]||"";
     const locBrand = (locParts[1]||"").trim();
 
     // Days Since Update — Umbrava sometimes emits "Never Updated" string;
     // coerce to NaN so downstream code can detect it.
-    const dsuRaw = r["Days Since Update"];
+    const dsuRaw = getField(r,"Days Since Update");
     const dsuNum = (dsuRaw===null||dsuRaw===undefined||dsuRaw==="") ? null
                  : (typeof dsuRaw==="number" ? dsuRaw
                  : (parseInt(String(dsuRaw).replace(/[^\d-]/g,""),10)||null));
@@ -1196,36 +1310,36 @@ function processData(raw,fname){
     };
 
     return {
-      "Job ID":padJobId(r["Source Job #"]||r["Job ID"]||""),
-      "Status":String(r["Status"]||"").trim(),
-      "City":String(r["City"]||"").trim(),
-      "State":String(r["State"]||"").trim(),
+      "Job ID":padJobId(getField(r,"Job ID")||""),
+      "Status":String(getField(r,"Status")||"").trim(),
+      "City":String(getField(r,"City")||"").trim(),
+      "State":String(getField(r,"State")||"").trim(),
       "Location":locNum,
       "Brand":locBrand,
-      "Aged":Math.round(parseFloat(r["# Days"]||r["Aged (Days)"]||r["Aged"]||0)||0),
-      "FM":String(r["FM"]||"").trim(),
-      "Assigned To":String(r["Assigned To"]||"").trim(),
-      "Notes":String(r["Notes"]||"").trim(),
-      "Amount":parseFloat(r["Client DNE"]||r["Amount"]||0)||0,
-      "Status Hrs":parseFloat(r["Time in Status (hrs.)"]||r["Status (hrs.)"]||r["Status Hrs."]||r["Status Hrs"]||0)||0,
-      "Approved_Flag":String(r["Approved_Flag"]||r["Approved Flag"]||"").trim(),
-      "Approved_Amount":parseFloat(r["Approved_Amount"]||r["Amount_Num"]||r["Client DNE"]||r["Amount"]||0)||0,
+      "Aged":Math.round(parseFloat(getField(r,"Aged")||0)||0),
+      "FM":String(getField(r,"FM")||"").trim(),
+      "Assigned To":String(getField(r,"Assigned To")||"").trim(),
+      "Notes":String(getField(r,"Notes")||"").trim(),
+      "Amount":parseFloat(getField(r,"Amount")||0)||0,
+      "Status Hrs":parseFloat(getField(r,"Status Hrs")||0)||0,
+      "Approved_Flag":String(getField(r,"Approved_Flag")||"").trim(),
+      "Approved_Amount":parseFloat(getField(r,"Approved_Amount")||0)||0,
       // --- New audit workflow columns (pass-through from source) ---
-      "Mgmt Assist Needed":String(r["Mgmt Assist Needed"]||"").trim(),
-      "Mgmt Notes":String(r["Mgmt Notes"]||"").trim(),
-      "Last Reviewed By":String(r["Last Reviewed By"]||r["Team Update"]||"").trim(),
-      "Last Updated":fmtDate(r["Last Updated"]),
-      "Last Note Date":fmtDate(r["Last Note Date"]),
-      "Next Onsite Date":fmtDate(r["Next Onsite Date"]),
-      "Expected Completion Date":fmtDate(r["Expected Completion Date"]||r["Expected Completion"]||""),
-      "Escalation Priority":String(r["Escalation Priority"]||"").trim(),
-      "Project Type":String(r["Project Type"]||"").trim(),
+      "Mgmt Assist Needed":String(getField(r,"Mgmt Assist Needed")||"").trim(),
+      "Mgmt Notes":String(getField(r,"Mgmt Notes")||"").trim(),
+      "Last Reviewed By":String(getField(r,"Last Reviewed By")||"").trim(),
+      "Last Updated":fmtDate(getField(r,"Last Updated")),
+      "Last Note Date":fmtDate(getField(r,"Last Note Date")),
+      "Next Onsite Date":fmtDate(getField(r,"Next Onsite Date")),
+      "Expected Completion Date":fmtDate(getField(r,"Expected Completion Date")),
+      "Escalation Priority":String(getField(r,"Escalation Priority")||"").trim(),
+      "Project Type":String(getField(r,"Project Type")||"").trim(),
       "Days Since Update":dsuNum,
       "Days Since Update Raw":String(dsuRaw||"").trim(),
       // --- New audit metadata columns (4/30/26 drop) ---
-      "Priority":String(r["Priority"]||"").trim(),
-      "Trades":String(r["Trades"]||"").trim(),
-      "Vendors":String(r["Vendor(s)"]||r["Vendors"]||"").trim(),
+      "Priority":String(getField(r,"Priority")||"").trim(),
+      "Trades":String(getField(r,"Trades")||"").trim(),
+      "Vendors":String(getField(r,"Vendors")||"").trim(),
     };
   });
   df.forEach(r=>{
