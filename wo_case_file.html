@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang='en'>
+<head>
+<meta charset='utf-8'>
+<meta name='viewport' content='width=device-width, initial-scale=1'>
+<title>BWN — WO Case File</title>
+<link href='https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700;800&display=swap' rel='stylesheet'>
+<style>
+  :root{
+    --green:#1a5f3e; --green-d:#0d3d26; --accent:#2ECC71;
+    --bg:#eef2f4; --card:#fff; --b1:#e2e8f0; --ink:#1f2a24; --mut:#7c8c83; --rad:9px;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);font-family:'DM Sans',system-ui,sans-serif;color:var(--ink);}
+  .hdr{position:relative;background:linear-gradient(135deg,var(--green),var(--green-d));color:#fff;padding:16px 24px;display:flex;align-items:center;gap:16px;}
+  .hdr::after{content:'';position:absolute;left:0;right:0;bottom:0;height:1px;background:linear-gradient(90deg,transparent,rgba(46,204,113,.5),transparent);}
+  .hdr .wm{font:800 16px 'DM Sans',sans-serif;letter-spacing:.02em;}
+  .hdr .ti{font:600 13px 'DM Mono',monospace;color:rgba(255,255,255,.8);}
+  .hdr .right{margin-left:auto;display:flex;align-items:center;gap:10px;}
+  .hdr .saved{font:500 11px 'DM Mono',monospace;color:rgba(255,255,255,.7);}
+  .hdr .gbtn{font:600 12px 'DM Sans',sans-serif;color:#fff;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.25);border-radius:7px;padding:6px 12px;cursor:pointer;}
+  .hdr .gbtn:hover{background:rgba(255,255,255,.22);}
+  .banner{max-width:1240px;margin:14px auto 0;padding:11px 16px;border-radius:var(--rad);font:600 12px 'DM Mono',monospace;display:none;}
+  .banner.show{display:block;}
+  .banner.offline{background:#fff7ec;border:1px solid #f2dcbd;color:#8a5a14;}
+  .banner.err{background:#fdecea;border:1px solid #f0c8c2;color:#7b241c;}
+  .banner.ok{background:#e8f3ed;border:1px solid #bfe6cf;color:#1a5f3e;}
+  /* capture */
+  .cap{max-width:1240px;margin:14px auto 0;background:var(--card);border:1px solid var(--b1);border-radius:var(--rad);padding:14px 16px;}
+  .cap .cap-h{display:flex;align-items:center;gap:10px;font:700 11px 'DM Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);margin:0 0 9px;}
+  .cap textarea{width:100%;min-height:84px;box-sizing:border-box;border:1px solid #dde6e1;border-radius:10px;padding:11px 13px;font:13px/1.5 'DM Mono',monospace;color:#1f2a24;background:#fcfdfc;outline:none;resize:vertical;}
+  .cap textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(46,204,113,.16);}
+  .cap .row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px;}
+  .cap .info{font:600 12px 'DM Mono',monospace;color:var(--mut);flex:1;min-width:220px;}
+  .cap .info b{color:#1a5f3e;}
+  .cap .info .miss{color:#c0392b;}
+  .seg{display:inline-flex;background:#eef3f0;border:1px solid #e1e9e4;border-radius:9px;padding:2px;gap:2px;}
+  .seg button{border:none;background:transparent;padding:6px 13px;border-radius:7px;font:600 11px 'DM Mono',monospace;color:#5a6b62;cursor:pointer;}
+  .seg button.on{background:#fff;color:#1a5f3e;box-shadow:0 1px 3px rgba(13,38,26,.12);}
+  .btn{padding:8px 16px;border:none;border-radius:8px;cursor:pointer;font:600 13px 'DM Sans',sans-serif;}
+  .btn.primary{color:#fff;background:linear-gradient(135deg,var(--green),var(--green-d));}
+  .btn.primary:disabled{opacity:.45;cursor:default;}
+  .btn.ghost{color:#1a5f3e;background:#e8f3ed;}
+  /* layout */
+  .wrap{display:grid;grid-template-columns:288px 1fr;gap:18px;max-width:1240px;margin:16px auto;padding:0 18px;align-items:start;}
+  .rail{background:var(--card);border:1px solid var(--b1);border-radius:var(--rad);overflow:hidden;}
+  .rail h2{font:700 11px 'DM Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);margin:0;padding:14px 16px 8px;}
+  .rail .none-row{padding:14px 16px;color:#9aa7a0;font:500 12px 'DM Mono',monospace;border-top:1px solid #f1f5f2;}
+  .wo{display:block;width:100%;text-align:left;border:none;background:transparent;border-top:1px solid #f1f5f2;padding:12px 16px;cursor:pointer;}
+  .wo:hover{background:#f4f8f5;}
+  .wo.on{background:#e8f3ed;box-shadow:inset 3px 0 0 var(--accent);}
+  .wo .n{font:700 13px 'DM Sans',sans-serif;color:var(--green-d);}
+  .wo .l{font:500 11px 'DM Mono',monospace;color:var(--mut);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .wo .badge{display:inline-block;margin-top:6px;font:700 10px 'DM Mono',monospace;letter-spacing:.4px;color:#0d3d26;background:#d9f2e3;border:1px solid #bfe6cf;border-radius:999px;padding:2px 8px;}
+  .wo .badge.none{color:#9aa7a0;background:#f3f6f4;border-color:#e6ece8;}
+  .main{display:flex;flex-direction:column;gap:16px;min-width:0;}
+  .idcard{background:var(--card);border:1px solid var(--b1);border-radius:var(--rad);padding:16px 20px;}
+  .idcard .id-top{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;}
+  .idcard .id-wo{font:800 18px 'DM Sans',sans-serif;color:var(--green-d);letter-spacing:-.01em;}
+  .idcard .id-trk{font:600 12px 'DM Mono',monospace;color:var(--mut);}
+  .idcard .id-loc{font:500 13px 'DM Sans',sans-serif;color:#46544c;margin-top:5px;}
+  .idcard .fresh{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;}
+  .chip{font:600 11px 'DM Mono',monospace;color:#556;background:#f3f6f4;border:1px solid #e6ece8;border-radius:999px;padding:5px 11px;}
+  .chip.ok{background:#e8f3ed;border-color:rgba(46,204,113,.35);color:#1a5f3e;}
+  .chip.warn{background:#fff7ec;border-color:#f2dcbd;color:#8a5a14;}
+  .sec-h{display:flex;align-items:center;gap:10px;font:700 11px 'DM Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--mut);margin:2px 2px -2px;}
+  .sec-h::after{content:'';flex:1;height:1px;background:linear-gradient(90deg,#d6e6dd,transparent);}
+  .panel{background:var(--card);border:1px solid var(--b1);border-radius:var(--rad);overflow:hidden;}
+  .panel .meta{display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid #eef2f4;background:#fafcfb;font:600 11px 'DM Mono',monospace;color:#7c8c83;}
+  .panel .meta .dot{width:6px;height:6px;border-radius:50%;background:var(--accent);}
+  .panel .meta .age{margin-left:auto;color:#9aa7a0;}
+  .empty,.bigempty{background:var(--card);border:1px dashed #cdd9d2;border-radius:var(--rad);padding:18px 20px;color:#78909c;font-size:13px;}
+  .bigempty{text-align:center;padding:40px 20px;}
+  /* ported case-file renderer (matches the userscript modal) */
+  .doc{padding:20px 24px;color:#26302b;font:15px/1.62 'DM Sans',system-ui,sans-serif;}
+  .doc>:first-child{margin-top:0;} .doc>:last-child{margin-bottom:0;}
+  .doc p{margin:0 0 11px;} .doc strong{font-weight:700;color:#0d3d26;}
+  .nd-title{font:800 20px/1.2 'DM Sans',sans-serif;color:#0d3d26;letter-spacing:-.02em;margin:0 0 3px;}
+  .nd-sub{font:600 12px 'DM Mono',monospace;color:#7c8c83;letter-spacing:.2px;margin:0 0 16px;}
+  .nd-h{display:flex;align-items:center;gap:10px;margin:24px 0 11px;font:700 12px 'DM Mono',monospace;color:#1a5f3e;text-transform:uppercase;letter-spacing:.12em;}
+  .nd-h::after{content:'';flex:1;height:1px;background:linear-gradient(90deg,#d6e6dd,transparent);}
+  .doc>.nd-h:first-child,.doc>.nd-title:first-child{margin-top:0;}
+  .nd-status{background:linear-gradient(135deg,#f1f9f4,#eaf5ef);border:1px solid #d3e8dc;border-left:4px solid #2ECC71;border-radius:10px;padding:13px 16px;margin:0 0 6px;font-size:14px;line-height:1.55;color:#234034;}
+  .nd-flag{display:grid;grid-template-columns:26px 1fr;gap:11px;align-items:start;margin:8px 0;padding:11px 14px;background:#fff8ee;border:1px solid #f0ddbe;border-left:3px solid #e08a1e;border-radius:10px;font-size:13.5px;line-height:1.5;color:#5a4012;}
+  .nd-flag .fn{font:700 11px 'DM Mono',monospace;color:#b9740f;background:#fbeacb;border-radius:6px;width:26px;height:22px;display:flex;align-items:center;justify-content:center;}
+  .nd-flag.hot{background:#fdece9;border-color:#f1cabf;border-left-color:#c0392b;color:#6e2018;}
+  .nd-flag.hot .fn{color:#fff;background:#c0392b;}
+  .nd-vend{margin:8px 0;padding:11px 15px;background:#fff;border:1px solid #e4ece7;border-radius:10px;font-size:13.5px;line-height:1.5;color:#2a3530;}
+  .nd-vend strong{color:#0d3d26;}
+  .nd-tl{display:flex;flex-direction:column;margin:8px 0 12px;border:1px solid #e7eee9;border-radius:11px;overflow:hidden;}
+  .nd-tlrow{display:grid;grid-template-columns:84px 1fr;gap:14px;padding:8px 14px;border-bottom:1px solid #f1f5f2;font-size:13.5px;line-height:1.45;}
+  .nd-tlrow:last-child{border-bottom:none;} .nd-tlrow:nth-child(even){background:#fafcfb;}
+  .nd-tldate{font:700 11px 'DM Mono',monospace;color:#1a5f3e;white-space:nowrap;padding-top:1px;}
+  .nd-tltext{color:#2a3530;min-width:0;}
+  .nd-tlrow.hot{background:#fdece9;} .nd-tlrow.hot .nd-tldate{color:#c0392b;}
+  .nd-ol{margin:6px 0 12px;padding-left:0;list-style:none;counter-reset:nd;}
+  .nd-ol li{position:relative;counter-increment:nd;padding:5px 0 5px 34px;line-height:1.5;border-bottom:1px solid #f3f6f4;}
+  .nd-ol li:last-child{border-bottom:none;}
+  .nd-ol li::before{content:counter(nd);position:absolute;left:0;top:5px;width:22px;height:22px;border-radius:7px;background:#e8f3ed;color:#1a5f3e;font:700 11px 'DM Mono',monospace;display:flex;align-items:center;justify-content:center;}
+  .foot{max-width:1240px;margin:6px auto 28px;padding:0 18px;color:#9aa7a0;font:500 11px 'DM Mono',monospace;line-height:1.6;}
+</style>
+</head>
+<body>
+  <div class='hdr'>
+    <span class='wm'>BROADWAY&nbsp;NATIONAL</span>
+    <span class='ti'>WO Case File</span>
+    <span class='right'>
+      <span class='saved' id='saved'></span>
+      <button class='gbtn' id='refresh'>Refresh</button>
+    </span>
+  </div>
+
+  <div class='banner' id='banner'></div>
+
+  <div class='cap'>
+    <div class='cap-h'>Add to case file</div>
+    <textarea id='capTa' placeholder='Paste a WO Audit or Recent Update note (the text you copied from the BWN AI menu)…'></textarea>
+    <div class='row'>
+      <div class='info' id='capInfo'>Paste a note to detect its WO.</div>
+      <div class='seg' id='capSeg'>
+        <button data-kind='base' class='on'>Full Audit (base)</button>
+        <button data-kind='update'>Recent Update</button>
+      </div>
+      <button class='btn ghost' id='capClear'>Clear</button>
+      <button class='btn primary' id='capSave' disabled>Save to case file</button>
+    </div>
+  </div>
+
+  <div class='wrap'>
+    <div class='rail' id='rail'><h2>Work Orders</h2></div>
+    <div class='main' id='main'></div>
+  </div>
+
+  <div class='foot' id='foot'></div>
+
+<script>
+  // ===================== Config =====================
+  var API = '/api/data-store', CLIENT = 'pilot', SLOT = 'wo-audit';
+
+  // ===================== State =====================
+  var STORE = { v: 1, items: {} };
+  var OFFLINE = false;
+  var SEL = null;
+  var capKind = 'base';
+  var capParsed = null;
+
+  // ===================== Data store I/O =====================
+  function normalize(d){ if (!d || typeof d !== 'object') d = {}; d.v = 1; d.items = d.items || {}; return d; }
+
+  async function loadStore(){
+    var r = await fetch(API + '?key=' + SLOT + '&client=' + CLIENT, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } });
+    if (!r.ok) throw new Error('Load failed (HTTP ' + r.status + ')');
+    var j = await r.json();
+    if (j && j.exists && j.data) { lastSavedAt = (j.metadata && j.metadata.savedAt) || ''; return normalize(j.data); }
+    lastSavedAt = '';
+    return { v: 1, items: {} };
+  }
+
+  async function saveStore(){
+    if (OFFLINE) throw new Error('Offline preview — saving is disabled here. Deploy to the SWA to save.');
+    var n = Object.keys(STORE.items).length;
+    var r = await fetch(API + '?key=' + SLOT + '&client=' + CLIENT, {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ data: STORE, metadata: { count: String(n) } })
+    });
+    if (!r.ok){ var msg = ''; try { msg = (await r.json()).error || ''; } catch (e) {} throw new Error('Save failed (HTTP ' + r.status + ') ' + msg); }
+    var jr = await r.json();
+    lastSavedAt = (jr.metadata && jr.metadata.savedAt) || new Date().toISOString();
+    return jr;
+  }
+
+  var lastSavedAt = '';
+
+  // ===================== Note parsing =====================
+  function parseNote(text){
+    var norm = String(text || '').replace(/\r/g, '');
+    var lines = norm.split('\n').map(function (s){ return s.trim(); });
+    var nonEmpty = lines.filter(Boolean);
+    var l1 = nonEmpty[0] || '';
+    var l2 = (nonEmpty[1] && nonEmpty[1].indexOf('|') >= 0) ? nonEmpty[1] : '';
+    var trkM = norm.match(/TRACKING\s*#?\s*([0-9]{5,})/i);
+    var woM = norm.match(/\bWO\s+([A-Za-z]?-?\d[\w-]*)/);
+    var isUpdate = /RECENT ACTIVITY/i.test(norm);
+    var winM = norm.match(/last\s+(\d+)\s+days/i);
+    return {
+      tracking: trkM ? trkM[1] : '',
+      wo: woM ? woM[1] : '',
+      title: l1, sub: l2,
+      isUpdate: isUpdate,
+      win: winM ? parseInt(winM[1], 10) : 7,
+      text: norm.trim()
+    };
+  }
+
+  function saveParsedNote(parsed, kind){
+    var key = parsed.tracking || parsed.wo;
+    if (!key) throw new Error('No TRACKING # or WO number found in the note — cannot file it.');
+    var rec = STORE.items[key] || { tracking: parsed.tracking, wo: parsed.wo, title: parsed.title, sub: parsed.sub, base: null, updates: [] };
+    if (parsed.wo) rec.wo = parsed.wo;
+    if (parsed.tracking) rec.tracking = parsed.tracking;
+    if (parsed.title) rec.title = parsed.title;
+    if (parsed.sub) rec.sub = parsed.sub;
+    if (kind === 'base'){
+      rec.base = { text: parsed.text, ts: Date.now() };
+    } else {
+      rec.updates = rec.updates || [];
+      rec.updates.push({ text: parsed.text, ts: Date.now(), win: parsed.win });
+      if (rec.updates.length > 25) rec.updates = rec.updates.slice(-25);
+    }
+    STORE.items[key] = rec;
+    return key;
+  }
+
+  // ===================== Helpers =====================
+  function fmtDate(ts){ var x = new Date(ts); return (x.getMonth() + 1) + '/' + x.getDate() + '/' + x.getFullYear(); }
+  function fmtRel(ts){ var d = Math.floor((Date.now() - ts) / 86400000); return d <= 0 ? 'today' : (d === 1 ? 'yesterday' : d + ' days ago'); }
+  function lastTs(rec){ var t = rec.base ? rec.base.ts : 0; (rec.updates || []).forEach(function (u){ if (u.ts > t) t = u.ts; }); return t; }
+  function updatesSince(rec){ var since = rec.base ? rec.base.ts : 0; return (rec.updates || []).filter(function (u){ return u.ts > since; }).length; }
+  function el(tag, cls, txt){ var e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; }
+  function shortLoc(rec){
+    var s = rec.sub || rec.title || '';
+    var m = s.match(/—\s*([A-Za-z .'-]+,\s*[A-Z]{2})/);
+    if (m) return m[1].trim();
+    return (rec.title || '').replace(/^TRACKING[^|]*\|?\s*/i, '').slice(0, 42);
+  }
+
+  // ===================== Case-file renderer (mirrors the userscript) =====================
+  function mdInline(parent, text){
+    var re = /\*\*([^*]+)\*\*/g, last = 0, m;
+    while ((m = re.exec(text)) !== null){
+      if (m.index > last) parent.appendChild(document.createTextNode(text.slice(last, m.index)));
+      var b = document.createElement('strong'); b.textContent = m[1]; parent.appendChild(b);
+      last = m.index + m[0].length;
+    }
+    if (last < text.length) parent.appendChild(document.createTextNode(text.slice(last)));
+  }
+  function renderCaseFile(container, src){
+    container.textContent = '';
+    var lines = String(src || '').split(/\r?\n/);
+    var first = true, section = 'other', tl = null, ol = null, flagN = 0;
+    var HOT = /\b(escalat|overdue|unpaid|halt|urgent|immediately|lien|stop work|dispute|rejected|cancel|backup vendor)\b/i;
+    function flushTl(){ if (tl){ container.appendChild(tl); tl = null; } }
+    function flushOl(){ if (ol){ container.appendChild(ol); ol = null; } }
+    function flushAll(){ flushTl(); flushOl(); }
+    function addP(t, cls){ var p = document.createElement('p'); if (cls) p.className = cls; mdInline(p, t); container.appendChild(p); }
+    function heading(t){ flushAll(); var h = document.createElement('div'); h.className = 'nd-h'; h.textContent = t.trim(); container.appendChild(h); }
+    function sectionOf(L){ L = L.toUpperCase();
+      if (/RISK FLAG/.test(L)) return 'flags';
+      if (/VENDOR|SUPPLIER/.test(L)) return 'vendors';
+      if (/TIMELINE|RECENT ACTIVITY/.test(L)) return 'timeline';
+      if (/NEXT ACTION|NEXT STEP/.test(L)) return 'actions';
+      if (/STATUS/.test(L)) return 'status';
+      return 'other';
+    }
+    for (var i = 0; i < lines.length; i++){
+      var t = lines[i].trim();
+      if (!t){ flushAll(); continue; }
+      if (first){ first = false; flushAll(); var ti = document.createElement('div'); ti.className = 'nd-title'; ti.textContent = t; container.appendChild(ti); continue; }
+      if (t.indexOf('|') >= 0){ flushAll(); addP(t, 'nd-sub'); continue; }
+      var ci = t.indexOf(':');
+      if (ci > 0){
+        var lab = t.slice(0, ci);
+        if (lab === lab.toUpperCase() && /[A-Z]/.test(lab) && lab.length <= 46){
+          heading(lab); section = sectionOf(lab); flagN = 0;
+          var rest = t.slice(ci + 1).trim();
+          if (rest){
+            if (section === 'status'){ var sb = document.createElement('div'); sb.className = 'nd-status'; mdInline(sb, rest); container.appendChild(sb); }
+            else if (section === 'flags'){ t = 'FLAG: ' + rest; }
+            else addP(rest);
+          }
+          if (section !== 'flags') continue;
+        }
+      }
+      if (section === 'flags'){ flushAll(); var fx = t.replace(/^FLAG[:\-\s]*/i, ''); flagN++;
+        var card = document.createElement('div'); card.className = 'nd-flag' + (HOT.test(fx) ? ' hot' : '');
+        var n = document.createElement('span'); n.className = 'fn'; n.textContent = flagN;
+        var bd = document.createElement('span'); mdInline(bd, fx);
+        card.appendChild(n); card.appendChild(bd); container.appendChild(card); continue;
+      }
+      if (section === 'vendors'){ flushAll(); var vc = document.createElement('div'); vc.className = 'nd-vend'; mdInline(vc, t); container.appendChild(vc); continue; }
+      var dm = t.match(/^(\d{1,2}\/\d{1,2}(?:\/\d{2,4})?)\s*[\u2014\-]\s*(.*)$/);
+      if (dm){ flushOl(); if (!tl){ tl = document.createElement('div'); tl.className = 'nd-tl'; }
+        var row = document.createElement('div'); row.className = 'nd-tlrow' + (HOT.test(dm[2]) ? ' hot' : '');
+        var ds = document.createElement('span'); ds.className = 'nd-tldate'; ds.textContent = dm[1];
+        var tx = document.createElement('span'); tx.className = 'nd-tltext'; mdInline(tx, dm[2]);
+        row.appendChild(ds); row.appendChild(tx); tl.appendChild(row); continue;
+      }
+      flushTl();
+      var nm = t.match(/^(\d+)[.)]\s+(.*)$/);
+      if (nm){ if (!ol){ ol = document.createElement('ol'); ol.className = 'nd-ol'; } var li = document.createElement('li'); mdInline(li, nm[2]); ol.appendChild(li); continue; }
+      flushOl();
+      addP(t);
+    }
+    flushAll();
+  }
+
+  // ===================== Compose / render =====================
+  function renderRecord(key){
+    var main = document.getElementById('main');
+    main.textContent = '';
+    var rec = STORE.items[key];
+    if (!rec){ main.appendChild(el('div', 'bigempty', 'Select a work order on the left, or paste a note above to start a case file.')); return; }
+
+    var id = el('div', 'idcard');
+    var top = el('div', 'id-top');
+    top.appendChild(el('span', 'id-wo', rec.wo ? ('WO ' + rec.wo) : 'WO —'));
+    if (rec.tracking) top.appendChild(el('span', 'id-trk', 'TRACKING #' + rec.tracking));
+    id.appendChild(top);
+    if (rec.title) id.appendChild(el('div', 'id-loc', rec.title));
+    var fresh = el('div', 'fresh');
+    if (rec.base) fresh.appendChild(el('span', 'chip ok', 'Last full audit ' + fmtDate(rec.base.ts) + ' · ' + fmtRel(rec.base.ts)));
+    else fresh.appendChild(el('span', 'chip warn', 'No full audit captured yet'));
+    var us = updatesSince(rec);
+    fresh.appendChild(el('span', 'chip' + (us ? ' ok' : ''), us ? (us + ' update' + (us === 1 ? '' : 's') + ' since audit') : 'No updates since audit'));
+    id.appendChild(fresh);
+    main.appendChild(id);
+
+    main.appendChild(el('div', 'sec-h', 'Full Audit'));
+    if (rec.base){
+      var bp = el('div', 'panel');
+      var bm = el('div', 'meta'); bm.appendChild(el('span', 'dot')); bm.appendChild(el('span', null, 'WO Audit · full case file')); bm.appendChild(el('span', 'age', 'captured ' + fmtDate(rec.base.ts)));
+      bp.appendChild(bm);
+      var bdoc = el('div', 'doc'); renderCaseFile(bdoc, rec.base.text); bp.appendChild(bdoc);
+      main.appendChild(bp);
+    } else {
+      main.appendChild(el('div', 'empty', 'No full audit captured yet — run WO Audit on this WO and save it here to set the base.'));
+    }
+
+    main.appendChild(el('div', 'sec-h', 'Recent Updates (newest first)'));
+    var ups = (rec.updates || []).slice().sort(function (a, b){ return b.ts - a.ts; });
+    if (ups.length){
+      ups.forEach(function (u){
+        var up = el('div', 'panel');
+        var um = el('div', 'meta'); um.appendChild(el('span', 'dot')); um.appendChild(el('span', null, 'Recent Update · last ' + (u.win || 7) + ' days')); um.appendChild(el('span', 'age', 'captured ' + fmtDate(u.ts) + ' · ' + fmtRel(u.ts)));
+        up.appendChild(um);
+        var udoc = el('div', 'doc'); renderCaseFile(udoc, u.text); up.appendChild(udoc);
+        main.appendChild(up);
+      });
+    } else {
+      main.appendChild(el('div', 'empty', 'No recent updates on record since the last audit.'));
+    }
+  }
+
+  function buildRail(){
+    var rail = document.getElementById('rail');
+    rail.textContent = '';
+    rail.appendChild(el('h2', null, 'Work Orders'));
+    var keys = Object.keys(STORE.items).sort(function (a, b){ return lastTs(STORE.items[b]) - lastTs(STORE.items[a]); });
+    if (!keys.length){ rail.appendChild(el('div', 'none-row', 'No case files yet.')); return; }
+    keys.forEach(function (key){
+      var rec = STORE.items[key];
+      var b = el('button', 'wo'); if (key === SEL) b.className = 'wo on';
+      b.appendChild(el('div', 'n', rec.wo ? ('WO ' + rec.wo) : ('TRK ' + rec.tracking)));
+      b.appendChild(el('div', 'l', shortLoc(rec)));
+      var us = updatesSince(rec);
+      b.appendChild(el('div', 'badge' + (us ? '' : ' none'), us ? ('● ' + us + ' new') : (rec.base ? 'audit only' : 'updates only')));
+      b.addEventListener('click', function (){ select(key); });
+      rail.appendChild(b);
+    });
+  }
+
+  function select(key){ SEL = key; buildRail(); renderRecord(key); }
+
+  function renderAll(){
+    var keys = Object.keys(STORE.items);
+    if (!SEL || !STORE.items[SEL]) SEL = keys.length ? keys.sort(function (a, b){ return lastTs(STORE.items[b]) - lastTs(STORE.items[a]); })[0] : null;
+    buildRail();
+    if (SEL) renderRecord(SEL); else document.getElementById('main').appendChild(el('div', 'bigempty', 'No case files yet. Paste a WO Audit or Recent Update note above and save it.'));
+    var saved = document.getElementById('saved');
+    saved.textContent = OFFLINE ? '' : (lastSavedAt ? ('saved ' + new Date(lastSavedAt).toLocaleString()) : '');
+    document.getElementById('foot').textContent = 'Slot: clients/' + CLIENT + '/' + SLOT + ' · ' + Object.keys(STORE.items).length + ' WO(s) on file' + (OFFLINE ? ' · OFFLINE DEMO (not saved)' : '');
+  }
+
+  // ===================== Banner =====================
+  function banner(kind, msg){
+    var b = document.getElementById('banner');
+    b.className = 'banner show ' + kind; b.textContent = msg;
+    if (kind === 'ok') setTimeout(function (){ if (b.textContent === msg) b.className = 'banner'; }, 3500);
+  }
+
+  // ===================== Capture wiring =====================
+  function refreshCap(){
+    var ta = document.getElementById('capTa');
+    var info = document.getElementById('capInfo');
+    var save = document.getElementById('capSave');
+    var txt = ta.value.trim();
+    if (!txt){ capParsed = null; info.textContent = 'Paste a note to detect its WO.'; save.disabled = true; return; }
+    capParsed = parseNote(txt);
+    capKind = capParsed.isUpdate ? 'update' : 'base';
+    setSeg(capKind);
+    var bits = [];
+    bits.push(capParsed.wo ? ('WO <b>' + capParsed.wo + '</b>') : '<span class="miss">no WO#</span>');
+    bits.push(capParsed.tracking ? ('TRACKING <b>#' + capParsed.tracking + '</b>') : '<span class="miss">no tracking#</span>');
+    bits.push('detected: <b>' + (capParsed.isUpdate ? 'Recent Update' : 'Full Audit') + '</b>');
+    info.innerHTML = 'Detected — ' + bits.join(' · ');
+    save.disabled = OFFLINE || !(capParsed.tracking || capParsed.wo);
+  }
+  function setSeg(kind){
+    capKind = kind;
+    var seg = document.getElementById('capSeg');
+    seg.querySelectorAll('button').forEach(function (btn){ btn.className = (btn.getAttribute('data-kind') === kind) ? 'on' : ''; });
+  }
+
+  async function doSave(){
+    if (!capParsed){ return; }
+    try {
+      var key = saveParsedNote(capParsed, capKind);
+      await saveStore();
+      SEL = key;
+      document.getElementById('capTa').value = '';
+      capParsed = null; refreshCap();
+      renderAll();
+      banner('ok', 'Saved ' + (capKind === 'base' ? 'full audit' : 'recent update') + ' to WO ' + (STORE.items[key].wo || key) + '.');
+    } catch (e){
+      banner('err', e.message || String(e));
+      // saveParsedNote already mutated STORE in memory; reload from server to stay truthful
+      if (!OFFLINE){ try { STORE = await loadStore(); renderAll(); } catch (e2) {} }
+    }
+  }
+
+  // ===================== Demo (offline) =====================
+  function d(mo, da, hr){ return new Date(2026, mo - 1, da, hr || 9, 0, 0).getTime(); }
+  function demoStore(){
+    return { v: 1, items: {
+      '01955215': { tracking: '01955215', wo: 'W-337016', title: 'TRACKING #01955215 | WO W-337016 | CAP STORE 1042 — VEGA, TX', sub: '',
+        base: { ts: d(6, 22, 16), text: 'TRACKING #01955215 | WO W-337016 | CAP STORE 1042 — VEGA, TX\nCrossAmerica Partners | 6555 US Hwy 385, Vega, TX 79092 | PO# 44821 / CLIENT WO# 337016\nCURRENT STATUS: Light-pole base work pending; drilling slipped from 6/18 after the vendor cited storms, no firm reschedule yet.\nRISK FLAGS:\nFLAG: No firm drilling date as of 6/22 — vendor unresponsive; aging.\nTIMELINE:\n6/4 — initial outreach to vendor for scheduling\n6/18 — drilling delayed, vendor cited storms\n6/22 — still no committed drilling date\nVENDORS:\n**BSG 1946** (Tim Lillpop) — concrete / pole — awaiting committed drilling date\nNEXT ACTIONS:\n1. Daniel Russell — get a committed drilling date from BSG by 6/24.' },
+        updates: [
+          { ts: d(6, 24, 15), win: 7, text: 'TRACKING #01955215 | WO W-337016 | CAP STORE 1042 — VEGA, TX\nCURRENT STATUS: New base poured 6/24; 5–7 day cure underway, reinstall ~7/1.\nRECENT ACTIVITY:\n6/24 — new base poured; cure window started\n6/24 — vendor flagged $827 added mobilization cost\nRISK FLAGS:\nFLAG: $827 add needs client approval before reinstall.\nNEXT ACTIONS:\n1. Daniel Russell — get client sign-off on the $827 add.' }
+        ] },
+      '02011890': { tracking: '02011890', wo: 'W-338221', title: 'TRACKING #02011890 | WO W-338221 | PILOT STORE 0931 — TUCUMCARI, NM', sub: '',
+        base: null,
+        updates: [ { ts: d(6, 24, 10), win: 7, text: 'TRACKING #02011890 | WO W-338221 | PILOT STORE 0931 — TUCUMCARI, NM\nCURRENT STATUS: New reactive service call opened 6/23 for a down sign circuit; vendor dispatched, no onsite yet.\nRECENT ACTIVITY:\n6/23 — WO created, sign circuit reported down\n6/24 — vendor accepted dispatch, ETA pending\nRISK FLAGS:\nFLAG: No onsite ETA yet on a reactive call.\nNEXT ACTIONS:\n1. Erick Nieves-Cruz — get a firm onsite ETA today.' } ] }
+    } };
+  }
+
+  // ===================== Init =====================
+  document.getElementById('capTa').addEventListener('input', refreshCap);
+  document.getElementById('capSeg').addEventListener('click', function (e){ var k = e.target.getAttribute('data-kind'); if (k) setSeg(k); });
+  document.getElementById('capClear').addEventListener('click', function (){ document.getElementById('capTa').value = ''; capParsed = null; refreshCap(); });
+  document.getElementById('capSave').addEventListener('click', doSave);
+  document.getElementById('refresh').addEventListener('click', function (){ init(); });
+
+  async function init(){
+    try {
+      STORE = await loadStore();
+      OFFLINE = false;
+      document.getElementById('banner').className = 'banner';
+    } catch (e){
+      OFFLINE = true;
+      STORE = demoStore();
+      banner('offline', 'Offline preview — showing demo data. This page reads/saves live only when served from the SWA (it could not reach ' + API + ').');
+    }
+    refreshCap();
+    renderAll();
+  }
+  init();
+</script>
+</body>
+</html>

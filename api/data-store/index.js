@@ -4,7 +4,11 @@ const CONTAINER_NAME = "broadway-data";
 
 // SLOTS are types of data. Same set for every client.
 // Adding a slot = ship code. Adding a client = edit VALID_CLIENTS below.
-const VALID_SLOTS = ["revenue", "wo-snapshot-today", "wo-snapshot-previous", "workbook", "over30-history", "job-notes", "config", "checkin", "om-bonus"];
+const VALID_SLOTS = ["revenue", "wo-snapshot-today", "wo-snapshot-previous", "workbook", "over30-history", "job-notes", "config", "checkin", "om-bonus", "wo-audit"];
+// "wo-audit": one blob per client holding a tracking-keyed map of AI case files
+// { v:1, items: { "<tracking>": { tracking, wo, title, sub, base:{text,ts}|null, updates:[{text,ts,win}] } } }.
+// WO Audit notes set .base (full case file); Recent Update notes append to .updates[].
+// Not financial -> stays at the broadway_employee gate (coordinators can read/write).
 
 // Each onboarded client gets one string here. Onboarding Wendy's = add "wendys".
 const VALID_CLIENTS = ["pilot"];
