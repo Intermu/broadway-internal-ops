@@ -1387,6 +1387,20 @@ function openJobModal(id){
   window._jnCurrentId=id; window._jnAction=action;
   const jnMode=hasNote?'recent':'full'; window._jnMode=jnMode;
   window._jnNAActions=na.actions||[];
+  // "Why flagged" — the same Exception Queue signals/actions, shown read-only on
+  // the job itself (manage ack/snooze in the Exception Queue). Over-30 jobs only.
+  const _fThr=(window._clientConfig&&window._clientConfig.over30&&window._clientConfig.over30.threshold)||30;
+  const _fReasons=j.aged>_fThr?eqReasons(j):[];
+  let flaggedHtml='';
+  if(_fReasons.length){
+    const _fSt=eqStatus(j.jobId);
+    const _fChips=_fReasons.map(function(c){ const rr=EQ_REASONS[c]; return '<span class="eq-chip eq-r-'+c+'">'+(rr?rr.label:c)+'</span>'; }).join('');
+    const _fActs=_fReasons.map(function(c){ return '<li>'+escapeHtml(EQ_ACTION[c]||c)+'</li>'; }).join('');
+    let _fState='';
+    if(_fSt.state==='ack') _fState=' <span class="eq-state-pill eq-acked">✓ Ack’d'+(_fSt.by?' · '+escapeHtml(_fSt.by):'')+'</span>';
+    else if(_fSt.state==='snooze') _fState=' <span class="eq-state-pill eq-snoozed">😴 until '+escapeHtml(_fSt.until||'?')+(_fSt.by?' · '+escapeHtml(_fSt.by):'')+'</span>';
+    flaggedHtml='<div class="jm-flagged"><div class="jm-flagged-h">⚑ Why this is flagged'+_fState+'</div><div class="jm-flagged-chips">'+_fChips+'</div><ul class="jm-flagged-acts">'+_fActs+'</ul><div class="jm-flagged-foot">Acknowledge or snooze in the Exception Queue.</div></div>';
+  }
   const box=document.getElementById('jobModalBox'); if(!box) return;
   const row=(k,v)=>`<div><span class="jm-k">${k}</span><span class="jm-v">${v}</span></div>`;
   box.innerHTML=`
@@ -1409,6 +1423,7 @@ function openJobModal(id){
         </div>
         <div class="holdup-meta" id="holdupMeta">${saved.summaryAt?'AI summary · '+escapeHtml(new Date(saved.summaryAt).toLocaleString()):''}</div>
       </div>
+      ${flaggedHtml}
       ${na.actions.length?'<div class="jm-na"><div class="jm-na-h"><span>Next Actions Required</span><button type="button" class="jm-na-copy" onclick="copyNextActions()" title="Copy these next actions">⧉ Copy</button></div>'+nextActionsCardHtml(na.actions)+naHistoryHtml(saved.naHistory)+'</div>':(saved.naHistory&&saved.naHistory.length?'<div class="jm-na">'+naHistoryHtml(saved.naHistory)+'</div>':'')}
       <div class="jm-timing">
         <div class="jt"><div class="jt-n">${j.aged}</div><div class="jt-l">Days open</div></div>
@@ -5454,6 +5469,11 @@ updateEditBadge();
 .em-spark-c{flex:1;max-width:300px;}
 .em-spark-r{text-align:right;font-family:'DM Mono',monospace;min-width:60px;font-size:10px;}
 .em-spark-n{font-size:15px;font-weight:700;}
+.jm-flagged{background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:10px 12px;margin:8px 0;}
+.jm-flagged-h{font-size:11px;font-weight:700;color:#92400e;margin-bottom:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.jm-flagged-chips{margin-bottom:6px;}
+.jm-flagged-acts{margin:0;padding-left:18px;font-size:11.5px;color:var(--text);line-height:1.5;}
+.jm-flagged-foot{font-size:10px;color:var(--muted);margin-top:6px;}
 </style>
 
 <!-- Mobile sticky save bar removed — Save Dashboard now lives in the sidebar -->
