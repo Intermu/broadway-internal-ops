@@ -4757,6 +4757,21 @@ async function saveOver30Snapshot(){
   };
   const res = await bnClientGet("over30-history");
   const hist = (res && res.exists && res.data && Array.isArray(res.data.entries)) ? res.data : {entries:[]};
+  // Record over-30 transitions vs the most recent PRIOR snapshot (additive field):
+  // which jobs newly crossed 30, which cleared out, which persisted — derived from
+  // the stored o30.ids so it's a retained record, not just a live Snapshot Compare.
+  // Additive-only: never removes existing fields; absent on the first snapshot.
+  let _prior=null;
+  hist.entries.forEach(function(e){ if(e && e.dateStr && e.dateStr<dateStr && (!_prior || e.dateStr>_prior.dateStr)) _prior=e; });
+  if(_prior && _prior.o30 && Array.isArray(_prior.o30.ids)){
+    const _curSet=new Set(entry.o30.ids), _priorSet=new Set(_prior.o30.ids);
+    entry.transitions={
+      vsDate:_prior.dateStr,
+      crossed:entry.o30.ids.filter(function(id){ return !_priorSet.has(id); }),
+      cleared:_prior.o30.ids.filter(function(id){ return !_curSet.has(id); }),
+      persisted:entry.o30.ids.filter(function(id){ return _priorSet.has(id); })
+    };
+  }
   const i = hist.entries.findIndex(e=>e.dateStr===dateStr);
   if(i>=0) hist.entries[i]=entry; else hist.entries.push(entry);
   hist.entries.sort((a,b)=>a.dateStr<b.dateStr?-1:1);
@@ -4764,7 +4779,7 @@ async function saveOver30Snapshot(){
   window._o30History = hist.entries;
   const saved = await bnClientPost("over30-history", hist, {latest:dateStr, count:String(hist.entries.length)});
   if(!saved) console.warn("Over-30 snapshot save failed — trend history not updated this load.");
-  else { bnLogActivity('snapshot-save', dateStr, over30.length+' over-30 · '+fmt$0(entry.o30.amt)); loadDataFreshness(); }
+  else { bnLogActivity('snapshot-save', dateStr, over30.length+' over-30 · '+fmt$0(entry.o30.amt)+(entry.transitions?(' · +'+entry.transitions.crossed.length+' crossed / −'+entry.transitions.cleared.length+' cleared'):'')); loadDataFreshness(); }
 }
 
 // Pick the prior entry whose age (in days before curStr) is inside [minD,maxD],
