@@ -1586,16 +1586,16 @@ function openEntityModal(kind, idx){
   else if(!closed.length){ invSection='<div class="em-note">No invoiced jobs on file for this '+kindLbl+'.</div>'; }
   else {
     const invOther = (isV||isT) ? 'Coordinator' : 'Vendor';
-    const invRows = closedSorted.slice(0,CAP).map(function(j){
+    const invRows = closedSorted.map(function(j,idx){
       const other = (isV||isT) ? escapeHtml(j.coord||'-') : (j.vendor?vendorListHtml(j.vendor):'-');
-      return '<tr><td class="em-jid">'+escapeHtml(j.sourceJobNum||'-')+'</td>'
+      return '<tr'+(idx>=CAP?' class="bn-row-hidden"':'')+'><td class="em-jid">'+escapeHtml(j.sourceJobNum||'-')+'</td>'
         + '<td class="em-mut">'+mdShort(j.completed)+'</td>'
         + '<td>'+(typeof j.ageToComplete==='number'?'<span class="age-pill '+ageCls(j.ageToComplete)+'">'+j.ageToComplete+'d</span>':'-')+'</td>'
         + '<td class="amt">'+(+j.amount>0?fmt$0(j.amount):'-')+'</td>'
         + '<td>'+other+'</td></tr>';
     }).join('');
-    invSection = '<div class="table-scroll-wrap"><div class="table-scroll-hint">\u2194 Scroll for more columns</div><table class="data-table em-table"><thead><tr><th>Job #</th><th>Completed</th><th>Days to complete</th><th>Inv $</th><th>'+invOther+'</th></tr></thead><tbody>'+invRows+'</tbody></table></div>'
-      + (closed.length>CAP ? '<div class="em-foot">Showing '+CAP+' of '+closed.length+' (most recent).</div>' : '');
+    const invMore = closed.length>CAP ? '<tr class="bn-more-row"><td colspan="5" onclick="bnExpandRows(this)">+'+(closed.length-CAP)+' more \u2014 click to show all (most recent first)</td></tr>' : '';
+    invSection = '<div class="table-scroll-wrap"><div class="table-scroll-hint">\u2194 Scroll for more columns</div><table class="data-table em-table"><thead><tr><th>Job #</th><th>Completed</th><th>Days to complete</th><th>Inv $</th><th>'+invOther+'</th></tr></thead><tbody>'+invRows+invMore+'</tbody></table></div>';
   }
   // Over-30 trajectory sparkline (coordinator drilldowns only — snapshots store
   // per-coordinator history in byCoord, not per vendor/trade).
@@ -1606,13 +1606,14 @@ function openEntityModal(kind, idx){
   let naHtml='';
   {
     const na=_bnNextActions(open);
-    const naRows=na.slice(0,15).map(function(x){
+    const NACAP=15;
+    const naRows=na.map(function(x,idx){
       const acts=x.reasons.map(function(c){ return '<div class="na-act">'+escapeHtml(EQ_ACTION[c]||c)+'</div>'; }).join('');
-      return '<tr class="em-click" data-jobid="'+escapeHtml(x.j.jobId)+'" onclick="closeEntityModal();openJobModal(this.dataset.jobid)">'
+      return '<tr class="em-click'+(idx>=NACAP?' bn-row-hidden':'')+'" data-jobid="'+escapeHtml(x.j.jobId)+'" onclick="closeEntityModal();openJobModal(this.dataset.jobid)">'
         + '<td class="em-jid">'+escapeHtml(x.j.jobId)+'</td>'
         + '<td><span class="age-pill '+ageCls(x.j.aged)+'">'+x.j.aged+'d</span></td>'
         + '<td>'+acts+'</td></tr>';
-    }).join('');
+    }).join('') + (na.length>NACAP?'<tr class="bn-more-row"><td colspan="3" onclick="bnExpandRows(this)">+'+(na.length-NACAP)+' more — click to show all</td></tr>':'');
     naHtml='<div class="em-seclbl">Next actions required <span class="n">· '+na.length+' open '+(na.length===1?'item':'items')+(na.length>15?' · top 15 shown':'')+'</span>'+(na.length?' <button type="button" class="em-kind-btn" style="text-transform:none;letter-spacing:normal;" onclick="copyEntityActions()" title="Copy this list to the clipboard">⧉ Copy</button>':'')+'</div>'
       + (na.length ? '<div class="table-scroll-wrap"><table class="data-table em-table"><thead><tr><th>Job #</th><th>Age</th><th>What needs to happen</th></tr></thead><tbody>'+naRows+'</tbody></table></div>'
                    : '<div class="em-note">No outstanding actions — this '+kindLbl+'’s over-30 jobs are acknowledged or up to date.</div>');
@@ -3797,6 +3798,14 @@ function _bnCoordO30Spark(name, curCount){
     + '<div class="em-spark-c">'+o30Sparkline(vals,280,34,color,series.map(function(s){return s.dateStr;}))+'</div>'
     + '<div class="em-spark-r"><span class="em-spark-n">'+last+'</span> <span class="'+dir+'">'+dirTxt+'</span></div></div>';
 }
+// Make a "+N more" truncation row clickable: reveal the hidden rows in its table
+// and remove the footer. Reusable across every capped list — render ALL rows,
+// add class "bn-row-hidden" beyond the cap, and a footer that calls bnExpandRows(this).
+function bnExpandRows(cell){
+  const tbl=cell.closest('table'); if(!tbl) return;
+  tbl.querySelectorAll('tr.bn-row-hidden').forEach(function(tr){ tr.classList.remove('bn-row-hidden'); });
+  const fr=cell.closest('tr'); if(fr&&fr.parentNode) fr.parentNode.removeChild(fr);
+}
 function eqReasons(j){
   const r = [];
   const sb = staleBucket(j);
@@ -5203,9 +5212,9 @@ function renderSnapshotCompare(mc){
   const jmap={}; JOBS.forEach(j=>{ jmap[j.jobId]=j; });
   const jobRows=ids=>{
     if(!ids.length) return `<tr><td colspan="4" style="color:var(--muted);font-size:12px;padding:12px 14px;">None.</td></tr>`;
-    const cap=50, show=ids.slice(0,cap);
-    const rows=show.map(id=>{ const j=jmap[id], div=o30Division({jobId:id}); const co=j?escapeHtml(j.coordinator||'—'):'<span style="color:var(--muted)">—</span>'; const ag=j?`<span class="age-pill ${ageCls(j.aged)}">${j.aged}d</span>`:'<span style="color:var(--muted)">—</span>'; return `<tr><td style="font-weight:600;">${escapeHtml(id)}</td><td>${co}</td><td>${ag}</td><td>${div}</td></tr>`; }).join('');
-    const more=ids.length>cap?`<tr><td colspan="4" style="color:var(--muted);font-size:11px;padding:8px 14px;">+${ids.length-cap} more not shown</td></tr>`:'';
+    const cap=50;
+    const rows=ids.map((id,idx)=>{ const j=jmap[id], div=o30Division({jobId:id}); const co=j?escapeHtml(j.coordinator||'—'):'<span style="color:var(--muted)">—</span>'; const ag=j?`<span class="age-pill ${ageCls(j.aged)}">${j.aged}d</span>`:'<span style="color:var(--muted)">—</span>'; return `<tr${idx>=cap?' class="bn-row-hidden"':''}><td style="font-weight:600;">${escapeHtml(id)}</td><td>${co}</td><td>${ag}</td><td>${div}</td></tr>`; }).join('');
+    const more=ids.length>cap?`<tr class="bn-more-row"><td colspan="4" onclick="bnExpandRows(this)">+${ids.length-cap} more — click to show all</td></tr>`:'';
     return rows+more;
   };
   const jobCard=(t,meta,ids,accent)=>`<div class="card"><div class="card-header"><h3>${t} <span class="badge ${accent}">${ids.length}</span></h3><span class="card-meta">${meta}</span></div><div class="card-body" style="padding:0;"><table class="data-table"><thead><tr><th>Job #</th><th>Coordinator</th><th>Age</th><th>Division</th></tr></thead><tbody>${jobRows(ids)}</tbody></table></div></div>`;
@@ -5482,6 +5491,9 @@ updateEditBadge();
 .jm-flagged-chips{margin-bottom:6px;}
 .jm-flagged-acts{margin:0;padding-left:18px;font-size:11.5px;color:var(--text);line-height:1.5;}
 .jm-flagged-foot{font-size:10px;color:var(--muted);margin-top:6px;}
+tr.bn-row-hidden{display:none;}
+.bn-more-row td{color:var(--color-success-text,#1a5f3e);cursor:pointer;font-weight:600;font-size:11px;padding:8px 14px;}
+.bn-more-row td:hover{text-decoration:underline;background:var(--color-success-bg,#f0fdf4);}
 </style>
 
 <!-- Mobile sticky save bar removed — Save Dashboard now lives in the sidebar -->

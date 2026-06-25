@@ -450,6 +450,9 @@ html.embedded .hdr{display:none}
 .rpt-table td{padding:7px 10px;border-bottom:1px solid var(--b1);vertical-align:middle}
 .rpt-table .num{text-align:right;font-variant-numeric:tabular-nums}
 .rpt-empty{padding:24px;text-align:center;color:var(--t3);font-size:12px}
+tr.bn-row-hidden{display:none}
+.bn-more-row td{color:var(--green-d);cursor:pointer;font-weight:700;font-size:11px;padding:8px 10px}
+.bn-more-row td:hover{text-decoration:underline}
 .rpt-distbar{display:flex;height:8px;border-radius:5px;overflow:hidden;background:#eef2ee;width:140px}
 .rpt-distbar-seg{height:100%}
 .rpt-flag{display:inline-block;font-size:10px;font-weight:800;padding:1px 6px;border-radius:4px;letter-spacing:1px;text-transform:uppercase;margin-left:6px;vertical-align:middle}
@@ -1465,6 +1468,13 @@ function hasTimeline(job){ return !!job.startDate || histSegs(job).length>0; }
 
 function toast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2600); }
 function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+// Reveal hidden rows for a "+N more" footer (render all rows, mark overflow with
+// class "bn-row-hidden", footer cell calls bnExpandRows(this)).
+function bnExpandRows(cell){
+  var tbl=cell.closest('table'); if(!tbl) return;
+  tbl.querySelectorAll('tr.bn-row-hidden').forEach(function(tr){ tr.classList.remove('bn-row-hidden'); });
+  var fr=cell.closest('tr'); if(fr&&fr.parentNode) fr.parentNode.removeChild(fr);
+}
 
 // ══════════════════════════════════════════════════════
 // GROUP VALUE HELPER — maps a field key to a job's value
@@ -3543,10 +3553,10 @@ function renderReports(el, list){
     h += '<div class="rpt-empty">No jobs are past their stage target. 🎉</div>';
   } else {
     h += '<table class="rpt-table"><thead><tr><th>WO</th><th>City</th><th>Client</th><th>Stage</th><th class="num">Days in Stage</th><th class="num">Target</th><th class="num">Over by</th></tr></thead><tbody>';
-    stuck.slice(0, 50).forEach(r => {
+    stuck.forEach((r,idx) => {
       const over = r.days - r.target;
       const sev = over > r.target ? 'red' : 'amber';
-      h += `<tr style="cursor:pointer" onclick="selJob('${r.job.id}')">
+      h += `<tr class="${idx>=50?'bn-row-hidden':''}" style="cursor:pointer" onclick="selJob('${r.job.id}')">
         <td style="color:var(--green-d);font-weight:700">${esc(r.job.wo||'—')}</td>
         <td>${esc(r.job.city||'—')}${r.job.state?', '+esc(r.job.state):''}</td>
         <td>${esc(r.job.client||'—')}</td>
@@ -3556,8 +3566,8 @@ function renderReports(el, list){
         <td class="num"><span class="rpt-flag ${sev}">+${over.toFixed(1)}d</span></td>
       </tr>`;
     });
+    if(stuck.length > 50) h += `<tr class="bn-more-row"><td colspan="7" onclick="bnExpandRows(this)">+${stuck.length-50} more — click to show all</td></tr>`;
     h += '</tbody></table>';
-    if(stuck.length > 50) h += `<div style="font-size:10px;color:var(--t3);margin-top:8px">Showing 50 of ${stuck.length}. Use filters to narrow further.</div>`;
   }
   h += '</div>';
 

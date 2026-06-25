@@ -25,7 +25,8 @@
       "PowerShell($env:PATH = \"C:\\\\Program Files\\\\Adobe\\\\Adobe Creative Cloud Experience\\\\libs;\" + $env:PATH; node scripts/preflight.js 2>&1 | Select-String -Pattern \"hard failure|advisory|FAIL\"; \"=== parity ===\"; node scripts/test-bn-core.js 2>&1 | Select-String -Pattern \"parity|OK:\")",
       "PowerShell($env:PATH = \"C:\\\\Program Files\\\\Adobe\\\\Adobe Creative Cloud Experience\\\\libs;\" + $env:PATH; node scripts/preflight.js 2>&1 | Select-String -Pattern \"hard failure|advisory\"; node scripts/test-bn-core.js 2>&1 | Select-String -Pattern \"parity|OK:\")",
       "PowerShell($env:PATH = \"C:\\\\Program Files\\\\Adobe\\\\Adobe Creative Cloud Experience\\\\libs;\" + $env:PATH; \"=== sync ===\"; node sync-theme.js 2>&1 | Select-String -Pattern \"agent.html\"; \"=== preflight ===\"; node scripts/preflight.js 2>&1 | Select-String -Pattern \"agent.html|hard failure|advisory\"; \"=== parity ===\"; node scripts/test-bn-core.js 2>&1 | Select-String -Pattern \"parity|OK:\")",
-      "PowerShell($env:PATH = \"C:\\\\Program Files\\\\Adobe\\\\Adobe Creative Cloud Experience\\\\libs;\" + $env:PATH; node scripts/preflight.js 2>&1 | Select-String -Pattern \"Broadway_Unified_Ops_Dashboard|hard failure|advisory\"; node scripts/test-bn-core.js 2>&1 | Select-String -Pattern \"parity|OK:\")"
+      "PowerShell($env:PATH = \"C:\\\\Program Files\\\\Adobe\\\\Adobe Creative Cloud Experience\\\\libs;\" + $env:PATH; node scripts/preflight.js 2>&1 | Select-String -Pattern \"Broadway_Unified_Ops_Dashboard|hard failure|advisory\"; node scripts/test-bn-core.js 2>&1 | Select-String -Pattern \"parity|OK:\")",
+      "PowerShell($env:PATH = \"C:\\\\Program Files\\\\Adobe\\\\Adobe Creative Cloud Experience\\\\libs;\" + $env:PATH; node scripts/preflight.js 2>&1 | Select-String -Pattern \"Broadway_Unified_Ops_Dashboard|hard failure|advisory\")"
     ]
   }
 }
