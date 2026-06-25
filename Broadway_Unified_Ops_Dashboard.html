@@ -3794,7 +3794,7 @@ function _bnCoordO30Spark(name, curCount){
   const dirTxt = last>first?('▲ +'+(last-first)):last<first?('▼ −'+(first-last)):'— 0';
   const color=(getComputedStyle(document.documentElement).getPropertyValue('--color-success-text').trim())||'#1a5f3e';
   return '<div class="em-spark"><div class="em-spark-l"><div class="em-spark-t">Over-30 trajectory</div><div class="em-spark-s">last '+vals.length+' audits</div></div>'
-    + '<div class="em-spark-c">'+o30Sparkline(vals,280,34,color)+'</div>'
+    + '<div class="em-spark-c">'+o30Sparkline(vals,280,34,color,series.map(function(s){return s.dateStr;}))+'</div>'
     + '<div class="em-spark-r"><span class="em-spark-n">'+last+'</span> <span class="'+dir+'">'+dirTxt+'</span></div></div>';
 }
 function eqReasons(j){
@@ -4802,22 +4802,30 @@ function _o30TrendRow(label, prior, cur){
 // Over-30 trajectory sparkline (Track B). Reads window._o30History entries
 // (count of jobs aged >30 per audit), made current-inclusive. Color is resolved
 // from --green-dk at render time so it follows the theme (incl. future dark mode).
-function o30Sparkline(vals,w,h,color){
+// `labels` (optional) aligns 1:1 with `vals` — each point gets a native <title>
+// tooltip "label · value" (e.g. the audit date + the count at that time) plus a
+// visible marker and a larger transparent hit-target so the tooltip is easy to hover.
+function o30Sparkline(vals,w,h,color,labels){
   if(vals.length<2) return '';
   const max=Math.max(...vals), min=Math.min(...vals), rng=(max-min)||1;
   const step=w/(vals.length-1);
   const pts=vals.map((v,i)=>[i*step, h-((v-min)/rng)*(h-6)-3]);
   const line=pts.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' ');
   const area=line+` L ${w} ${h} L 0 ${h} Z`;
-  const last=pts[pts.length-1];
   const uid='o30sg'+Math.random().toString(36).slice(2,7);
+  const dots=pts.map((p,i)=>{
+    const isLast=i===pts.length-1, cx=p[0].toFixed(1), cy=p[1].toFixed(1);
+    const tip=escapeHtml((labels&&labels[i]!=null?labels[i]+' · ':'')+vals[i]);
+    return `<circle cx="${cx}" cy="${cy}" r="${isLast?3:2}" fill="${color}"/>`
+         + `<circle cx="${cx}" cy="${cy}" r="7" fill="transparent" style="cursor:pointer"><title>${tip}</title></circle>`;
+  }).join('');
   return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="display:block;width:100%">
     <defs><linearGradient id="${uid}" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="${color}" stop-opacity="0.20"/>
       <stop offset="100%" stop-color="${color}" stop-opacity="0"/></linearGradient></defs>
     <path d="${area}" fill="url(#${uid})"/>
     <path d="${line}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-    <circle cx="${last[0].toFixed(1)}" cy="${last[1].toFixed(1)}" r="3" fill="${color}"/>
+    ${dots}
   </svg>`;
 }
 function o30SparkBlock(entries, cur){
@@ -4837,7 +4845,7 @@ function o30SparkBlock(entries, cur){
       <div style="font-size:11px;font-weight:700;color:var(--text);">Over-30 trajectory</div>
       <div style="font-size:10px;color:var(--muted);">last ${vals.length} audits</div>
     </div>
-    <div style="flex:1;max-width:340px;">${o30Sparkline(vals,320,40,color)}</div>
+    <div style="flex:1;max-width:340px;">${o30Sparkline(vals,320,40,color,series.map(s=>s.dateStr))}</div>
     <div style="text-align:right;font-family:'DM Mono',monospace;min-width:54px;">
       <div style="font-size:16px;font-weight:700;">${last}</div>
       <div style="font-size:10px;" class="${dir}">${dirTxt}</div>
@@ -4872,7 +4880,7 @@ function o30MultiSparkBlock(entries, cur){
     const dirTxt=last>first?('\u25b2 +'+(last-first)):last<first?('\u25bc \u2212'+(first-last)):'\u2014 0';
     return '<div style="display:flex;align-items:center;gap:14px;padding:7px 14px;border-bottom:1px solid var(--border);">'
       +'<div style="min-width:104px;display:flex;align-items:center;gap:7px;"><span style="width:9px;height:9px;border-radius:2px;background:'+s.color+';display:inline-block;flex:0 0 auto;"></span><span style="font-size:11.5px;font-weight:600;color:var(--text);">'+s.lbl+'</span></div>'
-      +'<div style="flex:1;max-width:300px;">'+o30Sparkline(vals,300,30,s.color)+'</div>'
+      +'<div style="flex:1;max-width:300px;">'+o30Sparkline(vals,300,30,s.color,rows.map(function(r){return r.dateStr;}))+'</div>'
       +'<div style="text-align:right;font-family:\'DM Mono\',monospace;min-width:70px;"><span style="font-size:15px;font-weight:700;">'+last+'</span> <span style="font-size:10px;" class="'+dir+'">'+dirTxt+'</span></div>'
       +'</div>';
   }).join('');
