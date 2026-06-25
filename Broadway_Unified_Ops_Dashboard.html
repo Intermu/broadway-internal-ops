@@ -1695,7 +1695,7 @@ function bnRenderCaseFile(container, src){
   const addP=(txt,cls)=>{ const p=document.createElement('p'); if(cls) p.className=cls; mdInline(p,txt); container.appendChild(p); };
   const heading=(txt)=>{ flushAll(); const hd=document.createElement('div'); hd.className='nd-h'; hd.textContent=txt.replace(/\*\*/g,'').replace(/:\s*$/,'').trim(); container.appendChild(hd); };
   const capsLabel=(s)=>{ const core=s.replace(/\([^)]*\)/g,''); return (core.match(/[a-z]/g)||[]).length<=1 && /[A-Z]/.test(core); };
-  const sectionOf=(label)=>{ const L=label.toUpperCase(); if(/RISK FLAG/.test(L))return 'flags'; if(/VENDOR|SUPPLIER/.test(L))return 'vendors'; if(/TIMELINE/.test(L))return 'timeline'; if(/NEXT ACTION/.test(L))return 'actions'; if(/BLOCK|REMAIN|DONE SO FAR/.test(L))return 'list'; if(/STATUS/.test(L))return 'status'; return 'other'; };
+  const sectionOf=(label)=>{ const L=label.toUpperCase(); if(/RISK FLAG/.test(L))return 'flags'; if(/VENDOR|SUPPLIER/.test(L))return 'vendors'; if(/TIMELINE/.test(L))return 'timeline'; if(/NEXT ACTION|NEXT STEP|ACTION ITEM/.test(L))return 'actions'; if(/BLOCK|REMAIN|DONE SO FAR/.test(L))return 'list'; if(/STATUS/.test(L))return 'status'; return 'other'; };
   const isTableRow=(s)=>/^\|/.test(s) && (s.match(/\|/g)||[]).length>=2;
   const isSep=(c)=>/-/.test(c) && /^[\s:|-]+$/.test(c);
   function flagCard(txt){
@@ -1757,8 +1757,11 @@ function bnRenderCaseFile(container, src){
     const hm=t.match(/^#{1,6}\s+(.*)$/);
     const wb=t.match(/^\*\*([^*]+)\*\*$/);
     const lc=t.match(/^([A-Z0-9][A-Z0-9 .,'\/&()\-]{2,46}?):\s*(.*)$/);
-    if(hm||wb||(lc&&capsLabel(lc[1]))){
-      const label=hm?hm[1]:wb?wb[1]:lc[1];
+    // Bare ALL-CAPS section header (no colon/markdown), e.g. "RISK FLAGS" / "NEXT STEPS".
+    // Accepted only when it maps to a known section, so shouty body text is not mistaken for one.
+    const bare = (!hm && !wb && !lc && t.length<=42 && capsLabel(t) && sectionOf(t)!=='other') ? t : null;
+    if(hm||wb||(lc&&capsLabel(lc[1]))||bare){
+      const label=hm?hm[1]:wb?wb[1]:lc?lc[1]:t;
       const sec=sectionOf(label);
       if(section==='flags' && sec==='other' && lc && !hm && !wb){ flagCard(t); continue; }
       heading(label); section=sec; flagN=0;
@@ -1790,9 +1793,9 @@ function renderNoteHtml(text){
 // modal (moved, not duplicated). Returns { actions:[...], rest:<note without that section> }.
 function extractNextActions(text){
   const src=String(text||''); const ls=src.replace(/\r/g,'').split('\n');
-  const headLabel=(s)=>{ const t=s.trim(); const hm=t.match(/^#{1,6}\s+(.*)$/); const wb=t.match(/^\*\*([^*]+)\*\*$/); const lc=t.match(/^([A-Z0-9][A-Z0-9 .,'\/&()\-]{2,46}?):\s*(.*)$/); return hm?hm[1]:wb?wb[1]:lc?lc[1]:null; };
+  const headLabel=(s)=>{ const t=s.trim(); const hm=t.match(/^#{1,6}\s+(.*)$/); const wb=t.match(/^\*\*([^*]+)\*\*$/); const lc=t.match(/^([A-Z0-9][A-Z0-9 .,'\/&()\-]{2,46}?):\s*(.*)$/); const bt=(!hm&&!wb&&!lc&&t.length<=42&&/^[A-Z0-9][A-Z0-9 .,'\/&()\-]*$/.test(t)&&(t.match(/[a-z]/g)||[]).length<=1&&/[A-Z]/.test(t))?t:null; const bare=(bt&&/STATUS|RISK FLAG|VENDOR|SUPPLIER|TIMELINE|NEXT ACTION|NEXT STEP|ACTION ITEM|BLOCK|REMAIN|DONE SO FAR/.test(bt))?bt:null; return hm?hm[1]:wb?wb[1]:lc?lc[1]:bare; };
   let start=-1;
-  for(let i=0;i<ls.length;i++){ const h=headLabel(ls[i]); if(h && /NEXT ACTION/i.test(h)){ start=i; break; } }
+  for(let i=0;i<ls.length;i++){ const h=headLabel(ls[i]); if(h && /NEXT ACTION|NEXT STEP|ACTION ITEM/i.test(h)){ start=i; break; } }
   if(start<0) return { actions:[], rest:src };
   let end=ls.length;
   for(let j=start+1;j<ls.length;j++){ if(headLabel(ls[j])){ end=j; break; } }
