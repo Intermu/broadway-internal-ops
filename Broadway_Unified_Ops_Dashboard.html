@@ -1778,8 +1778,22 @@ function extractNextActions(text){
   for(let j=start+1;j<ls.length;j++){ if(headLabel(ls[j])){ end=j; break; } }
   const actions=[];
   const inline=ls[start].match(/:\s*(.+)$/); if(inline) actions.push(inline[1].trim());
-  ls.slice(start+1,end).forEach(l=>{ const tt=l.trim(); if(tt) actions.push(tt.replace(/^\s*(?:\d+[.)]|[\u2022\-*])\s*/,'')); });
-  const rest=ls.slice(0,start).concat(ls.slice(end)).join('\n').replace(/\n{3,}/g,'\n\n').trim();
+  // Collect the action items. Once a marked list item (1. / 1) / - / * / \u2022) has appeared,
+  // the first later non-blank line that is NOT a marked item ends the section. This keeps
+  // trailing footer/identity lines (e.g. "TRACKING #\u2026 | WO \u2026 | \u2026") out of the
+  // hoisted card; they return to the case-file body via secEnd so nothing is lost.
+  const isItem=(t)=>/^\s*(?:\d+[.)]|[\u2022\-*])\s+/.test(t);
+  const seg=ls.slice(start+1,end);
+  let sawItem=false, cut=seg.length;
+  for(let k=0;k<seg.length;k++){
+    const tt=seg[k].trim();
+    if(tt===''){ continue; }
+    if(isItem(tt)){ sawItem=true; actions.push(tt.replace(/^\s*(?:\d+[.)]|[\u2022\-*])\s*/,'')); continue; }
+    if(sawItem){ cut=k; break; }   // marked list ended; remainder belongs to the body
+    actions.push(tt);              // free-text action line before any marker (legacy form)
+  }
+  const secEnd=start+1+cut;
+  const rest=ls.slice(0,start).concat(ls.slice(secEnd)).join('\n').replace(/\n{3,}/g,'\n\n').trim();
   return { actions, rest };
 }
 // Numbered (chip) list for the hoisted Next Actions card.
