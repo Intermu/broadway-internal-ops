@@ -12,7 +12,8 @@
       "PowerShell($node = \"C:\\\\Program Files\\\\Adobe\\\\Adobe Creative Cloud Experience\\\\libs\\\\node.exe\"; & $node --check \"api/data-store/index.js\"; if \\($?\\) { \"data-store OK\" })",
       "PowerShell($node = \"C:\\\\Program Files\\\\Adobe\\\\Adobe Creative Cloud Experience\\\\libs\\\\node.exe\"; & $node --check \"api/activity-log/index.js\"; if \\($?\\) { \"activity-log OK\" }; Get-Content \"api/activity-log/function.json\" -Raw | ConvertFrom-Json | Out-Null; if \\($?\\) { \"function.json valid\" })",
       "PowerShell($env:PATH = \"C:\\\\Program Files\\\\Adobe\\\\Adobe Creative Cloud Experience\\\\libs;\" + $env:PATH; \"node = \" + \\(Get-Command node\\).Source; \"--- preflight ---\"; node scripts/preflight.js)",
-      "PowerShell($env:PATH = \"C:\\\\Program Files\\\\Adobe\\\\Adobe Creative Cloud Experience\\\\libs;\" + $env:PATH; \"--- bn-core parity test ---\"; node scripts/test-bn-core.js; \"--- api syntax ---\"; node --check api/data-store/index.js; if\\($?\\){\"data-store OK\"}; node --check api/activity-log/index.js; if\\($?\\){\"activity-log OK\"}; node --check api/get-roles/index.js; if\\($?\\){\"get-roles OK\"})"
+      "PowerShell($env:PATH = \"C:\\\\Program Files\\\\Adobe\\\\Adobe Creative Cloud Experience\\\\libs;\" + $env:PATH; \"--- bn-core parity test ---\"; node scripts/test-bn-core.js; \"--- api syntax ---\"; node --check api/data-store/index.js; if\\($?\\){\"data-store OK\"}; node --check api/activity-log/index.js; if\\($?\\){\"activity-log OK\"}; node --check api/get-roles/index.js; if\\($?\\){\"get-roles OK\"})",
+      "PowerShell($env:PATH = \"C:\\\\Program Files\\\\Adobe\\\\Adobe Creative Cloud Experience\\\\libs;\" + $env:PATH; node scripts/preflight.js; \"=== parity ===\"; node scripts/test-bn-core.js)"
     ]
   }
 }

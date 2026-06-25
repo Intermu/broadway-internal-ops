@@ -942,6 +942,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible{
       <div class="sb-title" data-collapsible="true">Aging</div>
       <button class="nav-btn" data-view="over30-review">🔴 Over-30 Review</button>
       <button class="nav-btn" data-view="aging-detail">⏱ Aging Detail</button>
+      <button class="nav-btn" data-view="snapshot-compare">🔀 Snapshot Compare</button>
     </div>
     <div class="sb-divider"></div>
     <div class="sb-section">
@@ -2544,7 +2545,7 @@ function render(view) {
 
   // Empty state — show friendly placeholder until a workbook is loaded.
   // Reference views (SLA guide, trade tiers) work without data, so allow them.
-  if(!JOBS.length && view !== 'sla-guide' && view !== 'trade-tiers') {
+  if(!JOBS.length && view !== 'sla-guide' && view !== 'trade-tiers' && view !== 'snapshot-compare') {
     mc.innerHTML = `
       <div class="empty-dashboard">
         <div class="empty-icon">📥</div>
@@ -2573,6 +2574,7 @@ function render(view) {
   else if(view==='stale-tracker') renderStaleTracker(mc, agg);
   else if(view==='aging-detail') renderAging(mc, agg);
   else if(view==='over30-review') renderOver30(mc, agg);
+  else if(view==='snapshot-compare') renderSnapshotCompare(mc);
   else if(view.startsWith('coord-')) {
     // Index-based lookup: coord-3 → window._coordOrder[3]. Survives names with hyphens, apostrophes, periods, etc.
     const idx = parseInt(view.replace('coord-',''), 10);
@@ -4815,6 +4817,127 @@ async function renderOver30Trend(){
   </div>`;
 }
 
+// ── SNAPSHOT COMPARE ───────────────────────────────────────────────────────
+// Pick any two points on the over30-history record (plus an optional live
+// "today") and diff them: jobs newly crossed 30, jobs cleared, jobs still
+// stuck, the count/$ delta, per-division movement, and per-coordinator movement.
+// Generalizes the auto WoW/MoM Trend rows to an arbitrary window. Read-only —
+// reuses the same stored snapshots the Trend card already loads; writes nothing.
+window._snapCmp = { a:null, b:null };
+
+// Synthetic "live / today" entry from the current JOBS, shaped exactly like a
+// stored over30-history entry so the diff code treats it uniformly.
+function _snapLiveEntry(){
+  const o30 = JOBS.filter(j=>j.aged>30);
+  const byCoord = {};
+  o30.forEach(j=>{ const k=j.coordinator||'(unassigned)'; const c=byCoord[k]||(byCoord[k]={o30:0,amt:0,oldest:0}); c.o30++; c.amt+=j.amount; if(j.aged>c.oldest)c.oldest=j.aged; });
+  const dateStr = window._reportDate ? new Date(window._reportDate).toISOString().slice(0,10) : new Date().toISOString().slice(0,10);
+  return { dateStr, live:true, o30:{count:o30.length, amt:o30.reduce((s,j)=>s+j.amount,0), ids:o30.map(j=>j.jobId)}, byCoord };
+}
+// Every stored snapshot (ascending), plus a live "today" when live data is
+// loaded — replacing the newest stored entry if it shares today's date.
+function _snapCandidates(){
+  const entries = (window._o30History||[]).filter(e=>e&&e.dateStr&&e.o30&&Array.isArray(e.o30.ids)).slice();
+  entries.sort((a,b)=>a.dateStr<b.dateStr?-1:1);
+  if(JOBS.length && !window.BROADWAY_SNAPSHOT){
+    const live=_snapLiveEntry(), last=entries[entries.length-1];
+    if(!last || last.dateStr!==live.dateStr) entries.push(live); else entries[entries.length-1]=live;
+  }
+  return entries;
+}
+function _snapFind(cands, d){ return cands.find(e=>e.dateStr===d) || null; }
+function setSnapCmp(which, val){ window._snapCmp[which]=val; render('snapshot-compare'); }
+
+function renderSnapshotCompare(mc){
+  const title = `<div class="page-title">🔀 Snapshot Compare</div>`;
+  const sub = `<div class="page-sub">Diff any two over-30 snapshots over time.</div>`;
+  if(window.BROADWAY_SNAPSHOT){
+    mc.innerHTML = title + sub + `<div class="card"><div class="card-body" style="padding:14px 16px;color:var(--muted);font-size:12px;">History views run in the live dashboard only — saved snapshots can't reach the data store.</div></div>`;
+    return;
+  }
+  // History may not have finished its page-load prefetch yet (deep-link, cold open).
+  if(!window._o30History){
+    mc.innerHTML = title + `<div class="card"><div class="card-body" style="padding:14px 16px;color:var(--muted);font-size:12px;">Loading snapshot history…</div></div>`;
+    bnClientGet('over30-history').then(res=>{ window._o30History=(res&&res.exists&&res.data&&Array.isArray(res.data.entries))?res.data.entries:[]; if(currentView==='snapshot-compare') render('snapshot-compare'); }).catch(()=>{ window._o30History=[]; if(currentView==='snapshot-compare') render('snapshot-compare'); });
+    return;
+  }
+  const cands=_snapCandidates();
+  if(cands.length<2){
+    mc.innerHTML = title + sub + `<div class="card"><div class="card-body" style="padding:14px 16px;color:var(--muted);font-size:12px;">Need at least two snapshots on record to compare — history builds as weekly audits load (${cands.length} so far).</div></div>`;
+    return;
+  }
+
+  const dates=cands.map(c=>c.dateStr);
+  let bSel = (window._snapCmp.b && dates.includes(window._snapCmp.b)) ? window._snapCmp.b : dates[dates.length-1];
+  let aSel = (window._snapCmp.a && dates.includes(window._snapCmp.a)) ? window._snapCmp.a : null;
+  if(!aSel || aSel===bSel){
+    // Default baseline: the snapshot closest to ~30 days before B, else the oldest.
+    const bTime=new Date(bSel+'T00:00:00Z').getTime(); let best=null,bestDiff=Infinity;
+    cands.forEach(c=>{ if(c.dateStr>=bSel) return; const d=(bTime-new Date(c.dateStr+'T00:00:00Z').getTime())/86400000; const diff=Math.abs(d-30); if(diff<bestDiff){bestDiff=diff;best=c.dateStr;} });
+    aSel = best || dates.find(d=>d!==bSel) || dates[0];
+  }
+  window._snapCmp.a=aSel; window._snapCmp.b=bSel;
+  const A=_snapFind(cands,aSel), B=_snapFind(cands,bSel);
+
+  const optList=sel=>dates.map(d=>{ const e=_snapFind(cands,d); const lbl=d+(e&&e.live?' (live today)':'')+' · '+((e&&e.o30.count)||0)+' o30'; return `<option value="${d}"${d===sel?' selected':''}>${escapeHtml(lbl)}</option>`; }).join('');
+
+  const setA=new Set(A.o30.ids), setB=new Set(B.o30.ids);
+  const crossed=[...setB].filter(id=>!setA.has(id));   // newly over-30 by B
+  const cleared=[...setA].filter(id=>!setB.has(id));   // left the pile by B
+  const persisted=[...setB].filter(id=>setA.has(id));  // stuck across both
+  const dCount=(B.o30.count||0)-(A.o30.count||0);
+  const dAmt=(B.o30.amt||0)-(A.o30.amt||0);
+  const dAmtTxt=(dAmt>=0?'+':'−')+fmt$0(Math.abs(dAmt));
+  const spanDays=Math.round((new Date(bSel+'T00:00:00Z')-new Date(aSel+'T00:00:00Z'))/86400000);
+  const reversed=spanDays<0;
+
+  // Division movement (retroactive from stored IDs).
+  const dcA=_o30DivCounts(A.o30.ids), dcB=_o30DivCounts(B.o30.ids);
+  const divRows=[['overall','Overall'],['Service','Service'],['WiFi','WiFi'],['Photometrics','Photometrics']]
+    .map(([k,lbl])=>{ const a=dcA[k]||0,b=dcB[k]||0; return `<tr><td style="font-weight:600;">${lbl}</td><td>${a}</td><td><strong>${b}</strong></td><td>${_o30Arrow(b-a)}</td></tr>`; }).join('');
+
+  // Coordinator movement (from stored byCoord aggregates).
+  const ab=A.byCoord||{}, bb=B.byCoord||{};
+  const names={}; Object.keys(ab).forEach(n=>names[n]=1); Object.keys(bb).forEach(n=>names[n]=1);
+  const crows=Object.keys(names).map(n=>{ const a=(ab[n]&&ab[n].o30)||0,b=(bb[n]&&bb[n].o30)||0; return {n,a,b,d:b-a}; }).filter(r=>r.a||r.b).sort((x,y)=>Math.abs(y.d)-Math.abs(x.d)||y.b-x.b);
+  const coordRows=crows.length?crows.map(r=>`<tr><td style="font-weight:600;">${escapeHtml(r.n)}</td><td>${r.a}</td><td><strong>${r.b}</strong></td><td>${_o30Arrow(r.d)}</td></tr>`).join(''):`<tr><td colspan="4" style="color:var(--muted);font-size:12px;padding:12px 14px;">No per-coordinator data on these snapshots.</td></tr>`;
+
+  // Job lists. Enrich with live coordinator/age where the ID is still in the
+  // current workbook; cleared/historical-only IDs show "—" (snapshots store IDs,
+  // not full job records — division is still derivable from the ID).
+  const jmap={}; JOBS.forEach(j=>{ jmap[j.jobId]=j; });
+  const jobRows=ids=>{
+    if(!ids.length) return `<tr><td colspan="4" style="color:var(--muted);font-size:12px;padding:12px 14px;">None.</td></tr>`;
+    const cap=50, show=ids.slice(0,cap);
+    const rows=show.map(id=>{ const j=jmap[id], div=o30Division({jobId:id}); const co=j?escapeHtml(j.coordinator||'—'):'<span style="color:var(--muted)">—</span>'; const ag=j?`<span class="age-pill ${ageCls(j.aged)}">${j.aged}d</span>`:'<span style="color:var(--muted)">—</span>'; return `<tr><td style="font-weight:600;">${escapeHtml(id)}</td><td>${co}</td><td>${ag}</td><td>${div}</td></tr>`; }).join('');
+    const more=ids.length>cap?`<tr><td colspan="4" style="color:var(--muted);font-size:11px;padding:8px 14px;">+${ids.length-cap} more not shown</td></tr>`:'';
+    return rows+more;
+  };
+  const jobCard=(t,meta,ids,accent)=>`<div class="card"><div class="card-header"><h3>${t} <span class="badge ${accent}">${ids.length}</span></h3><span class="card-meta">${meta}</span></div><div class="card-body" style="padding:0;"><table class="data-table"><thead><tr><th>Job #</th><th>Coordinator</th><th>Age</th><th>Division</th></tr></thead><tbody>${jobRows(ids)}</tbody></table></div></div>`;
+
+  mc.innerHTML = title
+    + `<div class="page-sub">From <strong>${escapeHtml(aSel)}</strong>${A.live?' (live)':''} to <strong>${escapeHtml(bSel)}</strong>${B.live?' (live)':''} · ${Math.abs(spanDays)}-day window</div>`
+    + `<div class="card" style="margin-bottom:14px;"><div class="card-body" style="padding:12px 16px;display:flex;flex-wrap:wrap;gap:18px;align-items:flex-end;">
+        <label style="font-size:11px;font-weight:700;color:var(--text);">Baseline<br><select onchange="setSnapCmp('a',this.value)" style="margin-top:4px;font-family:'DM Mono',monospace;font-size:12px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text);">${optList(aSel)}</select></label>
+        <span style="font-size:18px;color:var(--muted);padding-bottom:6px;">→</span>
+        <label style="font-size:11px;font-weight:700;color:var(--text);">Compare to<br><select onchange="setSnapCmp('b',this.value)" style="margin-top:4px;font-family:'DM Mono',monospace;font-size:12px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text);">${optList(bSel)}</select></label>
+        ${reversed?`<span style="font-size:11px;color:var(--amber);padding-bottom:6px;">⚠ baseline is later than compare — showing reverse movement</span>`:''}
+      </div></div>`
+    + `<div class="stat-grid sg-4" style="margin-bottom:16px;">
+        <div class="stat-box"><div class="sb-num">${_o30Arrow(dCount)}</div><div class="sb-lbl">Over-30 count<br>${A.o30.count} → ${B.o30.count}</div></div>
+        <div class="stat-box"><div class="sb-num ${dAmt>0?'c-red':dAmt<0?'c-green':'c-amber'}" style="font-size:18px;">${dAmtTxt}</div><div class="sb-lbl">$ exposure change</div></div>
+        <div class="stat-box"><div class="sb-num c-red">${crossed.length}</div><div class="sb-lbl">Newly crossed 30</div></div>
+        <div class="stat-box"><div class="sb-num c-green">${cleared.length}</div><div class="sb-lbl">Cleared out</div></div>
+      </div>`
+    + `<div class="snap-cmp-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
+        <div class="card"><div class="card-header"><h3>Division movement</h3><span class="card-meta">over-30 by division · retroactive from job IDs</span></div><div class="card-body" style="padding:0;"><table class="data-table"><thead><tr><th>Division</th><th>${escapeHtml(aSel)}</th><th>${escapeHtml(bSel)}</th><th>Change</th></tr></thead><tbody>${divRows}</tbody></table></div></div>
+        <div class="card"><div class="card-header"><h3>Coordinator movement</h3><span class="card-meta">${crows.length} coordinator${crows.length===1?'':'s'} · over-30 load</span></div><div class="card-body" style="padding:0;"><table class="data-table"><thead><tr><th>Coordinator</th><th>${escapeHtml(aSel)}</th><th>${escapeHtml(bSel)}</th><th>Change</th></tr></thead><tbody>${coordRows}</tbody></table></div></div>
+      </div>`
+    + jobCard('Newly crossed 30','in '+escapeHtml(bSel)+' but not '+escapeHtml(aSel)+' · coordinator/age shown where still in the current workbook', crossed, 'b-red')
+    + jobCard('Cleared out','in '+escapeHtml(aSel)+' but gone by '+escapeHtml(bSel), cleared, 'b-green')
+    + jobCard('Still over-30','in both snapshots · the persistent pile', persisted, 'b-gray');
+}
+
 // Decode base64 string to a Blob, build a synthetic File, run through handleFile.
 function base64ToFile(b64, filename){
   const bin = atob(b64);
@@ -4900,6 +5023,7 @@ updateEditBadge();
 .eq-acked{background:#ecfdf5;color:#065f46}
 .eq-snoozed{background:#fffbeb;color:#92400e}
 .eq-note{font-size:10px;color:var(--muted);font-style:italic}
+@media (max-width:760px){.snap-cmp-grid{grid-template-columns:1fr !important}}
 </style>
 
 <!-- Mobile sticky save bar removed — Save Dashboard now lives in the sidebar -->
