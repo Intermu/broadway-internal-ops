@@ -1467,14 +1467,60 @@ function openJobModal(id){
       </div>
       </div>
     </div>`;
-  const o=document.getElementById('jobModalOverlay'); if(o) o.classList.add('open');
+  _bnModalOpen('jobModalOverlay','jobModalBox');
 }
-function closeJobModal(){ const o=document.getElementById('jobModalOverlay'); if(o) o.classList.remove('open'); }
-document.addEventListener('keydown',function(e){ if(e.key==='Escape') closeJobModal(); });
+function closeJobModal(){ _bnModalClose('jobModalOverlay'); }
+// ── Modal & row a11y ───────────────────────────────────────────────────────
+// Focus capture/restore + focus-into-dialog on open, Esc-closes-either + Tab
+// focus-trap while a modal is open, and Enter/Space activation for the table
+// rows (which are <tr onclick> elsewhere — made focusable via _bnA11yRows).
+let _bnReturnFocus=null;
+function _bnA11yRows(root){
+  (root||document).querySelectorAll('.job-row,.em-click').forEach(function(r){
+    if(!r.hasAttribute('tabindex')) r.setAttribute('tabindex','0');
+    if(!r.hasAttribute('role')) r.setAttribute('role','button');
+  });
+}
+function _bnModalOpen(overlayId, boxId){
+  _bnReturnFocus = document.activeElement;
+  const o=document.getElementById(overlayId); if(o) o.classList.add('open');
+  const box=document.getElementById(boxId);
+  if(box){ _bnA11yRows(box); box.setAttribute('tabindex','-1'); setTimeout(function(){ try{ box.focus(); }catch(_){} },0); }
+}
+function _bnModalClose(overlayId){
+  const o=document.getElementById(overlayId); if(o) o.classList.remove('open');
+  if(_bnReturnFocus && _bnReturnFocus.focus){ try{ _bnReturnFocus.focus(); }catch(_){} }
+  _bnReturnFocus=null;
+}
+function _bnOpenModalBox(){
+  const j=document.getElementById('jobModalOverlay'), e=document.getElementById('entModalOverlay');
+  if(j && j.classList.contains('open')) return document.getElementById('jobModalBox');
+  if(e && e.classList.contains('open')) return document.getElementById('entModalBox');
+  return null;
+}
+document.addEventListener('keydown',function(e){
+  const box=_bnOpenModalBox();
+  if(box){
+    if(e.key==='Escape'){ closeJobModal(); closeEntityModal(); return; }
+    if(e.key==='Tab'){
+      const f=box.querySelectorAll('a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])');
+      if(!f.length){ e.preventDefault(); box.focus(); return; }
+      const first=f[0], last=f[f.length-1];
+      if(e.shiftKey && document.activeElement===first){ e.preventDefault(); last.focus(); }
+      else if(!e.shiftKey && document.activeElement===last){ e.preventDefault(); first.focus(); }
+      else if(!box.contains(document.activeElement)){ e.preventDefault(); first.focus(); }
+    }
+    return;
+  }
+  if(e.key==='Enter' || e.key===' '){
+    const el=document.activeElement;
+    if(el && (el.classList.contains('job-row')||el.classList.contains('em-click'))){ e.preventDefault(); el.click(); }
+  }
+});
 // ── Vendor / Coordinator drilldown modal (job-modal shell). Index-based routing via
 // window._o30VendorOrder / _o30CoordOrder avoids quoting issues with names. Shows open work
 // (live audit, click-through to job modal) + invoiced history (loaded Pilot Revenue export).
-function closeEntityModal(){ const o=document.getElementById('entModalOverlay'); if(o) o.classList.remove('open'); }
+function closeEntityModal(){ _bnModalClose('entModalOverlay'); }
 function openEntityModal(kind, idx){
   const order = kind==='vendor' ? (window._o30VendorOrder||[]) : kind==='trade' ? (window._o30TradeOrder||[]) : (window._o30CoordOrder||[]);
   const name = order[idx]; if(name==null) return;
@@ -1550,7 +1596,7 @@ function openEntityModal(kind, idx){
     + '<div class="em-seclbl">Invoiced \u2014 completed'+(hasClosed?' <span class="n">\u00b7 '+closed.length+' '+(closed.length===1?'job':'jobs')+(window._closedSource?' \u00b7 '+escapeHtml(window._closedSource):'')+'</span>':'')+'</div>'
     + invSection
     + '</div>';
-  const o=document.getElementById('entModalOverlay'); if(o) o.classList.add('open');
+  _bnModalOpen('entModalOverlay','entModalBox');
 }
 document.addEventListener('keydown',function(e){ if(e.key==='Escape') closeEntityModal(); });
 
@@ -2535,8 +2581,9 @@ function initCounts() {
     wrap.innerHTML = sortedNames.map((name, i)=>{
       const c = agg.coords[name];
       const sr = c.jobs.length>0?((c.jobs.length-c.violations)/c.jobs.length*100):0;
+      const tier = sr>=80?'on track':sr>=60?'at risk':'off track';
       const dot = sr>=80?'🟢':sr>=60?'🟡':'🔴';
-      return `<button class="nav-btn" data-view="coord-${i}">${dot} ${escapeHtml(name)} <span class="nb-count">${c.jobs.length}</span></button>`;
+      return `<button class="nav-btn" data-view="coord-${i}"><span title="SLA ${Math.round(sr)}% — ${tier}" aria-label="SLA ${Math.round(sr)} percent, ${tier}">${dot}</span> ${escapeHtml(name)} <span class="nb-count">${c.jobs.length}</span></button>`;
     }).join('');
   }
 }
@@ -2590,6 +2637,7 @@ function render(view) {
   else if(view==='sla-guide') renderSlaGuide(mc);
   else if(view==='trade-tiers') renderTradeTiers(mc);
   _injectWbHealth(mc);
+  _bnA11yRows(mc);
 }
 
 // ── OVERVIEW ─────────────────────────────────────────────────────────────
@@ -5187,6 +5235,9 @@ updateEditBadge();
 @keyframes bnpulse{0%,100%{opacity:.35}50%{opacity:1}}
 .bn-chip-x{background:none;border:none;color:inherit;cursor:pointer;font-size:12px;line-height:1;padding:0 2px;opacity:.7;}
 .bn-chip-x:hover{opacity:1;}
+/* a11y: keyboard-reachable rows get a visible focus ring; critical age tier gets a non-color structural cue */
+.job-row:focus-visible,.em-click:focus-visible{outline:2px solid var(--color-accent,#2ECC71);outline-offset:-2px;}
+.age-pill.age-high{box-shadow:inset 0 0 0 1.5px var(--color-danger-text,#991b1b);}
 </style>
 
 <!-- Mobile sticky save bar removed — Save Dashboard now lives in the sidebar -->
