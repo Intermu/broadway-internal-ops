@@ -1585,6 +1585,22 @@ function openEntityModal(kind, idx){
     invSection = '<div class="table-scroll-wrap"><div class="table-scroll-hint">\u2194 Scroll for more columns</div><table class="data-table em-table"><thead><tr><th>Job #</th><th>Completed</th><th>Days to complete</th><th>Inv $</th><th>'+invOther+'</th></tr></thead><tbody>'+invRows+'</tbody></table></div>'
       + (closed.length>CAP ? '<div class="em-foot">Showing '+CAP+' of '+closed.length+' (most recent).</div>' : '');
   }
+  // Next Actions Required — coordinator drilldowns only. Open exception items
+  // (over-30, un-acked/un-snoozed) for this coordinator, with the action to take.
+  let naHtml='';
+  if(!isV && !isT){
+    const na=_bnNextActions(open);
+    const naRows=na.slice(0,15).map(function(x){
+      const acts=x.reasons.map(function(c){ return '<div class="na-act">'+escapeHtml(EQ_ACTION[c]||c)+'</div>'; }).join('');
+      return '<tr class="em-click" onclick="closeEntityModal();openJobModal('+JSON.stringify(String(x.j.jobId))+')">'
+        + '<td class="em-jid">'+escapeHtml(x.j.jobId)+'</td>'
+        + '<td><span class="age-pill '+ageCls(x.j.aged)+'">'+x.j.aged+'d</span></td>'
+        + '<td>'+acts+'</td></tr>';
+    }).join('');
+    naHtml='<div class="em-seclbl">Next actions required <span class="n">· '+na.length+' open '+(na.length===1?'item':'items')+(na.length>15?' · top 15 shown':'')+'</span>'+(na.length?' <button type="button" class="em-kind-btn" style="text-transform:none;letter-spacing:normal;" onclick="copyCoordActions()" title="Copy this list to the clipboard">⧉ Copy</button>':'')+'</div>'
+      + (na.length ? '<div class="table-scroll-wrap"><table class="data-table em-table"><thead><tr><th>Job #</th><th>Age</th><th>What needs to happen</th></tr></thead><tbody>'+naRows+'</tbody></table></div>'
+                   : '<div class="em-note">No outstanding actions — this coordinator’s over-30 jobs are acknowledged or up to date.</div>');
+  }
   box.innerHTML =
     '<div class="job-modal-head"><div class="jm-head-l"><span class="jm-id">'+escapeHtml(name)+supTag+'</span>'
     + '<span class="jm-head-sub">'+(isV?'Vendor':isT?'Trade':'Coordinator')+' \u00b7 '+open.length+' open'+(hasClosed?' \u00b7 '+closed.length+' invoiced':'')+'</span></div>'
@@ -1592,6 +1608,7 @@ function openEntityModal(kind, idx){
     + '<div class="job-modal-body">'
     + '<div class="em-tiles">'+tiles+'</div>'
     + kindCtrl
+    + naHtml
     + '<div class="em-seclbl">Open work <span class="n">\u00b7 '+open.length+' '+(open.length===1?'job':'jobs')+' \u00b7 click a row to open the job</span></div>'
     + '<div class="table-scroll-wrap"><div class="table-scroll-hint">\u2194 Scroll for more columns</div><table class="data-table em-table"><thead><tr><th>Job #</th><th>Status</th><th>Age</th><th>Approved $</th><th>'+otherCol+'</th></tr></thead><tbody>'+openRows+'</tbody></table></div>'
     + '<div class="em-seclbl">Invoiced \u2014 completed'+(hasClosed?' <span class="n">\u00b7 '+closed.length+' '+(closed.length===1?'job':'jobs')+(window._closedSource?' \u00b7 '+escapeHtml(window._closedSource):'')+'</span>':'')+'</div>'
@@ -2556,8 +2573,8 @@ function clearFilters() {
   toast('Filters cleared');
 }
 
-function initCounts() {
-  const agg = compute();
+function initCounts(_agg) {
+  const agg = _agg || compute();   // accept a precomputed agg to avoid double compute()
   // status view counts
   const statusMap = {'pending-schedule':'Pending Schedule','proposal-required':'Vendor Proposal Required|Vendor Proposal Received|Preparing Client Proposal|Pending Proposal Review|Pending Trade Specialist','scheduled':'Scheduled','validates':'Clocked Out: Complete|Clocked Out: In Progress|ATF Prep|ATF Submitted|ATF Approved'};
   Object.entries(statusMap).forEach(([id, statusPat])=>{
@@ -2584,13 +2601,15 @@ function initCounts() {
       const sr = c.jobs.length>0?((c.jobs.length-c.violations)/c.jobs.length*100):0;
       const tier = sr>=80?'on track':sr>=60?'at risk':'off track';
       const dot = sr>=80?'🟢':sr>=60?'🟡':'🔴';
-      return `<button class="nav-btn" data-view="coord-${i}"><span title="SLA ${Math.round(sr)}% — ${tier}" aria-label="SLA ${Math.round(sr)} percent, ${tier}">${dot}</span> ${escapeHtml(name)} <span class="nb-count">${c.jobs.length}</span></button>`;
+      const naN = _bnNextActions(c.jobs).length;
+      const naB = naN?`<span class="na-badge" title="${naN} open action${naN===1?'':'s'} required">${naN}</span>`:'';
+      return `<button class="nav-btn" data-view="coord-${i}"><span title="SLA ${Math.round(sr)}% — ${tier}" aria-label="SLA ${Math.round(sr)} percent, ${tier}">${dot}</span> ${escapeHtml(name)} ${naB}<span class="nb-count">${c.jobs.length}</span></button>`;
     }).join('');
   }
 }
 
 // ── SECTION 5: RENDER VIEWS ────────────────────────────────────────────────
-function render(view) {
+function render(view, _agg) {
   const mc = document.getElementById('mainContent');
 
   // Empty state — show friendly placeholder until a workbook is loaded.
@@ -2608,8 +2627,8 @@ function render(view) {
     return;
   }
 
-  const agg = compute();
-  
+  const agg = _agg || compute();
+
   if(view==='overview') renderOverview(mc, agg);
   else if(view==='pending-schedule') renderFiltered(mc,'Pending Schedule jobs','Pending Schedule',j=>j.status==='Pending Schedule',true);
   else if(view==='proposal-required') renderFiltered(mc,'Proposal Required','Proposals',j=>['Vendor Proposal Required','Vendor Proposal Received','Preparing Client Proposal','Pending Proposal Review','Pending Trade Specialist','Internal Proposal Approved','Internal Proposal Rejected'].includes(j.status),true);
@@ -2680,8 +2699,9 @@ function renderOverview(mc, agg) {
     const amt = c.jobs.reduce((s,j)=>s+j.amount,0);
     const ytd = YTD_TABLE.find(r=>r.name===name);
     const safeName = escapeHtml(name);
+    const naN = _bnNextActions(c.jobs).length;
     return `<tr>
-      <td><button style="background:none;border:none;cursor:pointer;font-weight:700;color:#1a5f3e;font-size:11px;text-decoration:underline;font-family:'DM Mono',monospace;" data-nav-name="${safeName}">${safeName}</button></td>
+      <td><button style="background:none;border:none;cursor:pointer;font-weight:700;color:#1a5f3e;font-size:11px;text-decoration:underline;font-family:'DM Mono',monospace;" data-nav-name="${safeName}">${safeName}</button>${naN?` <span class="na-badge" title="${naN} open action${naN===1?'':'s'} required">${naN}</span>`:''}</td>
       <td style="font-family:'DM Mono',monospace;font-weight:700;font-size:11px;">${n}</td>
       <td><span class="badge ${parseInt(sr)>=80?'b-green':'b-red'}">${sr}%</span></td>
       <td style="font-family:'DM Mono',monospace;font-size:11px;">${c.violations}</td>
@@ -3104,7 +3124,7 @@ function renderOver30(mc, agg) {
       <td><strong class="${r.o30>10?'c-red':r.o30>5?'c-amber':'c-green'}">${r.o30}</strong></td>
       <td>${r.appr||'-'}</td>
       <td>${r.oldest?`<span class="age-pill ${ageCls(r.oldest)}">${r.oldest}d</span>`:'-'}</td>
-    </tr>`;}).join('')}</tbody></table>`:'<div style="padding:14px 16px;color:var(--muted);font-size:12px;">No vendors on the current over-30 / approaching set.</div>';
+    </tr>`;}).join('')}</tbody></table>`:'<div class="bn-note">No vendors on the current over-30 / approaching set.</div>';
   const vendorCard=`<div class="card">
       <div class="card-header"><h3>By Vendor</h3><span class="card-meta">${vRows.length} vendor${vRows.length===1?'':'s'}${vRows.length>25?' · top 25 shown':''} · includes suppliers</span></div>
       <div class="card-body" style="padding:0;">${vendorTable}</div>
@@ -3132,7 +3152,7 @@ function renderOver30(mc, agg) {
       <td><strong class="${r.o30>10?'c-red':r.o30>5?'c-amber':'c-green'}">${r.o30}</strong></td>
       <td>${r.appr||'-'}</td>
       <td>${r.oldest?`<span class="age-pill ${ageCls(r.oldest)}">${r.oldest}d</span>`:'-'}</td>
-    </tr>`;}).join('')}</tbody></table>`:'<div style="padding:14px 16px;color:var(--muted);font-size:12px;">No trades on the current over-30 / approaching set.</div>';
+    </tr>`;}).join('')}</tbody></table>`:'<div class="bn-note">No trades on the current over-30 / approaching set.</div>';
   const tradeCard=`<div class="card">
       <div class="card-header"><h3>By Trade</h3><span class="card-meta">${tRows.length} trade${tRows.length===1?'':'s'}${tRows.length>25?' · top 25 shown':''} · a job counts under each listed trade</span></div>
       <div class="card-body" style="padding:0;">${tradeTable}</div>
@@ -3434,7 +3454,7 @@ function renderEscalations(mc, agg) {
     </div>`;
 
   if (!esc.length) {
-    mc.innerHTML = summary + `<div class="card"><div class="card-body"><div style="text-align:center;padding:40px 20px;color:var(--muted);"><div style="font-size:40px;margin-bottom:12px;">✅</div><p style="font-size:14px;">No work orders currently flagged for management assistance.</p></div></div></div>`;
+    mc.innerHTML = summary + `<div class="card"><div class="card-body"><div class="bn-empty"><div style="font-size:40px;margin-bottom:12px;">✅</div><p style="font-size:14px;">No work orders currently flagged for management assistance.</p></div></div></div>`;
     return;
   }
 
@@ -3671,6 +3691,59 @@ const EQ_REASONS = {
   'no-next-step': {label:'No next step',  w:16},
   'high-priority':{label:'High priority', w:14}
 };
+// Imperative "what to do" per reason code — drives the coordinator drilldown's
+// Next Actions Required report (same signal logic as the queue, one source).
+const EQ_ACTION = {
+  'never-updated':'Add a status update — no notes on record',
+  'mgmt-assist':'Coordinate management assist (flagged)',
+  'past-eta':'Revise expected completion — past ETA',
+  'chronic':'Escalate — stuck over-30 across 3+ audits',
+  'stale-7d':'Update the job — no note in 7+ days',
+  'no-next-step':'Schedule next onsite / set the next step',
+  'high-priority':'Prioritize — high priority and aging'
+};
+// Open (un-acked, un-snoozed) exception items for a set of jobs, highest-score
+// first. Used by the coordinator modal's Next Actions report.
+function _bnNextActions(jobs){
+  const thr = (window._clientConfig && window._clientConfig.over30 && window._clientConfig.over30.threshold) || 30;
+  return (jobs||[]).filter(function(j){ return j.aged>thr; }).map(function(j){
+    const reasons = eqReasons(j);
+    return {j:j, reasons:reasons, score:eqScore(reasons,j), st:eqStatus(j.jobId)};
+  }).filter(function(x){ return x.reasons.length && x.st.state==='open'; })
+    .sort(function(a,b){ return b.score-a.score; });
+}
+// Robust clipboard copy: modern API in a secure context, else an execCommand
+// fallback (avoids the poor-UX window.prompt path). Fire-and-forget; toasts.
+function _bnCopyText(text, okMsg){
+  const done=function(){ toast(okMsg||'Copied to clipboard'); };
+  const fail=function(){
+    try{
+      const ta=document.createElement('textarea'); ta.value=text;
+      ta.style.position='fixed'; ta.style.left='-9999px'; ta.style.top='-9999px';
+      document.body.appendChild(ta); ta.focus(); ta.select();
+      const ok=document.execCommand('copy'); document.body.removeChild(ta);
+      ok?done():toast('Could not copy');
+    }catch(_){ toast('Could not copy'); }
+  };
+  if(navigator.clipboard && navigator.clipboard.writeText && window.isSecureContext){
+    navigator.clipboard.writeText(text).then(done).catch(fail);
+  } else fail();
+}
+// Copy the open coordinator's full Next Actions list as plain text (Teams/email).
+function copyCoordActions(){
+  if(window._emKind==='vendor' || window._emKind==='trade') return; // coordinator-only
+  const name=window._emName; if(name==null) return;
+  const open=JOBS.filter(function(j){ return j.coordinator===name; }).slice().sort(function(a,b){ return (b.aged||0)-(a.aged||0); });
+  const na=_bnNextActions(open);
+  if(!na.length){ toast('No outstanding actions to copy'); return; }
+  const dateLabel=(document.getElementById('reportDateLabel')||{}).textContent||'';
+  const lines=na.map(function(x){
+    const acts=x.reasons.map(function(c){ return EQ_ACTION[c]||c; }).join('; ');
+    return '• '+x.j.jobId+' ('+x.j.aged+'d) — '+acts;
+  });
+  const text='Next Actions Required — '+name+(dateLabel?(' ('+dateLabel+')'):'')+'\n'+lines.join('\n');
+  _bnCopyText(text, na.length+' action'+(na.length===1?'':'s')+' copied');
+}
 function eqReasons(j){
   const r = [];
   const sb = staleBucket(j);
@@ -3727,7 +3800,7 @@ async function eqAck(jobId){
   const ok = await saveExceptionState(st=>{ st.items[jobId] = {state:'ack', by:user, ts:new Date().toISOString()}; });
   if(ok){ bnLogActivity('ack', jobId, null); toast('Acknowledged '+jobId); }
   else toast('Save failed — try again');
-  render('exception-queue'); updateEqBadge();
+  const _a=compute(); initCounts(_a); render('exception-queue', _a); updateEqBadge(); // refresh sidebar coord badges too
 }
 async function eqSnooze(jobId, days){
   if(!jobId) return;
@@ -3736,7 +3809,7 @@ async function eqSnooze(jobId, days){
   const ok = await saveExceptionState(st=>{ st.items[jobId] = {state:'snooze', until, by:user, ts:new Date().toISOString()}; });
   if(ok){ bnLogActivity('snooze', jobId, until); toast('Snoozed '+jobId+' until '+until); }
   else toast('Save failed — try again');
-  render('exception-queue'); updateEqBadge();
+  const _a=compute(); initCounts(_a); render('exception-queue', _a); updateEqBadge(); // refresh sidebar coord badges too
 }
 async function eqReopen(jobId){
   if(!jobId) return;
@@ -3744,7 +3817,7 @@ async function eqReopen(jobId){
   const ok = await saveExceptionState(st=>{ delete st.items[jobId]; });
   if(ok){ bnLogActivity(prev&&prev.state==='ack'?'unack':'unsnooze', jobId, null); toast('Reopened '+jobId); }
   else toast('Save failed — try again');
-  render('exception-queue'); updateEqBadge();
+  const _a=compute(); initCounts(_a); render('exception-queue', _a); updateEqBadge(); // refresh sidebar coord badges too
 }
 
 let EQ_SHOW_RESOLVED = false;
@@ -3803,7 +3876,7 @@ function renderExceptionQueue(mc, agg){
     </div>
     ${open.length
       ? `<div class="card"><div class="card-header"><h3>Open — ranked by score</h3><span class="card-meta">${open.length} item${open.length===1?'':'s'} · higher score = more reasons / older / larger $</span></div><div class="card-body" style="padding:0;">${table(open)}</div></div>`
-      : `<div class="card"><div class="card-body"><div style="text-align:center;padding:40px 20px;color:var(--muted);"><div style="font-size:40px;margin-bottom:12px;">✅</div><p style="font-size:14px;">Queue is clear — no open exceptions on the current load.</p></div></div></div>`}
+      : `<div class="card"><div class="card-body"><div class="bn-empty"><div style="font-size:40px;margin-bottom:12px;">✅</div><p style="font-size:14px;">Queue is clear — no open exceptions on the current load.</p></div></div></div>`}
     ${(acked.length||snoozed.length)?`<div style="margin:14px 0 8px;"><button class="eq-btn" onclick="eqToggleResolved()">${EQ_SHOW_RESOLVED?'▾ Hide':'▸ Show'} resolved (${acked.length+snoozed.length})</button></div>`:''}
     ${EQ_SHOW_RESOLVED&&snoozed.length?`<div class="card"><div class="card-header"><h3>😴 Snoozed</h3></div><div class="card-body" style="padding:0;">${table(snoozed)}</div></div>`:''}
     ${EQ_SHOW_RESOLVED&&acked.length?`<div class="card"><div class="card-header"><h3>✓ Acknowledged</h3></div><div class="card-body" style="padding:0;">${table(acked)}</div></div>`:''}
@@ -4732,7 +4805,7 @@ function o30StatusSection(over30){
     const pct=pileN?Math.round(r.n/pileN*100):0;
     return `<tr><td style="font-weight:600;">${escapeHtml(r.s)}</td><td><strong>${r.n}</strong></td><td><div style="display:flex;align-items:center;gap:7px;"><div style="flex:1;max-width:120px;height:7px;border-radius:4px;background:var(--border);overflow:hidden;"><div style="width:${pct}%;height:100%;background:#2f6df6;"></div></div><span style="font-size:10px;color:var(--muted);">${pct}%</span></div></td><td class="amt">${r.amt>0?fmt$0(r.amt):"-"}</td></tr>`;
   }).join("");
-  const inner = rows.length ? `<table class="data-table"><thead><tr><th>Status</th><th>Jobs</th><th>Share of pile</th><th>Over-30 $</th></tr></thead><tbody>${body}</tbody></table>` : `<div style="padding:14px 16px;color:var(--muted);font-size:12px;">No over-30 jobs on the current set.</div>`;
+  const inner = rows.length ? `<table class="data-table"><thead><tr><th>Status</th><th>Jobs</th><th>Share of pile</th><th>Over-30 $</th></tr></thead><tbody>${body}</tbody></table>` : `<div class="bn-note">No over-30 jobs on the current set.</div>`;
   return `<div class="card"><div class="card-header"><h3>Where they are stuck</h3><span class="card-meta">over-30 jobs by status &middot; the chokepoints</span></div><div class="card-body" style="padding:0;">${inner}</div></div>`;
 }
 
@@ -4758,7 +4831,7 @@ function o30StaleSection(over30){
   const stale14=over30.filter(function(j){ const d=_o30StaleDays(j); return d==null||d>=14; });
   const amt7=stale7.reduce(function(s,j){return s+j.amount;},0);
   const list=stale7.slice().sort(function(a,b){ const da=_o30StaleDays(a),db=_o30StaleDays(b); const va=(da==null)?1e9:da, vb=(db==null)?1e9:db; return vb-va||b.aged-a.aged; }).slice(0,12);
-  const inner = list.length ? `<table class="data-table"><thead><tr><th>Job #</th><th>Coordinator</th><th>Age</th><th>No update</th><th>Status</th></tr></thead><tbody>${_o30ActionRows(list)}</tbody></table>` : `<div style="padding:14px 16px;color:var(--muted);font-size:12px;">Every over-30 job has been touched in the last week.</div>`;
+  const inner = list.length ? `<table class="data-table"><thead><tr><th>Job #</th><th>Coordinator</th><th>Age</th><th>No update</th><th>Status</th></tr></thead><tbody>${_o30ActionRows(list)}</tbody></table>` : `<div class="bn-note">Every over-30 job has been touched in the last week.</div>`;
   return `<div class="card"><div class="card-header"><h3>Stale over-30</h3><span class="card-meta">${stale7.length} not updated in 7+ days &middot; ${stale14.length} in 14+ days &middot; ${fmt$0(amt7)} exposure</span></div><div class="card-body" style="padding:0;">${inner}</div></div>`;
 }
 
@@ -4772,7 +4845,7 @@ function o30NoNextSection(over30){
   }).sort(function(a,b){ return b.aged-a.aged; });
   const amt=list.reduce(function(s,j){return s+j.amount;},0);
   const top=list.slice(0,12);
-  const inner = top.length ? `<table class="data-table"><thead><tr><th>Job #</th><th>Coordinator</th><th>Age</th><th>No update</th><th>Status</th></tr></thead><tbody>${_o30ActionRows(top)}</tbody></table>` : `<div style="padding:14px 16px;color:var(--muted);font-size:12px;">Every over-30 job has a scheduled onsite or recent activity.</div>`;
+  const inner = top.length ? `<table class="data-table"><thead><tr><th>Job #</th><th>Coordinator</th><th>Age</th><th>No update</th><th>Status</th></tr></thead><tbody>${_o30ActionRows(top)}</tbody></table>` : `<div class="bn-note">Every over-30 job has a scheduled onsite or recent activity.</div>`;
   return `<div class="card"><div class="card-header"><h3>No next step</h3><span class="card-meta">${list.length} over-30 with no future onsite and no recent update &middot; ${fmt$0(amt)} &middot; action needed</span></div><div class="card-body" style="padding:0;">${inner}</div></div>`;
 }
 
@@ -4782,9 +4855,9 @@ function o30ChronicHtml(entries, over30, curDateStr){
   const curIds=over30.map(function(j){ return j.jobId; });
   if(audits.length && audits[audits.length-1].dateStr===curDateStr) audits[audits.length-1]={dateStr:curDateStr,set:new Set(curIds)};
   else audits.push({dateStr:curDateStr,set:new Set(curIds)});
-  if(audits.length<3) return `<div style="padding:14px 16px;color:var(--muted);font-size:12px;">Need at least three audits on record to flag chronic jobs &mdash; builds as weekly audits load (${audits.length} so far).</div>`;
+  if(audits.length<3) return `<div class="bn-note">Need at least three audits on record to flag chronic jobs &mdash; builds as weekly audits load (${audits.length} so far).</div>`;
   const streaks=over30.map(function(j){ let st=0; for(let i=audits.length-1;i>=0;i--){ if(audits[i].set.has(j.jobId)) st++; else break; } return {j:j, streak:st}; }).filter(function(x){ return x.streak>=3; }).sort(function(a,b){ return b.streak-a.streak||b.j.aged-a.j.aged; });
-  if(!streaks.length) return `<div style="padding:14px 16px;color:var(--muted);font-size:12px;">No job has stayed over-30 across three or more consecutive audits. Good churn.</div>`;
+  if(!streaks.length) return `<div class="bn-note">No job has stayed over-30 across three or more consecutive audits. Good churn.</div>`;
   const amt=streaks.reduce(function(s,x){ return s+x.j.amount; },0);
   const top=streaks.slice(0,15);
   const rows=top.map(function(x){ return `<tr><td style="font-weight:600;">${escapeHtml(x.j.jobId)}</td><td>${escapeHtml(x.j.coordinator||"-")}</td><td><span class="age-pill ${ageCls(x.j.aged)}">${x.j.aged}d</span></td><td><strong class="${x.streak>=5?"c-red":"c-amber"}">${x.streak}</strong></td><td class="amt">${x.j.amount>0?fmt$0(x.j.amount):"-"}</td></tr>`; }).join("");
@@ -4793,7 +4866,7 @@ function o30ChronicHtml(entries, over30, curDateStr){
 
 function o30CoordMoveHtml(entries, curDateStr){
   const wow=_o30Pick(entries||[], curDateStr, 7, 4, 13);
-  if(!wow) return `<div style="padding:14px 16px;color:var(--muted);font-size:12px;">No prior-week snapshot in range yet &mdash; movement appears once a second weekly audit is on record.</div>`;
+  if(!wow) return `<div class="bn-note">No prior-week snapshot in range yet &mdash; movement appears once a second weekly audit is on record.</div>`;
   const allO30=JOBS.filter(function(j){ return j.aged>30; });
   const cur={}; allO30.forEach(function(j){ const c=j.coordinator||"(unassigned)"; cur[c]=(cur[c]||0)+1; });
   const prior=wow.byCoord||{};
@@ -4824,7 +4897,7 @@ function o30ExposureSection(over30){
     const share=amt?Math.round(r.amt/amt*100):0;
     return `<tr><td style="font-weight:600;">${escapeHtml(r.c)}</td><td><strong>${r.n}</strong></td><td class="amt">${r.amt>0?fmt$0(r.amt):"-"}</td><td><div style="display:flex;align-items:center;gap:7px;"><div style="flex:1;max-width:120px;height:7px;border-radius:4px;background:var(--border);overflow:hidden;"><div style="width:${share}%;height:100%;background:#1a5f3e;"></div></div><span style="font-size:10px;color:var(--muted);">${share}%</span></div></td><td><span class="age-pill ${ageCls(r.oldest)}">${r.oldest}d</span></td></tr>`;
   }).join("");
-  const tbl=rows.length?`<table class="data-table"><thead><tr><th>Coordinator</th><th>Jobs</th><th>Over-30 $</th><th>Share of $</th><th>Oldest</th></tr></thead><tbody>${body}</tbody></table>`:`<div style="padding:14px 16px;color:var(--muted);font-size:12px;">No over-30 jobs on the current set.</div>`;
+  const tbl=rows.length?`<table class="data-table"><thead><tr><th>Coordinator</th><th>Jobs</th><th>Over-30 $</th><th>Share of $</th><th>Oldest</th></tr></thead><tbody>${body}</tbody></table>`:`<div class="bn-note">No over-30 jobs on the current set.</div>`;
   return `<div class="card"><div class="card-header"><h3>Over-30 exposure</h3><span class="card-meta">how big the pile is and who is holding the dollars</span></div><div class="card-body" style="padding:0;"><div style="padding:14px 16px 4px;">${tiles}</div>${tbl}</div></div>`;
 }
 
@@ -4845,7 +4918,7 @@ function o30PastDueSection(over30){
   const rows=top.map(function(x){
     return `<tr><td style="font-weight:600;">${escapeHtml(x.j.jobId)}</td><td>${escapeHtml(x.j.coordinator||"-")}</td><td><span class="age-pill ${ageCls(x.j.aged)}">${x.j.aged}d</span></td><td>${fmtD(x.d)}</td><td><strong class="${x.daysPast>=30?"c-red":"c-amber"}">${x.daysPast}d</strong></td><td class="amt">${x.j.amount>0?fmt$0(x.j.amount):"-"}</td></tr>`;
   }).join("");
-  const inner=list.length?`<table class="data-table"><thead><tr><th>Job #</th><th>Coordinator</th><th>Age</th><th>Expected</th><th>Past due</th><th>Approved $</th></tr></thead><tbody>${rows}</tbody></table>`:`<div style="padding:14px 16px;color:var(--muted);font-size:12px;">No over-30 job has a committed completion date in the past &mdash; ETAs are still ahead or none is set.</div>`;
+  const inner=list.length?`<table class="data-table"><thead><tr><th>Job #</th><th>Coordinator</th><th>Age</th><th>Expected</th><th>Past due</th><th>Approved $</th></tr></thead><tbody>${rows}</tbody></table>`:`<div class="bn-note">No over-30 job has a committed completion date in the past &mdash; ETAs are still ahead or none is set.</div>`;
   return `<div class="card"><div class="card-header"><h3>Past expected completion</h3><span class="card-meta">${list.length} over-30 past a committed ETA &middot; ${fmt$0(amt)} &middot; dates already missed</span></div><div class="card-body" style="padding:0;">${inner}</div></div>`;
 }
 
@@ -4854,7 +4927,7 @@ function o30PastDueSection(over30){
 // all-divisions count; this respects the chip). Reads snapshot ids, so it's retroactive.
 function o30ClearanceHtml(entries, over30, curDateStr, TYPE){
   const wow=_o30Pick(entries||[], curDateStr, 7, 4, 13);
-  if(!wow) return `<div style="padding:14px 16px;color:var(--muted);font-size:12px;">No prior-week snapshot in range yet &mdash; clearance appears once a second weekly audit is on record.</div>`;
+  if(!wow) return `<div class="bn-note">No prior-week snapshot in range yet &mdash; clearance appears once a second weekly audit is on record.</div>`;
   const divOk=function(id){ return TYPE ? (o30Division({jobId:id})===TYPE) : true; };
   const priorIds=((wow.o30&&wow.o30.ids)?wow.o30.ids:[]).filter(divOk);
   const curIds=over30.map(function(j){ return j.jobId; });
@@ -4882,7 +4955,7 @@ async function renderO30Analytics(){
   const base=TYPE?JOBS.filter(function(j){return o30Division(j)===TYPE;}):JOBS;
   const over30=base.filter(function(j){ return j.aged>30; });
   const curDateStr = window._reportDate ? window._reportDate.toISOString().slice(0,10) : new Date().toISOString().slice(0,10);
-  const placeholder=`<div style="padding:14px 16px;color:var(--muted);font-size:12px;">Loading history&hellip;</div>`;
+  const placeholder=`<div class="bn-note">Loading history&hellip;</div>`;
   slot.innerHTML = o30ExposureSection(over30)
     + o30StatusSection(over30)
     + o30DepthSection(over30)
@@ -4893,7 +4966,7 @@ async function renderO30Analytics(){
     + `<div class="card"><div class="card-header"><h3>Chronic over-30</h3><span class="card-meta">jobs that never leave the pile</span></div><div class="card-body" style="padding:0;" id="o30ChronicBody">${placeholder}</div></div>`
     + `<div class="card"><div class="card-header"><h3>Coordinator movement</h3><span class="card-meta">week-over-week change in over-30 load</span></div><div class="card-body" style="padding:0;" id="o30CoordMoveBody">${placeholder}</div></div>`;
   if(window.BROADWAY_SNAPSHOT){
-    const note=`<div style="padding:14px 16px;color:var(--muted);font-size:12px;">History views run in the live dashboard only.</div>`;
+    const note=`<div class="bn-note">History views run in the live dashboard only.</div>`;
     const cl=document.getElementById("o30ClearBody"); if(cl) cl.innerHTML=note;
     const c=document.getElementById("o30ChronicBody"); if(c) c.innerHTML=note;
     const m=document.getElementById("o30CoordMoveBody"); if(m) m.innerHTML=note;
@@ -4976,18 +5049,18 @@ function renderSnapshotCompare(mc){
   const title = `<div class="page-title">🔀 Snapshot Compare</div>`;
   const sub = `<div class="page-sub">Diff any two over-30 snapshots over time.</div>`;
   if(window.BROADWAY_SNAPSHOT){
-    mc.innerHTML = title + sub + `<div class="card"><div class="card-body" style="padding:14px 16px;color:var(--muted);font-size:12px;">History views run in the live dashboard only — saved snapshots can't reach the data store.</div></div>`;
+    mc.innerHTML = title + sub + `<div class="card"><div class="card-body bn-note">History views run in the live dashboard only — saved snapshots can't reach the data store.</div></div>`;
     return;
   }
   // History may not have finished its page-load prefetch yet (deep-link, cold open).
   if(!window._o30History){
-    mc.innerHTML = title + `<div class="card"><div class="card-body" style="padding:14px 16px;color:var(--muted);font-size:12px;">Loading snapshot history…</div></div>`;
+    mc.innerHTML = title + `<div class="card"><div class="card-body bn-note">Loading snapshot history…</div></div>`;
     bnClientGet('over30-history').then(res=>{ window._o30History=(res&&res.exists&&res.data&&Array.isArray(res.data.entries))?res.data.entries:[]; if(currentView==='snapshot-compare') render('snapshot-compare'); }).catch(()=>{ window._o30History=[]; if(currentView==='snapshot-compare') render('snapshot-compare'); });
     return;
   }
   const cands=_snapCandidates();
   if(cands.length<2){
-    mc.innerHTML = title + sub + `<div class="card"><div class="card-body" style="padding:14px 16px;color:var(--muted);font-size:12px;">Need at least two snapshots on record to compare — history builds as weekly audits load (${cands.length} so far).</div></div>`;
+    mc.innerHTML = title + sub + `<div class="card"><div class="card-body bn-note">Need at least two snapshots on record to compare — history builds as weekly audits load (${cands.length} so far).</div></div>`;
     return;
   }
 
@@ -5099,11 +5172,11 @@ function _alogActPill(a){
 function renderActivityLog(mc){
   const title = `<div class="page-title">🧾 Activity Log</div>`;
   if(window.BROADWAY_SNAPSHOT){
-    mc.innerHTML = title + `<div class="page-sub">Who changed what, server-stamped.</div><div class="card"><div class="card-body" style="padding:14px 16px;color:var(--muted);font-size:12px;">The activity log runs in the live dashboard only — saved snapshots can't reach the data store.</div></div>`;
+    mc.innerHTML = title + `<div class="page-sub">Who changed what, server-stamped.</div><div class="card"><div class="card-body bn-note">The activity log runs in the live dashboard only — saved snapshots can't reach the data store.</div></div>`;
     return;
   }
   if(window._activityLog===null){
-    mc.innerHTML = title + `<div class="card"><div class="card-body" style="padding:14px 16px;color:var(--muted);font-size:12px;">Loading activity…</div></div>`;
+    mc.innerHTML = title + `<div class="card"><div class="card-body bn-note">Loading activity…</div></div>`;
     loadActivityLog().then(()=>{ if(currentView==='activity-log') render('activity-log'); });
     return;
   }
@@ -5138,7 +5211,7 @@ function renderActivityLog(mc){
       </div></div>`
     + (entries.length
         ? `<div class="card"><div class="card-body" style="padding:0;"><table class="data-table"><thead><tr><th>When</th><th>Who</th><th>Action</th><th>Target</th><th>Detail</th></tr></thead><tbody id="alog-tbody">${rows}</tbody></table></div></div>`
-        : `<div class="card"><div class="card-body"><div style="text-align:center;padding:40px 20px;color:var(--muted);"><div style="font-size:40px;margin-bottom:12px;">🧾</div><p style="font-size:14px;">No activity recorded yet. Ack/snooze an exception or save a snapshot to populate the log.</p></div></div></div>`);
+        : `<div class="card"><div class="card-body"><div class="bn-empty"><div style="font-size:40px;margin-bottom:12px;">🧾</div><p style="font-size:14px;">No activity recorded yet. Ack/snooze an exception or save a snapshot to populate the log.</p></div></div></div>`);
 }
 
 // ── VP OPERATIONS BRIEF ─────────────────────────────────────────────────────
@@ -5243,7 +5316,9 @@ loadDataFreshness();   // header freshness line + connectivity probe
   }
   bnGetUser(); // warm cache; non-blocking
   updateEqBadge();
-  if(currentView==='exception-queue' && JOBS.length) render('exception-queue');
+  // EQ state + history just loaded — coordinator action-count badges (sidebar
+  // nav + overview table) may have computed before this resolved, so refresh.
+  if(JOBS.length){ try{ const _a=compute(); initCounts(_a); if(currentView==='overview'||currentView==='exception-queue') render(currentView, _a); }catch(_){} }
 })();
 
 // ── SECTION 8: INIT ──────────────────────────────────────────────────────
@@ -5291,6 +5366,12 @@ updateEditBadge();
 /* a11y: keyboard-reachable rows get a visible focus ring; critical age tier gets a non-color structural cue */
 .job-row:focus-visible,.em-click:focus-visible{outline:2px solid var(--color-accent,#2ECC71);outline-offset:-2px;}
 .age-pill.age-high{box-shadow:inset 0 0 0 1.5px var(--color-danger-text,#991b1b);}
+/* extracted from repeated inline styles (byte-identical) — muted note + empty-state inside card bodies */
+.bn-note{padding:14px 16px;color:var(--muted);font-size:12px;}
+.bn-empty{text-align:center;padding:40px 20px;color:var(--muted);}
+.na-act{font-size:11px;line-height:1.4;}
+.na-act + .na-act{margin-top:3px;padding-top:3px;border-top:1px dashed var(--border);}
+.na-badge{display:inline-block;min-width:16px;text-align:center;font:700 10px 'DM Mono',monospace;color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:9px;padding:0 5px;margin:0 4px;vertical-align:middle;}
 </style>
 
 <!-- Mobile sticky save bar removed — Save Dashboard now lives in the sidebar -->
