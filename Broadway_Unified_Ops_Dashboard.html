@@ -1530,10 +1530,7 @@ function openEntityModal(kind, idx){
   const isT = kind==='trade';
   const kindLbl = isV?'vendor':isT?'trade':'coordinator';
   window._emKind=kind; window._emIdx=idx; window._emName=name;
-  const open = (isV ? JOBS.filter(function(j){ return splitVendors(j.vendors).indexOf(name)!==-1; })
-                    : isT ? JOBS.filter(function(j){ return splitTrades(j.trades).indexOf(name)!==-1; })
-                    : JOBS.filter(function(j){ return j.coordinator===name; })
-               ).slice().sort(function(a,b){ return (b.aged||0)-(a.aged||0); });
+  const open = _bnEntityOpenJobs(kind, name);
   const closed = (window._closedJobs||[]).filter(function(j){ return isV ? splitVendors(j.vendor).indexOf(name)!==-1 : isT ? splitTrades(j.trade).indexOf(name)!==-1 : j.coord===name; });
   const closedSorted = closed.slice().sort(function(a,b){ const da=a.completed?+new Date(a.completed):0, db=b.completed?+new Date(b.completed):0; return db-da; });
   const CAP=50;
@@ -1585,10 +1582,11 @@ function openEntityModal(kind, idx){
     invSection = '<div class="table-scroll-wrap"><div class="table-scroll-hint">\u2194 Scroll for more columns</div><table class="data-table em-table"><thead><tr><th>Job #</th><th>Completed</th><th>Days to complete</th><th>Inv $</th><th>'+invOther+'</th></tr></thead><tbody>'+invRows+'</tbody></table></div>'
       + (closed.length>CAP ? '<div class="em-foot">Showing '+CAP+' of '+closed.length+' (most recent).</div>' : '');
   }
-  // Next Actions Required — coordinator drilldowns only. Open exception items
-  // (over-30, un-acked/un-snoozed) for this coordinator, with the action to take.
+  // Next Actions Required — any drilldown (coordinator / vendor / trade). Open
+  // exception items (over-30, un-acked/un-snoozed) on this entity's jobs, with
+  // the action to take. Same signal logic as the Exception Queue.
   let naHtml='';
-  if(!isV && !isT){
+  {
     const na=_bnNextActions(open);
     const naRows=na.slice(0,15).map(function(x){
       const acts=x.reasons.map(function(c){ return '<div class="na-act">'+escapeHtml(EQ_ACTION[c]||c)+'</div>'; }).join('');
@@ -1597,9 +1595,9 @@ function openEntityModal(kind, idx){
         + '<td><span class="age-pill '+ageCls(x.j.aged)+'">'+x.j.aged+'d</span></td>'
         + '<td>'+acts+'</td></tr>';
     }).join('');
-    naHtml='<div class="em-seclbl">Next actions required <span class="n">· '+na.length+' open '+(na.length===1?'item':'items')+(na.length>15?' · top 15 shown':'')+'</span>'+(na.length?' <button type="button" class="em-kind-btn" style="text-transform:none;letter-spacing:normal;" onclick="copyCoordActions()" title="Copy this list to the clipboard">⧉ Copy</button>':'')+'</div>'
+    naHtml='<div class="em-seclbl">Next actions required <span class="n">· '+na.length+' open '+(na.length===1?'item':'items')+(na.length>15?' · top 15 shown':'')+'</span>'+(na.length?' <button type="button" class="em-kind-btn" style="text-transform:none;letter-spacing:normal;" onclick="copyEntityActions()" title="Copy this list to the clipboard">⧉ Copy</button>':'')+'</div>'
       + (na.length ? '<div class="table-scroll-wrap"><table class="data-table em-table"><thead><tr><th>Job #</th><th>Age</th><th>What needs to happen</th></tr></thead><tbody>'+naRows+'</tbody></table></div>'
-                   : '<div class="em-note">No outstanding actions — this coordinator’s over-30 jobs are acknowledged or up to date.</div>');
+                   : '<div class="em-note">No outstanding actions — this '+kindLbl+'’s over-30 jobs are acknowledged or up to date.</div>');
   }
   box.innerHTML =
     '<div class="job-modal-head"><div class="jm-head-l"><span class="jm-id">'+escapeHtml(name)+supTag+'</span>'
@@ -3729,19 +3727,28 @@ function _bnCopyText(text, okMsg){
     navigator.clipboard.writeText(text).then(done).catch(fail);
   } else fail();
 }
-// Copy the open coordinator's full Next Actions list as plain text (Teams/email).
-function copyCoordActions(){
-  if(window._emKind==='vendor' || window._emKind==='trade') return; // coordinator-only
-  const name=window._emName; if(name==null) return;
-  const open=JOBS.filter(function(j){ return j.coordinator===name; }).slice().sort(function(a,b){ return (b.aged||0)-(a.aged||0); });
-  const na=_bnNextActions(open);
+// Open jobs for any drilldown entity (coordinator / vendor / trade), aged desc.
+// Single source for both the modal's "open" set and the copy handler.
+function _bnEntityOpenJobs(kind, name){
+  const isV=kind==='vendor', isT=kind==='trade';
+  return (isV ? JOBS.filter(function(j){ return splitVendors(j.vendors).indexOf(name)!==-1; })
+              : isT ? JOBS.filter(function(j){ return splitTrades(j.trades).indexOf(name)!==-1; })
+              : JOBS.filter(function(j){ return j.coordinator===name; })
+         ).slice().sort(function(a,b){ return (b.aged||0)-(a.aged||0); });
+}
+// Copy the open entity's full Next Actions list as plain text (Teams/email).
+// Works for any drilldown kind (coordinator / vendor / trade).
+function copyEntityActions(){
+  const kind=window._emKind, name=window._emName; if(name==null) return;
+  const na=_bnNextActions(_bnEntityOpenJobs(kind, name));
   if(!na.length){ toast('No outstanding actions to copy'); return; }
+  const kindLbl = kind==='vendor'?'Vendor':kind==='trade'?'Trade':'Coordinator';
   const dateLabel=(document.getElementById('reportDateLabel')||{}).textContent||'';
   const lines=na.map(function(x){
     const acts=x.reasons.map(function(c){ return EQ_ACTION[c]||c; }).join('; ');
     return '• '+x.j.jobId+' ('+x.j.aged+'d) — '+acts;
   });
-  const text='Next Actions Required — '+name+(dateLabel?(' ('+dateLabel+')'):'')+'\n'+lines.join('\n');
+  const text='Next Actions Required — '+kindLbl+': '+name+(dateLabel?(' ('+dateLabel+')'):'')+'\n'+lines.join('\n');
   _bnCopyText(text, na.length+' action'+(na.length===1?'':'s')+' copied');
 }
 function eqReasons(j){

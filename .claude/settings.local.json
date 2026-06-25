@@ -21,7 +21,8 @@
       "Bash(cat)",
       "Read(//tmp/**)",
       "Bash(git log *)",
-      "PowerShell($env:PATH = \"C:\\\\Program Files\\\\Adobe\\\\Adobe Creative Cloud Experience\\\\libs;\" + $env:PATH; node scripts/preflight.js 2>&1 | Select-String -Pattern \"hard failure|advisory|FAIL\"; \"=== parity ===\"; node scripts/test-bn-core.js 2>&1 | Select-String -Pattern \"parity|OK:\"; \"=== guard: single compute in ack handlers ===\"; Select-String -Path \"Broadway_Unified_Ops_Dashboard.html\" -Pattern \"initCounts\\\\\\(_a\\\\\\); render\\\\\\('exception-queue', _a\\\\\\)\" | Measure-Object | Select-Object -ExpandProperty Count)"
+      "PowerShell($env:PATH = \"C:\\\\Program Files\\\\Adobe\\\\Adobe Creative Cloud Experience\\\\libs;\" + $env:PATH; node scripts/preflight.js 2>&1 | Select-String -Pattern \"hard failure|advisory|FAIL\"; \"=== parity ===\"; node scripts/test-bn-core.js 2>&1 | Select-String -Pattern \"parity|OK:\"; \"=== guard: single compute in ack handlers ===\"; Select-String -Path \"Broadway_Unified_Ops_Dashboard.html\" -Pattern \"initCounts\\\\\\(_a\\\\\\); render\\\\\\('exception-queue', _a\\\\\\)\" | Measure-Object | Select-Object -ExpandProperty Count)",
+      "PowerShell($env:PATH = \"C:\\\\Program Files\\\\Adobe\\\\Adobe Creative Cloud Experience\\\\libs;\" + $env:PATH; node scripts/preflight.js 2>&1 | Select-String -Pattern \"hard failure|advisory|FAIL\"; \"=== parity ===\"; node scripts/test-bn-core.js 2>&1 | Select-String -Pattern \"parity|OK:\")"
     ]
   }
 }
