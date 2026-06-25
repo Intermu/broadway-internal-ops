@@ -4,7 +4,12 @@ const CONTAINER_NAME = "broadway-data";
 
 // SLOTS are types of data. Same set for every client.
 // Adding a slot = ship code. Adding a client = edit VALID_CLIENTS below.
-const VALID_SLOTS = ["revenue", "wo-snapshot-today", "wo-snapshot-previous", "workbook", "over30-history", "job-notes", "config", "checkin", "om-bonus", "wo-audit"];
+const VALID_SLOTS = ["revenue", "wo-snapshot-today", "wo-snapshot-previous", "workbook", "over30-history", "job-notes", "config", "checkin", "om-bonus", "wo-audit", "exception-queue"];
+// "exception-queue": one blob per client holding the ack/snooze state for the
+// Dashboard Exception Queue, keyed by Job ID:
+//   { v:1, items: { "<jobId>": { state:"ack"|"snooze", until?:"YYYY-MM-DD", by, ts, note? } } }.
+// Written with optimistic concurrency (If-Match) so two coordinators acking at
+// once can't silently clobber each other. Not financial -> broadway_employee gate.
 // "wo-audit": one blob per client holding a tracking-keyed map of AI case files
 // { v:1, items: { "<tracking>": { tracking, wo, title, sub, base:{text,ts}|null, updates:[{text,ts,win}] } } }.
 // WO Audit notes set .base (full case file); Recent Update notes append to .updates[].
@@ -82,14 +87,19 @@ async function readBlob(container, name) {
     const data = JSON.parse(text);
     const props = await blob.getProperties();
     const metadata = props.metadata || {};
-    return { data, metadata, exists: true };
+    return { data, metadata, etag: props.etag, exists: true };
   } catch (err) {
-    if (err.statusCode === 404) return { exists: false, data: null, metadata: null };
+    if (err.statusCode === 404) return { exists: false, data: null, metadata: null, etag: null };
     throw err;
   }
 }
 
-async function writeBlob(container, name, data, metadata) {
+// Returns { etag } of the written blob. `opts.ifMatch` enables optimistic
+// concurrency: the upload only succeeds if the blob's current etag matches,
+// otherwise Azure throws a 412 (ConditionNotMet) which the POST handler turns
+// into a 412 response so the client can re-read, merge, and retry. Callers that
+// pass no opts keep the prior last-write-wins behavior (backward compatible).
+async function writeBlob(container, name, data, metadata, opts) {
   const blob = container.getBlockBlobClient(name);
   const body = JSON.stringify(data);
   const flatMeta = {};
@@ -101,10 +111,14 @@ async function writeBlob(container, name, data, metadata) {
     const s = typeof v === "string" ? v : String(v);
     flatMeta[k] = s.replace(/[^\x20-\x7E]/g, "-");
   }
-  await blob.upload(body, Buffer.byteLength(body), {
+  const uploadOpts = {
     blobHTTPHeaders: { blobContentType: "application/json" },
     metadata: flatMeta,
-  });
+  };
+  if (opts && opts.ifMatch) uploadOpts.conditions = { ifMatch: opts.ifMatch };
+  else if (opts && opts.ifNoneMatch) uploadOpts.conditions = { ifNoneMatch: opts.ifNoneMatch };
+  const res = await blob.upload(body, Buffer.byteLength(body), uploadOpts);
+  return { etag: res.etag };
 }
 
 async function deleteBlob(container, name) {
@@ -194,7 +208,7 @@ module.exports = async function (context, req) {
         context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { exists: false, data: null, metadata: null } };
         return;
       }
-      context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { exists: true, data: result.data, metadata: result.metadata } };
+      context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { exists: true, data: result.data, metadata: result.metadata, etag: result.etag } };
       return;
     }
 
@@ -206,6 +220,10 @@ module.exports = async function (context, req) {
         return;
       }
       const meta = { ...(metadata || {}), savedAt: new Date().toISOString() };
+
+      // Optimistic concurrency: an If-Match etag (HTTP header or body.ifMatch)
+      // makes this write conditional. SWA/Functions lowercases header names.
+      const ifMatch = (req.headers && (req.headers["if-match"] || req.headers["If-Match"])) || incoming.ifMatch || null;
 
       // Snapshot rotation: when today's snapshot is replaced with a different
       // date, archive the existing one as "previous" first. Per-client because
@@ -225,7 +243,19 @@ module.exports = async function (context, req) {
         }
       }
 
-      await writeBlob(container, targetName, data, meta);
+      let writeRes;
+      try {
+        writeRes = await writeBlob(container, targetName, data, meta, ifMatch ? { ifMatch } : undefined);
+      } catch (err) {
+        // 412 = the blob changed since the client read it. Hand back the
+        // current etag so the caller can re-read, merge, and retry.
+        if (err.statusCode === 412) {
+          const cur = await readBlob(container, targetName);
+          context.res = { status: 412, headers: { "Content-Type": "application/json" }, body: { error: "etag mismatch — blob changed since read", etag: cur.etag || null } };
+          return;
+        }
+        throw err;
+      }
 
       let extra = {};
       if (slot === "wo-snapshot-today") {
@@ -233,7 +263,7 @@ module.exports = async function (context, req) {
         const prev = await readBlob(container, previousName);
         extra.previous = prev.exists ? prev.data : null;
       }
-      context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { ok: true, client, slot, metadata: meta, ...extra } };
+      context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { ok: true, client, slot, metadata: meta, etag: writeRes.etag, ...extra } };
       return;
     }
 

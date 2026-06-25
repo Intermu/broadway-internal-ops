@@ -917,6 +917,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible{
     <div class="sb-divider"></div>
     <div class="sb-section">
       <div class="sb-title" data-collapsible="true">Escalations</div>
+      <button class="nav-btn nav-escalate" data-view="exception-queue">🎯 Exception Queue <span class="nb-count" id="cnt-exception-queue">—</span></button>
       <button class="nav-btn nav-escalate" data-view="escalations">🚨 Mgmt Assist Needed <span class="nb-count" id="cnt-escalations">—</span></button>
       <button class="nav-btn" data-view="stale-tracker">⏳ Stale Tracker <span class="nb-count" id="cnt-stale">—</span></button>
     </div>
@@ -2521,6 +2522,7 @@ function initCounts() {
   const qrEl = document.getElementById('cnt-qr'); if(qrEl) qrEl.textContent = agg.qr.length;
   const escEl = document.getElementById('cnt-escalations'); if(escEl) escEl.textContent = agg.escalations.length;
   const staleEl = document.getElementById('cnt-stale'); if(staleEl) staleEl.textContent = agg.stale.length + agg.neverUpdated.length;
+  updateEqBadge();
   // coord nav
   const wrap = document.getElementById('coordNav');
   if(wrap) {
@@ -2566,6 +2568,7 @@ function render(view) {
   else if(view==='wifi-detail') renderFiltered(mc,'WIFI Detail','WIFI',j=>jobType(j)==='WIFI',true);
   else if(view==='retrofit-detail') renderFiltered(mc,'Retrofit Detail','Retrofit',j=>jobType(j)==='Retrofit',true);
   else if(view==='qr-detail') renderFiltered(mc,'Q/R Detail','QR',j=>jobType(j)==='Q/R',true);
+  else if(view==='exception-queue') renderExceptionQueue(mc, agg);
   else if(view==='escalations') renderEscalations(mc, agg);
   else if(view==='stale-tracker') renderStaleTracker(mc, agg);
   else if(view==='aging-detail') renderAging(mc, agg);
@@ -3504,6 +3507,253 @@ function renderStaleTracker(mc, agg) {
   `;
 }
 
+// ── EXCEPTION QUEUE ────────────────────────────────────────────────────────
+// One ranked, assignable list that turns the analytics the dashboard already
+// computes (stale, never-updated, no-next-step, past-ETA, chronic, high-priority,
+// mgmt-assist) into a single closeable work loop. Ack/snooze state persists to
+// the data-store "exception-queue" slot with optimistic concurrency (If-Match)
+// so two coordinators can't clobber each other; each ack/snooze is also recorded
+// in the append-only activity-log under the Entra user from /.auth/me.
+
+// Signed-in user (Entra). Cached; "unknown" if unavailable so the UI never blocks
+// on it. The server independently stamps activity-log entries from the principal
+// header — this client value is for optimistic display only.
+window._bnUser = null;
+async function bnGetUser(){
+  if(window._bnUser) return window._bnUser;
+  try{
+    const r = await fetch('/.auth/me');
+    const j = r.ok ? await r.json() : null;
+    const p = j && j.clientPrincipal;
+    window._bnUser = (p && p.userDetails) || 'unknown';
+  }catch(_){ window._bnUser = 'unknown'; }
+  return window._bnUser;
+}
+
+// Append an entry to the server-side activity log. Fire-and-forget; never throws.
+async function bnLogActivity(action, target, detail){
+  if(window.BROADWAY_SNAPSHOT) return; // saved copies never write
+  try{
+    await fetch('/api/activity-log?client='+O30_CLIENT,{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({action, slot:'exception-queue', target, detail})
+    });
+  }catch(_){}
+}
+
+// Ack/snooze state, keyed by Job ID, mirrored from the blob. EQ_ETAG is held for
+// optimistic-concurrency writes (If-Match).
+let EQ_STATE = { v:1, items:{} };
+let EQ_ETAG = null;
+async function loadExceptionState(){
+  try{
+    const r = await fetch(`${DATA_API}?key=exception-queue&client=${O30_CLIENT}`);
+    if(!r.ok) throw 0;
+    const j = await r.json();
+    if(j && j.exists && j.data && j.data.items) EQ_STATE = {v:1, items:j.data.items};
+    EQ_ETAG = (j && j.etag) || null;
+  }catch(_){ /* keep empty default */ }
+}
+// Apply `mutate` to the in-memory state and persist with If-Match. On a 412
+// (someone wrote between our read and write) re-read, re-apply the mutation on
+// top of the latest, and retry once. Returns true on success.
+async function saveExceptionState(mutate){
+  if(window.BROADWAY_SNAPSHOT) return false;
+  mutate(EQ_STATE);
+  for(let attempt=0; attempt<2; attempt++){
+    try{
+      const headers = {'Content-Type':'application/json'};
+      if(EQ_ETAG) headers['If-Match'] = EQ_ETAG;
+      const r = await fetch(`${DATA_API}?key=exception-queue&client=${O30_CLIENT}`,{
+        method:'POST', headers,
+        body: JSON.stringify({data:EQ_STATE, metadata:{count:String(Object.keys(EQ_STATE.items).length)}})
+      });
+      if(r.status===412){
+        const cur = await fetch(`${DATA_API}?key=exception-queue&client=${O30_CLIENT}`).then(x=>x.ok?x.json():null).catch(()=>null);
+        EQ_STATE = {v:1, items:(cur&&cur.data&&cur.data.items)?cur.data.items:{}};
+        EQ_ETAG = (cur && cur.etag) || null;
+        mutate(EQ_STATE);
+        continue;
+      }
+      if(!r.ok) throw 0;
+      const j = await r.json();
+      EQ_ETAG = (j && j.etag) || null;
+      return true;
+    }catch(_){ return false; }
+  }
+  return false;
+}
+
+// ── Signals (reuse the dashboard's existing definitions where they exist) ──
+// chronic: this Job ID was over-30 in 3+ prior audit snapshots (over30-history).
+function eqChronicCount(jobId){
+  const hist = window._o30History || [];
+  let n = 0;
+  hist.forEach(e=>{ if(e && e.o30 && Array.isArray(e.o30.ids) && e.o30.ids.indexOf(jobId)!==-1) n++; });
+  return n;
+}
+// no-next-step: nothing scheduled and not already in a scheduled/closing state.
+function eqNoNextStep(j){
+  if(j.nextOnsiteDate) return false;
+  return !/scheduled|complete|validat|atf|clocked|invoice|closed/i.test(j.status||'');
+}
+// past-eta: an Expected Completion Date that's already in the past.
+function eqPastEta(j){
+  if(!j.expectedCompletion) return false;
+  const d = new Date(j.expectedCompletion);
+  if(isNaN(d.getTime())) return false;
+  return d < new Date(new Date().toDateString());
+}
+
+// Reason catalog: code → {label, weight}. Weight drives the score.
+const EQ_REASONS = {
+  'never-updated':{label:'Never updated', w:30},
+  'mgmt-assist':  {label:'Mgmt assist',   w:24},
+  'past-eta':     {label:'Past ETA',      w:22},
+  'chronic':      {label:'Chronic',       w:20},
+  'stale-7d':     {label:'Stale 7d+',     w:18},
+  'no-next-step': {label:'No next step',  w:16},
+  'high-priority':{label:'High priority', w:14}
+};
+function eqReasons(j){
+  const r = [];
+  const sb = staleBucket(j);
+  if(sb==='never') r.push('never-updated');
+  else if(sb==='stale') r.push('stale-7d');
+  if(eqNoNextStep(j)) r.push('no-next-step');
+  if(eqPastEta(j)) r.push('past-eta');
+  if(eqChronicCount(j.jobId)>=3) r.push('chronic');
+  const pri = priorityBucket(j.priority);
+  if(normPriority(j.escalationPriority)==='High' || pri==='P1' || pri==='P2' || pri==='Red') r.push('high-priority');
+  if(needsAssist(j)) r.push('mgmt-assist');
+  return r;
+}
+function eqScore(reasons, j){
+  let s = reasons.reduce((acc,code)=>acc+((EQ_REASONS[code]&&EQ_REASONS[code].w)||0),0);
+  s += Math.min(j.aged||0, 120) * 0.5;     // age pressure, capped
+  s += Math.min((j.amount||0)/1000, 50);   // $ exposure, capped at +50
+  return Math.round(s);
+}
+// The queue is over the over-30 population (threshold is config-driven). Each
+// item carries its reason codes and score; items with no reason are dropped.
+function buildExceptionQueue(){
+  const thr = (window._clientConfig && window._clientConfig.over30 && window._clientConfig.over30.threshold) || 30;
+  return JOBS.filter(j=>j.aged>thr).map(j=>{
+    const reasons = eqReasons(j);
+    return {j, reasons, score: eqScore(reasons, j)};
+  }).filter(x=>x.reasons.length).sort((a,b)=>b.score-a.score);
+}
+
+// Resolve a job's current ack/snooze status. An expired snooze reads as 'open'.
+function eqStatus(jobId){
+  const it = EQ_STATE.items[jobId];
+  if(!it) return {state:'open'};
+  if(it.state==='snooze'){
+    if(it.until){ const u=new Date(it.until+'T23:59:59'); if(!isNaN(u.getTime()) && u < new Date()) return {state:'open', expired:true}; }
+    return {state:'snooze', until:it.until, by:it.by, ts:it.ts};
+  }
+  if(it.state==='ack') return {state:'ack', by:it.by, ts:it.ts};
+  return {state:'open'};
+}
+function eqOpenCount(){
+  try{ return buildExceptionQueue().filter(x=>eqStatus(x.j.jobId).state==='open').length; }
+  catch(_){ return 0; }
+}
+function updateEqBadge(){
+  const el = document.getElementById('cnt-exception-queue');
+  if(el) el.textContent = JOBS.length ? eqOpenCount() : '—';
+}
+
+// ── Actions (wired via the row's data-jobid; no string-interpolated args) ──
+async function eqAck(jobId){
+  if(!jobId) return;
+  const user = await bnGetUser();
+  const ok = await saveExceptionState(st=>{ st.items[jobId] = {state:'ack', by:user, ts:new Date().toISOString()}; });
+  if(ok){ bnLogActivity('ack', jobId, null); toast('Acknowledged '+jobId); }
+  else toast('Save failed — try again');
+  render('exception-queue'); updateEqBadge();
+}
+async function eqSnooze(jobId, days){
+  if(!jobId) return;
+  const user = await bnGetUser();
+  const until = new Date(Date.now()+days*86400000).toISOString().slice(0,10);
+  const ok = await saveExceptionState(st=>{ st.items[jobId] = {state:'snooze', until, by:user, ts:new Date().toISOString()}; });
+  if(ok){ bnLogActivity('snooze', jobId, until); toast('Snoozed '+jobId+' until '+until); }
+  else toast('Save failed — try again');
+  render('exception-queue'); updateEqBadge();
+}
+async function eqReopen(jobId){
+  if(!jobId) return;
+  const prev = EQ_STATE.items[jobId];
+  const ok = await saveExceptionState(st=>{ delete st.items[jobId]; });
+  if(ok){ bnLogActivity(prev&&prev.state==='ack'?'unack':'unsnooze', jobId, null); toast('Reopened '+jobId); }
+  else toast('Save failed — try again');
+  render('exception-queue'); updateEqBadge();
+}
+
+let EQ_SHOW_RESOLVED = false;
+function eqToggleResolved(){ EQ_SHOW_RESOLVED = !EQ_SHOW_RESOLVED; render('exception-queue'); }
+
+function renderExceptionQueue(mc, agg){
+  const ro = !!window.BROADWAY_SNAPSHOT;
+  const queue = buildExceptionQueue().map(x=>({...x, st:eqStatus(x.j.jobId)}));
+  const open = queue.filter(x=>x.st.state==='open');
+  const acked = queue.filter(x=>x.st.state==='ack');
+  const snoozed = queue.filter(x=>x.st.state==='snooze');
+  const openAmt = open.reduce((s,x)=>s+(x.j.amount||0),0);
+
+  const reasonChip = code => { const r=EQ_REASONS[code]; return `<span class="eq-chip eq-r-${code}">${r?r.label:code}</span>`; };
+
+  function rowHtml(x){
+    const j=x.j, st=x.st;
+    const ageP = `<span class="age-pill ${ageCls(j.aged)}">${j.aged}d</span>`;
+    const chips = x.reasons.map(reasonChip).join('');
+    const amt = j.amount>0?`<span class="eq-amt">${fmt$0(j.amount)}</span>`:'<span style="color:var(--muted)">—</span>';
+    let actions='';
+    if(ro){ actions = `<span class="eq-note">live dashboard only</span>`; }
+    else if(st.state==='open'){
+      actions = `<button class="eq-btn eq-ack" onclick="event.stopPropagation();eqAck(this.closest('tr').dataset.jobid)">✓ Ack</button>`+
+        `<button class="eq-btn" onclick="event.stopPropagation();eqSnooze(this.closest('tr').dataset.jobid,3)">😴 3d</button>`+
+        `<button class="eq-btn" onclick="event.stopPropagation();eqSnooze(this.closest('tr').dataset.jobid,7)">7d</button>`;
+    } else if(st.state==='ack'){
+      actions = `<span class="eq-state-pill eq-acked">✓ Ack’d${st.by?' · '+escapeHtml(st.by):''}</span>`+
+        `<button class="eq-btn" onclick="event.stopPropagation();eqReopen(this.closest('tr').dataset.jobid)">Reopen</button>`;
+    } else {
+      actions = `<span class="eq-state-pill eq-snoozed">😴 until ${escapeHtml(st.until||'?')}${st.by?' · '+escapeHtml(st.by):''}</span>`+
+        `<button class="eq-btn" onclick="event.stopPropagation();eqReopen(this.closest('tr').dataset.jobid)">Reopen</button>`;
+    }
+    return `<tr class="job-row" data-jobid="${escapeHtml(j.jobId)}" onclick="openJobModal(this.dataset.jobid)">
+      <td><span class="eq-score">${x.score}</span></td>
+      <td><span class="jid">${escapeHtml(j.jobId)}</span></td>
+      <td>${escapeHtml(j.coordinator||'—')}</td>
+      <td>${ageP}</td>
+      <td>${amt}</td>
+      <td>${chips}</td>
+      <td class="eq-actions">${actions}</td>
+    </tr>`;
+  }
+  const table = list => `<table class="data-table eq-table">
+    <thead><tr><th>Score</th><th>Job</th><th>Coordinator</th><th>Age</th><th>$</th><th>Why flagged</th><th>Action</th></tr></thead>
+    <tbody>${list.map(rowHtml).join('')}</tbody></table>`;
+
+  mc.innerHTML = `
+    <div class="page-title">🎯 Exception Queue</div>
+    <div class="page-sub">${open.length} open · ${acked.length} ack’d · ${snoozed.length} snoozed · ${fmt$0(openAmt)} open exposure${ro?' · <strong>snapshot (read-only)</strong>':''}</div>
+    <div class="stat-grid sg-4" style="margin-bottom:16px;">
+      <div class="stat-box"><div class="sb-num c-red">${open.length}</div><div class="sb-lbl">Open</div></div>
+      <div class="stat-box"><div class="sb-num c-green">${acked.length}</div><div class="sb-lbl">Acknowledged</div></div>
+      <div class="stat-box"><div class="sb-num c-amber">${snoozed.length}</div><div class="sb-lbl">Snoozed</div></div>
+      <div class="stat-box"><div class="sb-num">${fmt$0(openAmt)}</div><div class="sb-lbl">Open $ Exposure</div></div>
+    </div>
+    ${open.length
+      ? `<div class="card"><div class="card-header"><h3>Open — ranked by score</h3><span class="card-meta">${open.length} item${open.length===1?'':'s'} · higher score = more reasons / older / larger $</span></div><div class="card-body" style="padding:0;">${table(open)}</div></div>`
+      : `<div class="card"><div class="card-body"><div style="text-align:center;padding:40px 20px;color:var(--muted);"><div style="font-size:40px;margin-bottom:12px;">✅</div><p style="font-size:14px;">Queue is clear — no open exceptions on the current load.</p></div></div></div>`}
+    ${(acked.length||snoozed.length)?`<div style="margin:14px 0 8px;"><button class="eq-btn" onclick="eqToggleResolved()">${EQ_SHOW_RESOLVED?'▾ Hide':'▸ Show'} resolved (${acked.length+snoozed.length})</button></div>`:''}
+    ${EQ_SHOW_RESOLVED&&snoozed.length?`<div class="card"><div class="card-header"><h3>😴 Snoozed</h3></div><div class="card-body" style="padding:0;">${table(snoozed)}</div></div>`:''}
+    ${EQ_SHOW_RESOLVED&&acked.length?`<div class="card"><div class="card-header"><h3>✓ Acknowledged</h3></div><div class="card-body" style="padding:0;">${table(acked)}</div></div>`:''}
+  `;
+}
+
 // ── MGMT NOTES EDIT STATE ─────────────────────────────────────────────────
 // Tracks in-session edits to Mgmt Notes, keyed by Job ID. Persists in
 // sessionStorage so edits survive view switches but reset on reload (which
@@ -4216,6 +4466,7 @@ async function saveOver30Snapshot(){
   window._o30History = hist.entries;
   const saved = await bnClientPost("over30-history", hist, {latest:dateStr, count:String(hist.entries.length)});
   if(!saved) console.warn("Over-30 snapshot save failed — trend history not updated this load.");
+  else bnLogActivity('snapshot-save', dateStr, over30.length+' over-30 · '+fmt$0(entry.o30.amt));
 }
 
 // Pick the prior entry whose age (in days before curStr) is inside [minD,maxD],
@@ -4604,6 +4855,19 @@ loadStatusHist();
 loadVendorKinds();
 loadClientConfig();
 
+// Exception Queue: load ack/snooze state, ensure over-30 history is available
+// for the 'chronic' signal (without needing to visit the trend view first),
+// warm the signed-in user, then refresh the badge and re-render if it's open.
+(async function initExceptionQueue(){
+  await loadExceptionState();
+  if(!window._o30History){
+    try{ const res=await bnClientGet('over30-history'); window._o30History=(res&&res.exists&&res.data&&Array.isArray(res.data.entries))?res.data.entries:[]; }catch(_){ window._o30History=window._o30History||[]; }
+  }
+  bnGetUser(); // warm cache; non-blocking
+  updateEqBadge();
+  if(currentView==='exception-queue' && JOBS.length) render('exception-queue');
+})();
+
 // ── SECTION 8: INIT ──────────────────────────────────────────────────────
 // Default the header date to today. handleFile() will overwrite with the
 // workbook's parsed date (from the sheet/filename) once a file is dropped.
@@ -4619,6 +4883,24 @@ _applyInitialView();
 window.addEventListener('hashchange', _onHashChange);
 updateEditBadge();
 </script>
+
+<style id="eq-styles">
+.eq-table td{vertical-align:middle}
+.eq-score{font-family:'DM Mono',monospace;font-weight:700;font-size:12px;color:var(--color-success,#1a5f3e);background:var(--card2,#f6faf7);border:1px solid var(--border,#e2e8f0);border-radius:6px;padding:2px 7px;display:inline-block;min-width:30px;text-align:center}
+.eq-amt{font-family:'DM Mono',monospace;font-size:11px;font-weight:600;color:var(--muted)}
+.eq-chip{display:inline-block;font-size:10px;font-weight:600;line-height:1.5;padding:1px 7px;border-radius:10px;margin:1px 3px 1px 0;border:1px solid transparent;white-space:nowrap}
+.eq-r-never-updated,.eq-r-mgmt-assist,.eq-r-past-eta{background:#fef2f2;color:#991b1b;border-color:#fecaca}
+.eq-r-stale-7d,.eq-r-chronic,.eq-r-high-priority{background:#fffbeb;color:#92400e;border-color:#fde68a}
+.eq-r-no-next-step{background:#eff6ff;color:#1e40af;border-color:#bfdbfe}
+.eq-actions{white-space:nowrap;text-align:right}
+.eq-btn{font:600 11px 'DM Sans',sans-serif;padding:4px 9px;border-radius:6px;border:1px solid var(--border,#e2e8f0);background:var(--card,#fff);color:var(--text,#1f2a24);cursor:pointer;margin:0 2px}
+.eq-btn:hover{border-color:#94a3b8}
+.eq-ack{background:var(--color-success,#1a5f3e);color:var(--color-on-accent,#fff);border-color:var(--color-success,#1a5f3e)}
+.eq-state-pill{font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;margin-right:6px;display:inline-block}
+.eq-acked{background:#ecfdf5;color:#065f46}
+.eq-snoozed{background:#fffbeb;color:#92400e}
+.eq-note{font-size:10px;color:var(--muted);font-style:italic}
+</style>
 
 <!-- Mobile sticky save bar removed — Save Dashboard now lives in the sidebar -->
 
