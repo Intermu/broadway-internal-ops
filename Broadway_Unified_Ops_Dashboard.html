@@ -264,6 +264,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .job-modal-head{display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--color-surface);border-radius:10px 10px 0 0;}
 .job-modal-head .jm-id{font-family:'DM Mono',monospace;font-weight:700;font-size:14px;color:var(--text);}
 .job-modal-head .jm-x{margin-left:auto;background:none;border:none;font-size:20px;line-height:1;cursor:pointer;color:var(--muted);}
+.job-modal-head .jm-back{background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.35);color:#fff;font:600 11px 'DM Sans',sans-serif;padding:4px 10px;border-radius:6px;cursor:pointer;margin-right:10px;white-space:nowrap;}
+.job-modal-head .jm-back:hover{background:rgba(255,255,255,.30);}
 .job-modal-body{padding:16px 18px;flex:1 1 auto;min-height:0;overflow:hidden;display:flex;flex-direction:column;}
 .jm-holdup{background:var(--color-surface-alt);border:1px solid var(--border);border-left:3px solid var(--green-dk);border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12.5px;line-height:1.5;color:var(--text);}
 .jm-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px 18px;font-size:12px;margin-bottom:14px;}
@@ -1378,8 +1380,11 @@ function stuckReason(j){
   const inStatus = j.statusHrs>0 ? Math.round(j.statusHrs/24) : null;
   return {stage, activity, inStatus};
 }
-function openJobModal(id){
+function openJobModal(id, fromEntity){
   const j=JOBS.find(x=>x.jobId===id); if(!j) return;
+  // Remember the entity drilldown we came from (if any) so the job modal can
+  // offer "← Back" to it. Cleared when a job is opened from anywhere else.
+  window._jmReturn = (fromEntity && window._emName!=null) ? {kind:window._emKind, idx:window._emIdx, name:window._emName} : null;
   const r=stuckReason(j);
   const saved=JOB_NOTES[id]||{}; const action=saved.action||'none';
   const hasNote=!!(saved.note&&saved.note.trim());
@@ -1406,6 +1411,7 @@ function openJobModal(id){
   const row=(k,v)=>`<div><span class="jm-k">${k}</span><span class="jm-v">${v}</span></div>`;
   box.innerHTML=`
     <div class="job-modal-head">
+      ${window._jmReturn?`<button class="jm-back" onclick="jmBack()" title="Back to ${escapeHtml(String(window._jmReturn.name))}">← Back</button>`:''}
       <div class="jm-head-l">
         <span class="jm-id">${escapeHtml(j.jobId)}</span>
         <span class="jm-head-sub">${escapeHtml(j.coordinator||'—')}${j.location?' · '+escapeHtml(j.location):''}</span>
@@ -1487,6 +1493,8 @@ function openJobModal(id){
   _bnModalOpen('jobModalOverlay','jobModalBox');
 }
 function closeJobModal(){ _bnModalClose('jobModalOverlay'); }
+// Return from a job modal to the entity drilldown it was opened from.
+function jmBack(){ const r=window._jmReturn; window._jmReturn=null; closeJobModal(); if(r) openEntityModal(r.kind, r.idx); }
 // ── Modal & row a11y ───────────────────────────────────────────────────────
 // Focus capture/restore + focus-into-dialog on open, Esc-closes-either + Tab
 // focus-trap while a modal is open, and Enter/Space activation for the table
@@ -1574,7 +1582,7 @@ function openEntityModal(kind, idx){
   const otherCol = (isV||isT) ? 'Coordinator' : 'Vendors';
   const openRows = open.length ? open.map(function(j){
       const other = (isV||isT) ? escapeHtml(j.coordinator||'-') : vendorListHtml(j.vendors);
-      return '<tr class="em-click" data-jobid="'+escapeHtml(j.jobId)+'" onclick="closeEntityModal();openJobModal(this.dataset.jobid)">'
+      return '<tr class="em-click" data-jobid="'+escapeHtml(j.jobId)+'" onclick="closeEntityModal();openJobModal(this.dataset.jobid,true)">'
         + '<td class="em-jid">'+escapeHtml(j.jobId)+'</td>'
         + '<td>'+statusBadge(j.status)+'</td>'
         + '<td><span class="age-pill '+ageCls(j.aged)+'">'+j.aged+'d</span></td>'
@@ -1610,7 +1618,7 @@ function openEntityModal(kind, idx){
     const NACAP=15;
     const naRows=na.map(function(x,idx){
       const acts=x.reasons.map(function(c){ return '<div class="na-act">'+escapeHtml(EQ_ACTION[c]||c)+'</div>'; }).join('');
-      return '<tr class="em-click'+(idx>=NACAP?' bn-row-hidden':'')+'" data-jobid="'+escapeHtml(x.j.jobId)+'" onclick="closeEntityModal();openJobModal(this.dataset.jobid)">'
+      return '<tr class="em-click'+(idx>=NACAP?' bn-row-hidden':'')+'" data-jobid="'+escapeHtml(x.j.jobId)+'" onclick="closeEntityModal();openJobModal(this.dataset.jobid,true)">'
         + '<td class="em-jid">'+escapeHtml(x.j.jobId)+'</td>'
         + '<td><span class="age-pill '+ageCls(x.j.aged)+'">'+x.j.aged+'d</span></td>'
         + '<td>'+acts+'</td></tr>';
