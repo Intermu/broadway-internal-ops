@@ -944,6 +944,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible{
       <button class="nav-btn" data-view="over30-review">🔴 Over-30 Review</button>
       <button class="nav-btn" data-view="aging-detail">⏱ Aging Detail</button>
       <button class="nav-btn" data-view="snapshot-compare">🔀 Snapshot Compare</button>
+      <button class="nav-btn" data-view="churn-history">🔁 Churn History</button>
     </div>
     <div class="sb-divider"></div>
     <div class="sb-section">
@@ -2632,7 +2633,7 @@ function render(view, _agg) {
 
   // Empty state — show friendly placeholder until a workbook is loaded.
   // Reference views (SLA guide, trade tiers) work without data, so allow them.
-  if(!JOBS.length && view !== 'sla-guide' && view !== 'trade-tiers' && view !== 'snapshot-compare' && view !== 'activity-log') {
+  if(!JOBS.length && view !== 'sla-guide' && view !== 'trade-tiers' && view !== 'snapshot-compare' && view !== 'activity-log' && view !== 'churn-history') {
     mc.innerHTML = `
       <div class="empty-dashboard">
         <div class="empty-icon">📥</div>
@@ -2662,6 +2663,7 @@ function render(view, _agg) {
   else if(view==='aging-detail') renderAging(mc, agg);
   else if(view==='over30-review') renderOver30(mc, agg);
   else if(view==='snapshot-compare') renderSnapshotCompare(mc);
+  else if(view==='churn-history') renderChurnHistory(mc);
   else if(view==='activity-log') renderActivityLog(mc);
   else if(view==='vp-brief') renderVpBrief(mc, agg);
   else if(view.startsWith('coord-')) {
@@ -5257,6 +5259,46 @@ function renderSnapshotCompare(mc){
     + jobCard('Still over-30','in both snapshots · the persistent pile', persisted, 'b-gray');
 }
 
+// ── OVER-30 CHURN HISTORY ───────────────────────────────────────────────────
+// Reads the persisted per-snapshot `transitions` (crossed/cleared/persisted vs
+// the prior snapshot) and lists them newest-first. Click a row for the job IDs.
+function bnToggleChurn(rowEl, idx){
+  const tbl=rowEl.closest('table'); if(!tbl) return;
+  const d=tbl.querySelector('tr.ch-detail[data-ch="'+idx+'"]'); if(d) d.classList.toggle('bn-row-hidden');
+}
+function renderChurnHistory(mc){
+  const title='<div class="page-title">🔁 Over-30 Churn History</div>';
+  const sub='<div class="page-sub">What crossed 30 and what cleared out, snapshot to snapshot.</div>';
+  if(window.BROADWAY_SNAPSHOT){ mc.innerHTML=title+sub+'<div class="card"><div class="bn-note">History views run in the live dashboard only — saved snapshots can\'t reach the data store.</div></div>'; return; }
+  if(!window._o30History){
+    mc.innerHTML=title+'<div class="card"><div class="bn-note">Loading snapshot history…</div></div>';
+    bnClientGet('over30-history').then(function(res){ window._o30History=(res&&res.exists&&res.data&&Array.isArray(res.data.entries))?res.data.entries:[]; if(currentView==='churn-history') render('churn-history'); }).catch(function(){ window._o30History=[]; if(currentView==='churn-history') render('churn-history'); });
+    return;
+  }
+  const ents=(window._o30History||[]).filter(function(e){ return e&&e.transitions&&e.dateStr; }).slice().sort(function(a,b){ return a.dateStr<b.dateStr?1:-1; });
+  if(!ents.length){ mc.innerHTML=title+sub+'<div class="card"><div class="bn-note">No transition records yet — this builds going forward as weekly snapshots save (earlier snapshots predate this record).</div></div>'; return; }
+  const jmap={}; JOBS.forEach(function(j){ jmap[j.jobId]=j; });
+  const chip=function(id){ const j=jmap[id], div=o30Division({jobId:id}); return '<span class="ch-chip" title="'+escapeHtml(div+(j&&j.coordinator?(' · '+j.coordinator):''))+'">'+escapeHtml(id)+'</span>'; };
+  const rows=ents.map(function(e,idx){
+    const t=e.transitions, net=t.crossed.length-t.cleared.length;
+    const netTxt=(net>0?'+':net<0?'−':'')+Math.abs(net), netCls=net>0?'c-red':net<0?'c-green':'c-amber';
+    const detail='<tr class="ch-detail bn-row-hidden" data-ch="'+idx+'"><td colspan="6" style="padding:10px 14px;background:var(--color-surface-alt,#f8fafc);">'
+      + (t.crossed.length?'<div style="margin-bottom:6px;"><strong class="c-red">▲ Newly crossed 30 ('+t.crossed.length+'):</strong> '+t.crossed.map(chip).join(' ')+'</div>':'')
+      + (t.cleared.length?'<div><strong class="c-green">▼ Cleared out ('+t.cleared.length+'):</strong> '+t.cleared.map(chip).join(' ')+'</div>':'')
+      + (!t.crossed.length&&!t.cleared.length?'<span style="color:var(--muted);font-size:12px;">No crossings or clearances — the pile held steady.</span>':'')
+      + '</td></tr>';
+    return '<tr class="ch-row" style="cursor:pointer" onclick="bnToggleChurn(this,'+idx+')"><td style="font-weight:600;">'+escapeHtml(e.dateStr)+'</td>'
+      + '<td style="color:var(--muted);">'+escapeHtml(t.vsDate)+'</td>'
+      + '<td><strong class="c-red">'+t.crossed.length+'</strong></td>'
+      + '<td><strong class="c-green">'+t.cleared.length+'</strong></td>'
+      + '<td><strong class="'+netCls+'">'+netTxt+'</strong></td>'
+      + '<td>'+((e.o30&&typeof e.o30.count==='number')?e.o30.count:t.persisted.length)+'</td></tr>'+detail;
+  }).join('');
+  mc.innerHTML=title
+    + '<div class="page-sub">'+ents.length+' transition record'+(ents.length===1?'':'s')+' · newest first · click a row to see the job IDs</div>'
+    + '<div class="card"><div class="card-body" style="padding:0;"><table class="data-table"><thead><tr><th>Audit</th><th>vs prior</th><th>▲ Crossed</th><th>▼ Cleared</th><th>Net</th><th>Over-30 total</th></tr></thead><tbody>'+rows+'</tbody></table></div></div>';
+}
+
 // ── ACTIVITY LOG VIEWER ────────────────────────────────────────────────────
 // Read-only window onto the append-only /api/activity-log trail (ack/snooze,
 // snapshot-save, etc.). Server-stamped who + ts; this view never writes. Filter
@@ -5509,6 +5551,8 @@ updateEditBadge();
 tr.bn-row-hidden{display:none;}
 .bn-more-row td{color:var(--color-success-text,#1a5f3e);cursor:pointer;font-weight:600;font-size:11px;padding:8px 14px;}
 .bn-more-row td:hover{text-decoration:underline;background:var(--color-success-bg,#f0fdf4);}
+.ch-row:hover{background:var(--color-surface-alt,#f8fafc);}
+.ch-chip{display:inline-block;font-family:'DM Mono',monospace;font-size:10px;background:var(--color-surface,#fff);border:1px solid var(--border);border-radius:5px;padding:1px 6px;margin:2px 3px 2px 0;}
 </style>
 
 <!-- Mobile sticky save bar removed — Save Dashboard now lives in the sidebar -->
