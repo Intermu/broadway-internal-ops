@@ -813,6 +813,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible{
       <div>
         <h1>Unified Ops Dashboard</h1>
         <p id="reportDateLabel">—</p>
+        <p id="bnFreshLine" class="bn-fresh-line"></p>
       </div>
     </div>
   </div>
@@ -3564,6 +3565,7 @@ async function loadExceptionState(){
 async function saveExceptionState(mutate){
   if(window.BROADWAY_SNAPSHOT) return false;
   mutate(EQ_STATE);
+  _bnSaveStart();
   for(let attempt=0; attempt<2; attempt++){
     try{
       const headers = {'Content-Type':'application/json'};
@@ -3582,10 +3584,10 @@ async function saveExceptionState(mutate){
       if(!r.ok) throw 0;
       const j = await r.json();
       EQ_ETAG = (j && j.etag) || null;
-      return true;
-    }catch(_){ return false; }
+      _bnSaveOk(); return true;
+    }catch(_){ _bnSaveFail(); return false; }
   }
-  return false;
+  _bnSaveFail(); return false;
 }
 
 // ── Signals (reuse the dashboard's existing definitions where they exist) ──
@@ -4423,10 +4425,80 @@ const DATA_API = "/api/data-store";
 // ── OVER-30 HISTORY (Azure Blob via /api/data-store, slot: over30-history) ──
 const O30_CLIENT = "pilot";
 async function bnClientGet(slot){
-  try{const r=await fetch(`${DATA_API}?key=${encodeURIComponent(slot)}&client=${O30_CLIENT}`);if(!r.ok)throw 0;return await r.json();}catch(_){return null;}
+  if(window.BROADWAY_SNAPSHOT) return null;   // saved copies are offline by design
+  try{
+    const r=await fetch(`${DATA_API}?key=${encodeURIComponent(slot)}&client=${O30_CLIENT}`);
+    if(!r.ok){ _bnReadFail(r.status>=500); return null; }   // 4xx stays quiet (auth/validation), 5xx = outage
+    const j=await r.json(); _bnReadOk(); return j;
+  }catch(_){ _bnReadFail(true); return null; }   // network throw = outage
 }
 async function bnClientPost(slot,data,metadata){
-  try{const r=await fetch(`${DATA_API}?key=${encodeURIComponent(slot)}&client=${O30_CLIENT}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({data,metadata})});if(!r.ok)throw 0;return await r.json();}catch(_){return null;}
+  if(window.BROADWAY_SNAPSHOT) return null;   // never write from a saved copy
+  _bnSaveStart();
+  try{
+    const r=await fetch(`${DATA_API}?key=${encodeURIComponent(slot)}&client=${O30_CLIENT}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({data,metadata})});
+    if(!r.ok) throw 0;
+    const j=await r.json(); _bnSaveOk(); return j;
+  }catch(_){ _bnSaveFail(); return null; }
+}
+
+// ── DATA-TRUST UI: unified save status + connectivity + freshness ───────────
+// One shared indicator so every blob read/write is visible. bnClientGet/Post
+// and saveExceptionState route through these; the chip is created lazily so
+// ordering never matters. Severity: saving → saved (auto-hide) / error / offline.
+let _bnSaveN = 0;          // in-flight save counter — concurrent saves coalesce
+let _bnChipTimer = null;
+function _bnChip(){
+  let el = document.getElementById('bnSyncChip');
+  if(!el){ el=document.createElement('div'); el.id='bnSyncChip'; el.className='bn-sync-chip'; el.style.display='none'; document.body.appendChild(el); }
+  return el;
+}
+function _bnChipShow(cls, html, autohideMs){
+  const el=_bnChip();
+  if(_bnChipTimer){ clearTimeout(_bnChipTimer); _bnChipTimer=null; }
+  el.className='bn-sync-chip '+cls; el.innerHTML=html; el.style.display='';
+  if(autohideMs){ _bnChipTimer=setTimeout(()=>{ el.style.display='none'; }, autohideMs); }
+}
+function _bnChipHide(){ const el=document.getElementById('bnSyncChip'); if(el) el.style.display='none'; }
+function _bnSaveStart(){ _bnSaveN++; _bnChipShow('saving','<span class="bn-dot"></span> Saving…'); }
+function _bnSaveOk(){ _bnSaveN=Math.max(0,_bnSaveN-1); if(_bnSaveN===0) _bnChipShow('saved','✓ Saved',1800); }
+function _bnSaveFail(){ _bnSaveN=Math.max(0,_bnSaveN-1); _bnChipShow('error','⚠ Save failed — not stored <button class="bn-chip-x" onclick="_bnChipHide()" aria-label="Dismiss">✕</button>'); }
+// Connectivity: only a network throw or 5xx flips to "offline". A 4xx returns
+// null quietly (could be a legitimate auth/validation response, not an outage).
+function _bnReadFail(isOutage){
+  if(!isOutage) return;
+  window._dsOffline=true;
+  if(_bnSaveN===0) _bnChipShow('offline','⚠ Data store unreachable — figures may be stale <button class="bn-chip-x" onclick="_bnChipHide()" aria-label="Dismiss">✕</button>');
+}
+function _bnReadOk(){
+  if(window._dsOffline){ window._dsOffline=false; const el=document.getElementById('bnSyncChip'); if(el && el.classList.contains('offline')) el.style.display='none'; }
+}
+// Relative-time label for the freshness line.
+function _bnRelTime(iso){
+  if(!iso) return '';
+  const t=new Date(iso).getTime(); if(isNaN(t)) return '';
+  const s=Math.max(0,(Date.now()-t)/1000);
+  if(s<90) return 'just now';
+  const m=s/60; if(m<90) return Math.round(m)+'m ago';
+  const h=m/60; if(h<36) return Math.round(h)+'h ago';
+  return Math.round(h/24)+'d ago';
+}
+// Freshness line: one cheap list call doubles as a connectivity probe and shows
+// the vintage of the key slots so people trust what they're looking at.
+async function loadDataFreshness(){
+  if(window.BROADWAY_SNAPSHOT) return;
+  const line=document.getElementById('bnFreshLine'); if(!line) return;
+  let info=null;
+  try{
+    const r=await fetch(`${DATA_API}?action=list&client=${O30_CLIENT}`);
+    if(!r.ok){ _bnReadFail(r.status>=500); return; }
+    info=await r.json(); _bnReadOk();
+  }catch(_){ _bnReadFail(true); return; }
+  const parts=[];
+  const wb=info.workbook; if(wb&&wb.exists){ const w=_bnRelTime(wb.generatedAt||wb.savedAt); parts.push('📦 Workbook'+(w?(' '+w):' synced')); }
+  const rev=info.revenue; if(rev&&rev.exists){ parts.push('💵 Revenue'+(rev.month?(' '+escapeHtml(rev.month)):'')+(rev.savedAt?(' · '+_bnRelTime(rev.savedAt)):'')); }
+  const hist=info['over30-history']; if(hist&&hist.exists){ parts.push('📸 Snapshot'+(hist.latest?(' '+escapeHtml(hist.latest)):'')+(hist.count?(' · '+escapeHtml(hist.count)+' on record'):'')); }
+  line.innerHTML = parts.join(' &nbsp;·&nbsp; ');
 }
 
 // ── Per-client config (slot: "config") ───────────────────────────────────────
@@ -4470,7 +4542,7 @@ async function saveOver30Snapshot(){
   window._o30History = hist.entries;
   const saved = await bnClientPost("over30-history", hist, {latest:dateStr, count:String(hist.entries.length)});
   if(!saved) console.warn("Over-30 snapshot save failed — trend history not updated this load.");
-  else bnLogActivity('snapshot-save', dateStr, over30.length+' over-30 · '+fmt$0(entry.o30.amt));
+  else { bnLogActivity('snapshot-save', dateStr, over30.length+' over-30 · '+fmt$0(entry.o30.amt)); loadDataFreshness(); }
 }
 
 // Pick the prior entry whose age (in days before curStr) is inside [minD,maxD],
@@ -5058,6 +5130,7 @@ loadJobNotes();
 loadStatusHist();
 loadVendorKinds();
 loadClientConfig();
+loadDataFreshness();   // header freshness line + connectivity probe
 
 // Exception Queue: load ack/snooze state, ensure over-30 history is available
 // for the 'chronic' signal (without needing to visit the trend view first),
@@ -5105,6 +5178,15 @@ updateEditBadge();
 .eq-snoozed{background:#fffbeb;color:#92400e}
 .eq-note{font-size:10px;color:var(--muted);font-style:italic}
 @media (max-width:760px){.snap-cmp-grid{grid-template-columns:1fr !important}}
+.bn-fresh-line{font:500 10.5px 'DM Mono',monospace;opacity:.72;margin:3px 0 0;color:inherit;}
+.bn-sync-chip{position:fixed;left:14px;bottom:14px;z-index:9998;font:600 11.5px 'DM Sans',sans-serif;padding:7px 12px;border-radius:8px;box-shadow:0 4px 14px rgba(0,0,0,.16);display:flex;align-items:center;gap:8px;}
+.bn-sync-chip.saving{background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe;}
+.bn-sync-chip.saved{background:#ecfdf5;color:#065f46;border:1px solid #a7f3d0;}
+.bn-sync-chip.error,.bn-sync-chip.offline{background:#fef2f2;color:#991b1b;border:1px solid #fecaca;}
+.bn-sync-chip .bn-dot{width:8px;height:8px;border-radius:50%;background:currentColor;animation:bnpulse 1s infinite;}
+@keyframes bnpulse{0%,100%{opacity:.35}50%{opacity:1}}
+.bn-chip-x{background:none;border:none;color:inherit;cursor:pointer;font-size:12px;line-height:1;padding:0 2px;opacity:.7;}
+.bn-chip-x:hover{opacity:1;}
 </style>
 
 <!-- Mobile sticky save bar removed — Save Dashboard now lives in the sidebar -->
