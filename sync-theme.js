@@ -20,6 +20,10 @@ const TARGETS = [
   "Broadway_Unified_Ops_Dashboard.html",
   "Pilot_Proposal_Diagnostic.html",
   "Broadway_Coordinator_CheckIn.html",
+  // wo_case_file + Projects Tracker keep their own local token NAMES but alias
+  // them to the canonical tokens after the synced region (see their :root).
+  "wo_case_file.html",
+  "Broadway_Projects_Tracker.html",
   // add tools here as they opt in (must contain the relevant sentinels):
   // "agent.html",
 ];

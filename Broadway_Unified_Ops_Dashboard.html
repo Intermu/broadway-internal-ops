@@ -955,6 +955,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible{
     <div class="sb-section collapsed">
       <div class="sb-title" data-collapsible="true">Insights</div>
       <button class="nav-btn" data-view="kpi-dashboard">🎯 KPI Dashboard</button>
+      <button class="nav-btn" data-view="vp-brief">📄 VP Brief</button>
       <button class="nav-btn" data-view="activity-log">🧾 Activity Log</button>
     </div>
     <div class="sb-divider"></div>
@@ -2625,6 +2626,7 @@ function render(view) {
   else if(view==='over30-review') renderOver30(mc, agg);
   else if(view==='snapshot-compare') renderSnapshotCompare(mc);
   else if(view==='activity-log') renderActivityLog(mc);
+  else if(view==='vp-brief') renderVpBrief(mc, agg);
   else if(view.startsWith('coord-')) {
     // Index-based lookup: coord-3 → window._coordOrder[3]. Survives names with hyphens, apostrophes, periods, etc.
     const idx = parseInt(view.replace('coord-',''), 10);
@@ -5137,6 +5139,57 @@ function renderActivityLog(mc){
     + (entries.length
         ? `<div class="card"><div class="card-body" style="padding:0;"><table class="data-table"><thead><tr><th>When</th><th>Who</th><th>Action</th><th>Target</th><th>Detail</th></tr></thead><tbody id="alog-tbody">${rows}</tbody></table></div></div>`
         : `<div class="card"><div class="card-body"><div style="text-align:center;padding:40px 20px;color:var(--muted);"><div style="font-size:40px;margin-bottom:12px;">🧾</div><p style="font-size:14px;">No activity recorded yet. Ack/snooze an exception or save a snapshot to populate the log.</p></div></div></div>`);
+}
+
+// ── VP OPERATIONS BRIEF ─────────────────────────────────────────────────────
+// One composed, print-optimized page: headline KPIs + over-30 load by
+// coordinator + top escalations, with a Print/Save-as-PDF button. Reuses the
+// existing @media print rules (hides chrome, shows .print-header, hides
+// .screen-title / .no-print). Read-only — composes the compute() aggregate.
+function renderVpBrief(mc, agg){
+  const {total, over30, slaRate, hr, totalAmt, coords, escalations, stale, neverUpdated} = agg;
+  const o30Amt = over30.reduce((s,j)=>s+(j.amount||0),0);
+  const dateLabel = (document.getElementById('reportDateLabel')||{}).textContent || '';
+  const o30Pct = total>0?((over30.length/total)*100).toFixed(1):0;
+  let eqOpen='—'; try{ eqOpen=eqOpenCount(); }catch(_){}
+
+  const coordRows = Object.keys(coords).map(name=>{
+    const c=coords[name]; const o30=c.jobs.filter(j=>j.aged>30);
+    const sla = c.jobs.length?Math.round((c.jobs.length-c.violations)/c.jobs.length*100):0;
+    return {name, n:c.jobs.length, o30:o30.length, amt:o30.reduce((s,j)=>s+(j.amount||0),0), oldest:o30.reduce((m,j)=>Math.max(m,j.aged),0), sla};
+  }).filter(r=>r.o30>0).sort((a,b)=>b.o30-a.o30||b.amt-a.amt).slice(0,10);
+  const esc = [...escalations].sort((a,b)=>b.amount-a.amount).slice(0,8);
+
+  const coordTbl = coordRows.length?`<table class="data-table"><thead><tr><th>Coordinator</th><th>Jobs</th><th>Over-30</th><th>Over-30 $</th><th>Oldest</th><th>SLA</th></tr></thead><tbody>${coordRows.map(r=>`<tr>
+      <td style="font-weight:600;">${escapeHtml(r.name)}</td><td>${r.n}</td>
+      <td><strong class="${r.o30>10?'c-red':r.o30>5?'c-amber':'c-green'}">${r.o30}</strong></td>
+      <td class="amt">${r.amt>0?fmt$0(r.amt):'-'}</td>
+      <td>${r.oldest?`<span class="age-pill ${ageCls(r.oldest)}">${r.oldest}d</span>`:'-'}</td>
+      <td>${r.sla}%</td></tr>`).join('')}</tbody></table>`:'<div style="padding:12px 14px;color:var(--muted);font-size:12px;">No coordinators currently hold over-30 jobs.</div>';
+
+  const escTbl = esc.length?`<table class="data-table"><thead><tr><th>Job #</th><th>Coordinator</th><th>Priority</th><th>Age</th><th>$</th></tr></thead><tbody>${esc.map(j=>`<tr>
+      <td style="font-weight:600;">${escapeHtml(j.jobId)}</td><td>${escapeHtml(j.coordinator||'-')}</td>
+      <td>${escapeHtml(normPriority(j.escalationPriority)||'-')}</td>
+      <td><span class="age-pill ${ageCls(j.aged)}">${j.aged}d</span></td>
+      <td class="amt">${j.amount>0?fmt$0(j.amount):'-'}</td></tr>`).join('')}</tbody></table>`:'<div style="padding:12px 14px;color:var(--muted);font-size:12px;">No work orders flagged for management assistance.</div>';
+
+  mc.innerHTML = `
+    <div class="print-header"><span class="ph-brand">BROADWAY NATIONAL</span><span class="ph-title">Operations Brief · ${escapeHtml(dateLabel)}</span></div>
+    <div class="no-print" style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:4px;">
+      <div class="page-title screen-title" style="margin:0;">📄 VP Operations Brief</div>
+      <button class="eq-btn" onclick="window.print()" style="padding:7px 14px;">🖨 Print / Save as PDF</button>
+    </div>
+    <div class="page-sub screen-title">${escapeHtml(dateLabel)} · executive summary of the current audit</div>
+    <div class="stat-grid sg-4" style="margin:14px 0;">
+      <div class="stat-box"><div class="sb-num">${total}</div><div class="sb-lbl">Active Jobs</div><div class="sb-sub">${fmt$0(totalAmt)} approved</div></div>
+      <div class="stat-box"><div class="sb-num ${parseFloat(slaRate)>=80?'c-green':'c-red'}">${slaRate}%</div><div class="sb-lbl">Met SLA</div><div class="sb-sub">Goal 90% · Min 80%</div></div>
+      <div class="stat-box"><div class="sb-num ${over30.length?'c-red':'c-green'}">${over30.length}</div><div class="sb-lbl">Over 30 Days</div><div class="sb-sub">${o30Pct}% · ${fmt$0(o30Amt)}</div></div>
+      <div class="stat-box"><div class="sb-num ${hr.length?'c-red':'c-green'}">${hr.length}</div><div class="sb-lbl">High Risk</div><div class="sb-sub">${eqOpen} open exceptions</div></div>
+    </div>
+    <div class="card"><div class="card-header"><h3>Over-30 load by coordinator</h3><span class="card-meta">top ${coordRows.length} · worst first</span></div><div class="card-body" style="padding:0;">${coordTbl}</div></div>
+    <div class="card"><div class="card-header"><h3>Management assist needed</h3><span class="card-meta">${escalations.length} flagged · top ${esc.length} by $</span></div><div class="card-body" style="padding:0;">${escTbl}</div></div>
+    <div style="margin-top:10px;font-size:11px;color:var(--muted);">Staleness: ${neverUpdated.length} never updated · ${stale.length} stale (7+ days). Generated from the ${escapeHtml(dateLabel)} audit.</div>
+  `;
 }
 
 // Decode base64 string to a Blob, build a synthetic File, run through handleFile.

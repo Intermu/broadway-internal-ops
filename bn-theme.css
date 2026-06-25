@@ -3,7 +3,10 @@
    SINGLE SOURCE OF TRUTH. Edit here, then run:  node sync-theme.js
    It rewrites the block between the BN-THEME:START / BN-THEME:END sentinels
    in each tool that opts in. Inline-by-design so snapshot exports stay
-   self-contained (no runtime <link>). Projects Tracker is intentionally excluded.
+   self-contained (no runtime <link>). Tools keep their own local token NAMES
+   where they have them (e.g. Projects Tracker --t1/--green-d, wo_case_file
+   --ink/--mut) and alias those to these canonical tokens after the synced
+   region, so existing rules are untouched and dark mode is inherited.
    ============================================================================= */
 /* BN-THEME:START | Canonical theme synced from bn-theme.css. Do not edit between the sentinels; edit bn-theme.css and run: node sync-theme.js */
 :root{
