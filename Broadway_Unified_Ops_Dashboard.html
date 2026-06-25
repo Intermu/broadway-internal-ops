@@ -954,6 +954,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible{
     <div class="sb-section collapsed">
       <div class="sb-title" data-collapsible="true">Insights</div>
       <button class="nav-btn" data-view="kpi-dashboard">🎯 KPI Dashboard</button>
+      <button class="nav-btn" data-view="activity-log">🧾 Activity Log</button>
     </div>
     <div class="sb-divider"></div>
     <div class="sb-section collapsed">
@@ -2545,7 +2546,7 @@ function render(view) {
 
   // Empty state — show friendly placeholder until a workbook is loaded.
   // Reference views (SLA guide, trade tiers) work without data, so allow them.
-  if(!JOBS.length && view !== 'sla-guide' && view !== 'trade-tiers' && view !== 'snapshot-compare') {
+  if(!JOBS.length && view !== 'sla-guide' && view !== 'trade-tiers' && view !== 'snapshot-compare' && view !== 'activity-log') {
     mc.innerHTML = `
       <div class="empty-dashboard">
         <div class="empty-icon">📥</div>
@@ -2575,6 +2576,7 @@ function render(view) {
   else if(view==='aging-detail') renderAging(mc, agg);
   else if(view==='over30-review') renderOver30(mc, agg);
   else if(view==='snapshot-compare') renderSnapshotCompare(mc);
+  else if(view==='activity-log') renderActivityLog(mc);
   else if(view.startsWith('coord-')) {
     // Index-based lookup: coord-3 → window._coordOrder[3]. Survives names with hyphens, apostrophes, periods, etc.
     const idx = parseInt(view.replace('coord-',''), 10);
@@ -4936,6 +4938,85 @@ function renderSnapshotCompare(mc){
     + jobCard('Newly crossed 30','in '+escapeHtml(bSel)+' but not '+escapeHtml(aSel)+' · coordinator/age shown where still in the current workbook', crossed, 'b-red')
     + jobCard('Cleared out','in '+escapeHtml(aSel)+' but gone by '+escapeHtml(bSel), cleared, 'b-green')
     + jobCard('Still over-30','in both snapshots · the persistent pile', persisted, 'b-gray');
+}
+
+// ── ACTIVITY LOG VIEWER ────────────────────────────────────────────────────
+// Read-only window onto the append-only /api/activity-log trail (ack/snooze,
+// snapshot-save, etc.). Server-stamped who + ts; this view never writes. Filter
+// is client-side (toggle row display) so the search box keeps focus per keystroke.
+window._activityLog = null;        // cached entries array; null = not loaded yet
+window._activityLogLimit = 200;
+async function loadActivityLog(){
+  try{
+    const r = await fetch(`/api/activity-log?client=${O30_CLIENT}&limit=${window._activityLogLimit}`);
+    if(!r.ok) throw 0;
+    const j = await r.json();
+    window._activityLog = Array.isArray(j.entries) ? j.entries : [];
+  }catch(_){ window._activityLog = []; }
+}
+function refreshActivityLog(limit){
+  if(limit) window._activityLogLimit = parseInt(limit,10) || 200;
+  window._activityLog = null; // force reload
+  render('activity-log');
+}
+function filterActivityRows(){
+  const q = ((document.getElementById('alog-search')||{}).value || '').toLowerCase();
+  const a = (document.getElementById('alog-action')||{}).value || '';
+  document.querySelectorAll('#alog-tbody tr').forEach(tr=>{
+    const okA = !a || tr.dataset.action===a;
+    const okQ = !q || (tr.dataset.search||'').indexOf(q)!==-1;
+    tr.style.display = (okA&&okQ) ? '' : 'none';
+  });
+}
+function _alogActPill(a){
+  const m={ack:['#065f46','#ecfdf5'],unack:['#475569','#f1f5f9'],snooze:['#92400e','#fffbeb'],unsnooze:['#475569','#f1f5f9'],'snapshot-save':['#1e40af','#eff6ff'],note:['#475569','#f1f5f9'],'vendor-override':['#7c2d12','#fff7ed'],'config-change':['#5b21b6','#f5f3ff'],'review-ack':['#065f46','#ecfdf5']};
+  const c=m[a]||['#475569','#f1f5f9'];
+  return `<span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;color:${c[0]};background:${c[1]};white-space:nowrap;">${escapeHtml(a||'—')}</span>`;
+}
+
+function renderActivityLog(mc){
+  const title = `<div class="page-title">🧾 Activity Log</div>`;
+  if(window.BROADWAY_SNAPSHOT){
+    mc.innerHTML = title + `<div class="page-sub">Who changed what, server-stamped.</div><div class="card"><div class="card-body" style="padding:14px 16px;color:var(--muted);font-size:12px;">The activity log runs in the live dashboard only — saved snapshots can't reach the data store.</div></div>`;
+    return;
+  }
+  if(window._activityLog===null){
+    mc.innerHTML = title + `<div class="card"><div class="card-body" style="padding:14px 16px;color:var(--muted);font-size:12px;">Loading activity…</div></div>`;
+    loadActivityLog().then(()=>{ if(currentView==='activity-log') render('activity-log'); });
+    return;
+  }
+  const entries = window._activityLog.slice().reverse(); // newest first
+  const actions = [...new Set(entries.map(e=>e.action).filter(Boolean))].sort();
+  const jmap={}; JOBS.forEach(j=>{ jmap[j.jobId]=j; });
+  const fmtTs = ts=>{ try{ const d=new Date(ts); return isNaN(d.getTime())?escapeHtml(String(ts||'')):d.toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}); }catch(_){ return escapeHtml(String(ts||'')); } };
+  const rows = entries.map(e=>{
+    const tgt = e.target||'';
+    const tgtCell = tgt
+      ? (jmap[tgt]
+          ? `<button data-jobid="${escapeHtml(tgt)}" onclick="openJobModal(this.dataset.jobid)" style="background:none;border:none;cursor:pointer;color:#1a5f3e;text-decoration:underline;font-family:'DM Mono',monospace;font-size:11px;padding:0;">${escapeHtml(tgt)}</button>`
+          : `<span style="font-family:'DM Mono',monospace;font-size:11px;">${escapeHtml(tgt)}</span>`)
+      : '<span style="color:var(--muted)">—</span>';
+    const search = ((e.who||'')+' '+(e.action||'')+' '+tgt+' '+(e.detail||'')).toLowerCase();
+    return `<tr data-action="${escapeHtml(e.action||'')}" data-search="${escapeHtml(search)}">
+      <td style="white-space:nowrap;font-size:11px;color:var(--muted);">${fmtTs(e.ts)}</td>
+      <td style="font-weight:600;">${escapeHtml(e.who||'unknown')}</td>
+      <td>${_alogActPill(e.action||'')}</td>
+      <td>${tgtCell}</td>
+      <td style="font-size:11px;color:var(--muted);">${escapeHtml(e.detail||'')}</td>
+    </tr>`;
+  }).join('');
+
+  mc.innerHTML = title
+    + `<div class="page-sub">${entries.length} recent event${entries.length===1?'':'s'} · server-stamped user + time · newest first</div>`
+    + `<div class="card" style="margin-bottom:12px;"><div class="card-body" style="padding:10px 14px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;">
+        <input id="alog-search" type="search" placeholder="Search user / job / detail…" oninput="filterActivityRows()" style="flex:1;min-width:180px;font-size:12px;padding:7px 10px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text);">
+        <select id="alog-action" onchange="filterActivityRows()" style="font-size:12px;padding:7px 10px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text);"><option value="">All actions</option>${actions.map(a=>`<option value="${escapeHtml(a)}">${escapeHtml(a)}</option>`).join('')}</select>
+        <select id="alog-limit" onchange="refreshActivityLog(this.value)" style="font-size:12px;padding:7px 10px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text);">${[100,200,500,2000].map(n=>`<option value="${n}"${n===window._activityLogLimit?' selected':''}>Last ${n}</option>`).join('')}</select>
+        <button class="eq-btn" onclick="refreshActivityLog()">↻ Refresh</button>
+      </div></div>`
+    + (entries.length
+        ? `<div class="card"><div class="card-body" style="padding:0;"><table class="data-table"><thead><tr><th>When</th><th>Who</th><th>Action</th><th>Target</th><th>Detail</th></tr></thead><tbody id="alog-tbody">${rows}</tbody></table></div></div>`
+        : `<div class="card"><div class="card-body"><div style="text-align:center;padding:40px 20px;color:var(--muted);"><div style="font-size:40px;margin-bottom:12px;">🧾</div><p style="font-size:14px;">No activity recorded yet. Ack/snooze an exception or save a snapshot to populate the log.</p></div></div></div>`);
 }
 
 // Decode base64 string to a Blob, build a synthetic File, run through handleFile.
