@@ -1582,6 +1582,9 @@ function openEntityModal(kind, idx){
     invSection = '<div class="table-scroll-wrap"><div class="table-scroll-hint">\u2194 Scroll for more columns</div><table class="data-table em-table"><thead><tr><th>Job #</th><th>Completed</th><th>Days to complete</th><th>Inv $</th><th>'+invOther+'</th></tr></thead><tbody>'+invRows+'</tbody></table></div>'
       + (closed.length>CAP ? '<div class="em-foot">Showing '+CAP+' of '+closed.length+' (most recent).</div>' : '');
   }
+  // Over-30 trajectory sparkline (coordinator drilldowns only — snapshots store
+  // per-coordinator history in byCoord, not per vendor/trade).
+  const sparkHtml = (!isV && !isT) ? _bnCoordO30Spark(name, openO30) : '';
   // Next Actions Required — any drilldown (coordinator / vendor / trade). Open
   // exception items (over-30, un-acked/un-snoozed) on this entity's jobs, with
   // the action to take. Same signal logic as the Exception Queue.
@@ -1605,6 +1608,7 @@ function openEntityModal(kind, idx){
     + '<button class="jm-x" onclick="closeEntityModal()" aria-label="Close">\u00d7</button></div>'
     + '<div class="job-modal-body">'
     + '<div class="em-tiles">'+tiles+'</div>'
+    + sparkHtml
     + kindCtrl
     + naHtml
     + '<div class="em-seclbl">Open work <span class="n">\u00b7 '+open.length+' '+(open.length===1?'job':'jobs')+' \u00b7 click a row to open the job</span></div>'
@@ -3751,6 +3755,33 @@ function copyEntityActions(){
   const text='Next Actions Required — '+kindLbl+': '+name+(dateLabel?(' ('+dateLabel+')'):'')+'\n'+lines.join('\n');
   _bnCopyText(text, na.length+' action'+(na.length===1?'':'s')+' copied');
 }
+// Per-coordinator over-30 trajectory for the drilldown modal. Reads byCoord.o30
+// from each over30-history snapshot (retroactive), current-inclusive. Coordinator
+// only — snapshots don't carry per-vendor/trade history. '' when <2 data points.
+function _bnCoordO30Spark(name, curCount){
+  if(window.BROADWAY_SNAPSHOT) return '';
+  const hist = window._o30History || [];
+  const series = [];
+  hist.forEach(function(e){
+    if(!e || !e.dateStr) return;
+    series.push({dateStr:e.dateStr, v:(e.byCoord && e.byCoord[name] && e.byCoord[name].o30) || 0});
+  });
+  const curDate = window._reportDate ? new Date(window._reportDate).toISOString().slice(0,10) : null;
+  if(curDate){
+    if(series.length && series[series.length-1].dateStr===curDate) series[series.length-1].v = curCount;
+    else series.push({dateStr:curDate, v:curCount});
+  }
+  const vals = series.map(function(s){ return s.v; });
+  if(vals.length<2) return '';
+  if(Math.max.apply(null, vals)===0) return ''; // never had over-30 — nothing to chart
+  const first=vals[0], last=vals[vals.length-1];
+  const dir = last>first?'c-red':last<first?'c-green':'c-amber';
+  const dirTxt = last>first?('▲ +'+(last-first)):last<first?('▼ −'+(first-last)):'— 0';
+  const color=(getComputedStyle(document.documentElement).getPropertyValue('--color-success-text').trim())||'#1a5f3e';
+  return '<div class="em-spark"><div class="em-spark-l"><div class="em-spark-t">Over-30 trajectory</div><div class="em-spark-s">last '+vals.length+' audits</div></div>'
+    + '<div class="em-spark-c">'+o30Sparkline(vals,280,34,color)+'</div>'
+    + '<div class="em-spark-r"><span class="em-spark-n">'+last+'</span> <span class="'+dir+'">'+dirTxt+'</span></div></div>';
+}
 function eqReasons(j){
   const r = [];
   const sb = staleBucket(j);
@@ -3830,6 +3861,30 @@ async function eqReopen(jobId){
 let EQ_SHOW_RESOLVED = false;
 function eqToggleResolved(){ EQ_SHOW_RESOLVED = !EQ_SHOW_RESOLVED; render('exception-queue'); }
 
+// Queue filters (coordinator / reason) + bulk ack. EQ_FILTER persists across
+// renders; _eqMatchesFilter is the single predicate used by both the table and
+// the bulk-ack so they always act on the same set.
+let EQ_FILTER = {coord:'', reason:''};
+function _eqMatchesFilter(x){
+  return (!EQ_FILTER.coord || (x.j.coordinator||'')===EQ_FILTER.coord)
+      && (!EQ_FILTER.reason || x.reasons.indexOf(EQ_FILTER.reason)!==-1);
+}
+function setEqFilter(type, val){ EQ_FILTER[type]=val; render('exception-queue'); }
+function clearEqFilter(){ EQ_FILTER={coord:'', reason:''}; render('exception-queue'); }
+async function eqAckAll(){
+  if(window.BROADWAY_SNAPSHOT) return;
+  const ids = buildExceptionQueue().map(x=>({...x, st:eqStatus(x.j.jobId)}))
+    .filter(x=>x.st.state==='open').filter(_eqMatchesFilter).map(x=>x.j.jobId);
+  if(!ids.length){ toast('No open items match the filter'); return; }
+  if(!window.confirm('Acknowledge '+ids.length+' exception'+(ids.length===1?'':'s')+'? This marks them resolved in the queue.')) return;
+  const user = await bnGetUser();
+  // One conditional write for the whole batch (not N writes).
+  const ok = await saveExceptionState(function(st){ const ts=new Date().toISOString(); ids.forEach(function(id){ st.items[id]={state:'ack', by:user, ts:ts}; }); });
+  if(ok){ bnLogActivity('ack', ids.length+' items', 'bulk ack'+((EQ_FILTER.coord||EQ_FILTER.reason)?' (filtered)':'')); toast(ids.length+' acknowledged'); }
+  else toast('Save failed — try again');
+  const _a=compute(); initCounts(_a); render('exception-queue', _a); updateEqBadge();
+}
+
 function renderExceptionQueue(mc, agg){
   const ro = !!window.BROADWAY_SNAPSHOT;
   const queue = buildExceptionQueue().map(x=>({...x, st:eqStatus(x.j.jobId)}));
@@ -3837,6 +3892,19 @@ function renderExceptionQueue(mc, agg){
   const acked = queue.filter(x=>x.st.state==='ack');
   const snoozed = queue.filter(x=>x.st.state==='snooze');
   const openAmt = open.reduce((s,x)=>s+(x.j.amount||0),0);
+  // Filter the open list (coordinator / reason); options built from the full open
+  // set so they stay stable while filtering.
+  const openF = open.filter(_eqMatchesFilter);
+  const coordOpts = [...new Set(open.map(x=>x.j.coordinator).filter(Boolean))].sort();
+  const reasonOpts = [...new Set(open.flatMap(x=>x.reasons))];
+  const _eqSel = "font-size:12px;padding:7px 10px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text);";
+  const filterBar = (!ro && open.length) ? `<div class="card" style="margin-bottom:10px;"><div class="card-body" style="padding:10px 14px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;">
+      <select style="${_eqSel}" onchange="setEqFilter('coord',this.value)"><option value="">All coordinators</option>${coordOpts.map(c=>`<option value="${escapeHtml(c)}"${EQ_FILTER.coord===c?' selected':''}>${escapeHtml(c)}</option>`).join('')}</select>
+      <select style="${_eqSel}" onchange="setEqFilter('reason',this.value)"><option value="">All reasons</option>${reasonOpts.map(r=>`<option value="${escapeHtml(r)}"${EQ_FILTER.reason===r?' selected':''}>${escapeHtml(EQ_REASONS[r]?EQ_REASONS[r].label:r)}</option>`).join('')}</select>
+      ${(EQ_FILTER.coord||EQ_FILTER.reason)?`<button class="eq-btn" onclick="clearEqFilter()">✕ Clear</button>`:''}
+      <span style="flex:1;"></span>
+      <button class="eq-btn eq-ack" onclick="eqAckAll()" ${openF.length?'':'disabled'} title="Acknowledge every open item shown below">✓ Ack all (${openF.length})</button>
+    </div></div>` : '';
 
   const reasonChip = code => { const r=EQ_REASONS[code]; return `<span class="eq-chip eq-r-${code}">${r?r.label:code}</span>`; };
 
@@ -3882,7 +3950,7 @@ function renderExceptionQueue(mc, agg){
       <div class="stat-box"><div class="sb-num">${fmt$0(openAmt)}</div><div class="sb-lbl">Open $ Exposure</div></div>
     </div>
     ${open.length
-      ? `<div class="card"><div class="card-header"><h3>Open — ranked by score</h3><span class="card-meta">${open.length} item${open.length===1?'':'s'} · higher score = more reasons / older / larger $</span></div><div class="card-body" style="padding:0;">${table(open)}</div></div>`
+      ? filterBar + `<div class="card"><div class="card-header"><h3>Open — ranked by score</h3><span class="card-meta">${openF.length===open.length?`${open.length} item${open.length===1?'':'s'}`:`${openF.length} of ${open.length} shown`} · higher score = more reasons / older / larger $</span></div><div class="card-body" style="padding:0;">${openF.length?table(openF):'<div class="bn-note">No open items match the current filter.</div>'}</div></div>`
       : `<div class="card"><div class="card-body"><div class="bn-empty"><div style="font-size:40px;margin-bottom:12px;">✅</div><p style="font-size:14px;">Queue is clear — no open exceptions on the current load.</p></div></div></div>`}
     ${(acked.length||snoozed.length)?`<div style="margin:14px 0 8px;"><button class="eq-btn" onclick="eqToggleResolved()">${EQ_SHOW_RESOLVED?'▾ Hide':'▸ Show'} resolved (${acked.length+snoozed.length})</button></div>`:''}
     ${EQ_SHOW_RESOLVED&&snoozed.length?`<div class="card"><div class="card-header"><h3>😴 Snoozed</h3></div><div class="card-body" style="padding:0;">${table(snoozed)}</div></div>`:''}
@@ -5379,6 +5447,13 @@ updateEditBadge();
 .na-act{font-size:11px;line-height:1.4;}
 .na-act + .na-act{margin-top:3px;padding-top:3px;border-top:1px dashed var(--border);}
 .na-badge{display:inline-block;min-width:16px;text-align:center;font:700 10px 'DM Mono',monospace;color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:9px;padding:0 5px;margin:0 4px;vertical-align:middle;}
+.em-spark{display:flex;align-items:center;gap:14px;padding:10px 0;margin:2px 0 6px;border-bottom:1px solid var(--border);}
+.em-spark-l{min-width:118px;}
+.em-spark-t{font-size:11px;font-weight:700;color:var(--text);}
+.em-spark-s{font-size:10px;color:var(--muted);}
+.em-spark-c{flex:1;max-width:300px;}
+.em-spark-r{text-align:right;font-family:'DM Mono',monospace;min-width:60px;font-size:10px;}
+.em-spark-n{font-size:15px;font-weight:700;}
 </style>
 
 <!-- Mobile sticky save bar removed — Save Dashboard now lives in the sidebar -->
