@@ -424,7 +424,10 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .nd-sup{background:#fdf3e0;color:#9a6a12;border:1px solid #e8cfa0;}
 .vnd-sep{margin:0 5px;color:var(--muted);}
 .jm-na{background:linear-gradient(135deg,#f1f9f4,#eaf5ef);border:1px solid #d3e8dc;border-radius:8px;padding:11px 14px 6px;margin-bottom:14px;}
-.jm-na-h{font:700 10.5px 'DM Mono',monospace;color:#0d3d26;text-transform:uppercase;letter-spacing:.1em;margin-bottom:5px;}
+.jm-na-h{display:flex;align-items:center;justify-content:space-between;gap:8px;font:700 10.5px 'DM Mono',monospace;color:#0d3d26;text-transform:uppercase;letter-spacing:.1em;margin-bottom:5px;}
+.jm-na-copy{flex:none;font:600 9.5px 'DM Mono',monospace;text-transform:none;letter-spacing:0;color:#1a5f3e;background:#fff;border:1px solid #cfe3d7;border-radius:6px;padding:3px 8px;cursor:pointer;transition:background .12s,border-color .12s;}
+.jm-na-copy:hover{background:#f0fdf4;border-color:#86efac;}
+.jm-na-copy:active{transform:translateY(1px);}
 .jm-na .nd-ol{margin:2px 0 4px;}
 .jm-na .nd-ol li{font-size:12.5px;border-bottom-color:#d8e8de;}
 .jn-head{margin-bottom:7px;}
@@ -1370,6 +1373,7 @@ function openJobModal(id){
   const actLbl=action==='done'?'Action taken':action==='working'?'In progress':'No action yet';
   window._jnCurrentId=id; window._jnAction=action;
   const jnMode=hasNote?'recent':'full'; window._jnMode=jnMode;
+  window._jnNAActions=na.actions||[];
   const box=document.getElementById('jobModalBox'); if(!box) return;
   const row=(k,v)=>`<div><span class="jm-k">${k}</span><span class="jm-v">${v}</span></div>`;
   box.innerHTML=`
@@ -1392,7 +1396,7 @@ function openJobModal(id){
         </div>
         <div class="holdup-meta" id="holdupMeta">${saved.summaryAt?'AI summary · '+escapeHtml(new Date(saved.summaryAt).toLocaleString()):''}</div>
       </div>
-      ${na.actions.length?'<div class="jm-na"><div class="jm-na-h">Next Actions Required</div>'+nextActionsCardHtml(na.actions)+naHistoryHtml(saved.naHistory)+'</div>':(saved.naHistory&&saved.naHistory.length?'<div class="jm-na">'+naHistoryHtml(saved.naHistory)+'</div>':'')}
+      ${na.actions.length?'<div class="jm-na"><div class="jm-na-h"><span>Next Actions Required</span><button type="button" class="jm-na-copy" onclick="copyNextActions()" title="Copy these next actions">⧉ Copy</button></div>'+nextActionsCardHtml(na.actions)+naHistoryHtml(saved.naHistory)+'</div>':(saved.naHistory&&saved.naHistory.length?'<div class="jm-na">'+naHistoryHtml(saved.naHistory)+'</div>':'')}
       <div class="jm-timing">
         <div class="jt"><div class="jt-n">${j.aged}</div><div class="jt-l">Days open</div></div>
         <div class="jt"><div class="jt-n">${j.statusHrs?(j.statusHrs>=24?Math.round(j.statusHrs/24)+'d':Math.round(j.statusHrs)+'h'):'\u2014'}</div><div class="jt-l">In status</div></div>
@@ -1732,7 +1736,7 @@ function bnRenderCaseFile(container, src){
       container.appendChild(table); i=jj-1; continue;
     }
     if(first){ first=false; flushAll(); const ttl=document.createElement('div'); ttl.className='nd-title'; ttl.textContent=t.replace(/\*\*/g,''); container.appendChild(ttl); continue; }
-    if(/\|/.test(t) || /tracking #|internal use only/i.test(t)){ flushAll(); addP(t,'nd-sub'); continue; }
+    if(/\|/.test(t) || /^tracking\s*#|internal use only/i.test(t)){ flushAll(); addP(t,'nd-sub'); continue; }
     if(/^(-{3,}|\*{3,}|_{3,})$/.test(t)){ flushAll(); container.appendChild(document.createElement('hr')); continue; }
     const hm=t.match(/^#{1,6}\s+(.*)$/);
     const wb=t.match(/^\*\*([^*]+)\*\*$/);
@@ -1824,6 +1828,16 @@ async function loadJobNotes(){
     }
   }
   if(JOBS.length) render(currentView); // paint row markers once notes are known
+}
+// Copy the hoisted Next Actions as a clean numbered block (re-parseable as a NEXT ACTIONS section).
+function copyNextActions(){
+  const acts=window._jnNAActions||[];
+  if(!acts.length){ toast('No next actions to copy'); return; }
+  const txt='NEXT ACTIONS:\n'+acts.map(function(a,i){ return (i+1)+'. '+a; }).join('\n');
+  const ok=function(){ toast('Next actions copied'); };
+  const fallback=function(){ try{ window.prompt('Copy the next actions:', txt); }catch(e){ toast('Copy failed'); } };
+  if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(txt).then(ok).catch(fallback); }
+  else { fallback(); }
 }
 function setJobNoteAction(action){
   window._jnAction=action;
