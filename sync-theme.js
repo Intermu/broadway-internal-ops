@@ -24,8 +24,7 @@ const TARGETS = [
   // them to the canonical tokens after the synced region (see their :root).
   "wo_case_file.html",
   "Broadway_Projects_Tracker.html",
-  // add tools here as they opt in (must contain the relevant sentinels):
-  // "agent.html",
+  "agent.html",
 ];
 const DRY = process.argv.slice(2).some(a => a === "--dry-run" || a === "--dry" || a === "-n");
 
