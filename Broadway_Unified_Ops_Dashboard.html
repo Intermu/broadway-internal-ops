@@ -1573,7 +1573,7 @@ function openEntityModal(kind, idx){
   const otherCol = (isV||isT) ? 'Coordinator' : 'Vendors';
   const openRows = open.length ? open.map(function(j){
       const other = (isV||isT) ? escapeHtml(j.coordinator||'-') : vendorListHtml(j.vendors);
-      return '<tr class="em-click" onclick="closeEntityModal();openJobModal('+JSON.stringify(String(j.jobId))+')">'
+      return '<tr class="em-click" data-jobid="'+escapeHtml(j.jobId)+'" onclick="closeEntityModal();openJobModal(this.dataset.jobid)">'
         + '<td class="em-jid">'+escapeHtml(j.jobId)+'</td>'
         + '<td>'+statusBadge(j.status)+'</td>'
         + '<td><span class="age-pill '+ageCls(j.aged)+'">'+j.aged+'d</span></td>'
@@ -1608,7 +1608,7 @@ function openEntityModal(kind, idx){
     const na=_bnNextActions(open);
     const naRows=na.slice(0,15).map(function(x){
       const acts=x.reasons.map(function(c){ return '<div class="na-act">'+escapeHtml(EQ_ACTION[c]||c)+'</div>'; }).join('');
-      return '<tr class="em-click" onclick="closeEntityModal();openJobModal('+JSON.stringify(String(x.j.jobId))+')">'
+      return '<tr class="em-click" data-jobid="'+escapeHtml(x.j.jobId)+'" onclick="closeEntityModal();openJobModal(this.dataset.jobid)">'
         + '<td class="em-jid">'+escapeHtml(x.j.jobId)+'</td>'
         + '<td><span class="age-pill '+ageCls(x.j.aged)+'">'+x.j.aged+'d</span></td>'
         + '<td>'+acts+'</td></tr>';
