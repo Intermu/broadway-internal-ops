@@ -4851,7 +4851,7 @@ function o30Sparkline(vals,w,h,color,labels){
     const isLast=i===pts.length-1, cx=p[0].toFixed(1), cy=p[1].toFixed(1);
     const tip=escapeHtml((labels&&labels[i]!=null?labels[i]+' · ':'')+vals[i]);
     return `<circle cx="${cx}" cy="${cy}" r="${isLast?3:2}" fill="${color}"/>`
-         + `<circle cx="${cx}" cy="${cy}" r="7" fill="transparent" style="cursor:pointer"><title>${tip}</title></circle>`;
+         + `<circle class="bn-spark-dot" cx="${cx}" cy="${cy}" r="7" fill="transparent" data-tip="${tip}" aria-label="${tip}" style="--dot:${color}"/>`;
   }).join('');
   return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="display:block;width:100%">
     <defs><linearGradient id="${uid}" x1="0" y1="0" x2="0" y2="1">
@@ -4862,6 +4862,35 @@ function o30Sparkline(vals,w,h,color,labels){
     ${dots}
   </svg>`;
 }
+// Styled hover tooltip for sparkline points (replaces the native <title>): one
+// shared element pinned at the cursor, populated from the point's data-tip.
+// Delegated so it works across every re-rendered sparkline; gated by a flag so
+// the global mousemove handler is a no-op unless a point is actually hovered.
+let _bnSparkTipOn=false;
+function _bnSparkTipEl(){
+  let el=document.getElementById('bn-spark-tip');
+  if(!el){ el=document.createElement('div'); el.id='bn-spark-tip'; el.className='bn-spark-tip'; el.style.display='none'; document.body.appendChild(el); }
+  return el;
+}
+document.addEventListener('mouseover',function(e){
+  const t=e.target;
+  if(t&&t.classList&&t.classList.contains('bn-spark-dot')){
+    _bnSparkTipOn=true;
+    const el=_bnSparkTipEl();
+    el.textContent=t.getAttribute('data-tip')||'';
+    el.style.left=(e.clientX+12)+'px'; el.style.top=(e.clientY-12)+'px'; el.style.display='block';
+  }
+});
+document.addEventListener('mousemove',function(e){
+  if(!_bnSparkTipOn) return;
+  const el=document.getElementById('bn-spark-tip'); if(!el) return;
+  let x=e.clientX+12; const w=el.offsetWidth||90; if(x+w>window.innerWidth-8) x=e.clientX-w-12;
+  el.style.left=x+'px'; el.style.top=(e.clientY-12)+'px';
+});
+document.addEventListener('mouseout',function(e){
+  const t=e.target;
+  if(t&&t.classList&&t.classList.contains('bn-spark-dot')){ _bnSparkTipOn=false; const el=document.getElementById('bn-spark-tip'); if(el) el.style.display='none'; }
+});
 function o30SparkBlock(entries, cur){
   const series = (entries||[]).map(e=>({dateStr:e.dateStr, count:(e.o30&&e.o30.count)||0}));
   if(series.length && series[series.length-1].dateStr===cur.dateStr) series[series.length-1].count=cur.count;
@@ -5561,6 +5590,9 @@ tr.bn-row-hidden{display:none;}
 .bn-more-row td:hover{text-decoration:underline;background:var(--color-success-bg,#f0fdf4);}
 .ch-row:hover{background:var(--color-surface-alt,#f8fafc);}
 .ch-chip{display:inline-block;font-family:'DM Mono',monospace;font-size:10px;background:var(--color-surface,#fff);border:1px solid var(--border);border-radius:5px;padding:1px 6px;margin:2px 3px 2px 0;}
+.bn-spark-dot{transition:fill-opacity .1s ease;}
+.bn-spark-dot:hover{fill:var(--dot,#1a5f3e);fill-opacity:.22;}
+.bn-spark-tip{position:fixed;z-index:9999;pointer-events:none;background:var(--color-text,#1e293b);color:#fff;font:600 11px 'DM Mono',monospace;padding:5px 9px;border-radius:6px;box-shadow:0 4px 14px rgba(0,0,0,.20);white-space:nowrap;}
 </style>
 
 <!-- Mobile sticky save bar removed — Save Dashboard now lives in the sidebar -->
