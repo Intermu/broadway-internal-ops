@@ -3790,7 +3790,8 @@ function _bnCoordO30Spark(name, curCount){
   const series = [];
   hist.forEach(function(e){
     if(!e || !e.dateStr) return;
-    series.push({dateStr:e.dateStr, v:(e.byCoord && e.byCoord[name] && e.byCoord[name].o30) || 0});
+    const bc=(e.byCoord && e.byCoord[name]) || null;
+    series.push({dateStr:e.dateStr, v:(bc&&bc.o30)||0, amt:(bc&&bc.amt)||0, oldest:(bc&&bc.oldest)||0});
   });
   const curDate = window._reportDate ? new Date(window._reportDate).toISOString().slice(0,10) : null;
   if(curDate){
@@ -3805,7 +3806,7 @@ function _bnCoordO30Spark(name, curCount){
   const dirTxt = last>first?('▲ +'+(last-first)):last<first?('▼ −'+(first-last)):'— 0';
   const color=(getComputedStyle(document.documentElement).getPropertyValue('--color-success-text').trim())||'#1a5f3e';
   return '<div class="em-spark"><div class="em-spark-l"><div class="em-spark-t">Over-30 trajectory</div><div class="em-spark-s">last '+vals.length+' audits</div></div>'
-    + '<div class="em-spark-c">'+o30Sparkline(vals,280,34,color,series.map(function(s){return s.dateStr;}))+'</div>'
+    + '<div class="em-spark-c">'+o30Sparkline(vals,280,34,color,series.map(function(s,i){ return [s.dateStr, s.v+' over-30', s.amt?fmt$0(s.amt)+' exposure':'', s.oldest?s.oldest+'d oldest':'', i>0?_bnDeltaStr(s.v-series[i-1].v)+' vs prior':'']; }))+'</div>'
     + '<div class="em-spark-r"><span class="em-spark-n">'+last+'</span> <span class="'+dir+'">'+dirTxt+'</span></div></div>';
 }
 // Make a "+N more" truncation row clickable: reveal the hidden rows in its table
@@ -4812,6 +4813,8 @@ function _o30Arrow(n){
   if(n<0) return `<span class="c-green" style="font-weight:700;">\u25bc ${n}</span>`;
   return `<span class="c-amber" style="font-weight:700;">\u2014 0</span>`;
 }
+// Plain-text signed delta for sparkline tooltips: "\u25b2 +3" / "\u25bc \u22122" / "\u2014 0".
+function _bnDeltaStr(d){ return d>0?('\u25b2 +'+d):(d<0?('\u25bc \u2212'+(-d)):'\u2014 0'); }
 
 // Build one comparison row (WoW or MoM) against a prior snapshot.
 function _o30TrendRow(label, prior, cur){
@@ -4839,7 +4842,7 @@ function _o30TrendRow(label, prior, cur){
 // `labels` (optional) aligns 1:1 with `vals` — each point gets a native <title>
 // tooltip "label · value" (e.g. the audit date + the count at that time) plus a
 // visible marker and a larger transparent hit-target so the tooltip is easy to hover.
-function o30Sparkline(vals,w,h,color,labels){
+function o30Sparkline(vals,w,h,color,tips){
   if(vals.length<2) return '';
   const max=Math.max(...vals), min=Math.min(...vals), rng=(max-min)||1;
   const step=w/(vals.length-1);
@@ -4849,9 +4852,12 @@ function o30Sparkline(vals,w,h,color,labels){
   const uid='o30sg'+Math.random().toString(36).slice(2,7);
   const dots=pts.map((p,i)=>{
     const isLast=i===pts.length-1, cx=p[0].toFixed(1), cy=p[1].toFixed(1);
-    const tip=escapeHtml((labels&&labels[i]!=null?labels[i]+' · ':'')+vals[i]);
+    // tips[i] = array of lines (first = header). Joined with ~|~ for the
+    // multi-line styled tooltip; the handler splits + renders each via textContent.
+    const lines=(tips&&tips[i]!=null)?(Array.isArray(tips[i])?tips[i].filter(Boolean):[String(tips[i])]):[String(vals[i])];
+    const enc=escapeHtml(lines.join('~|~'));
     return `<circle cx="${cx}" cy="${cy}" r="${isLast?3:2}" fill="${color}"/>`
-         + `<circle class="bn-spark-dot" cx="${cx}" cy="${cy}" r="7" fill="transparent" data-tip="${tip}" aria-label="${tip}" style="--dot:${color}"/>`;
+         + `<circle class="bn-spark-dot" cx="${cx}" cy="${cy}" r="7" fill="transparent" data-tip="${enc}" aria-label="${escapeHtml(lines.join(' · '))}" style="--dot:${color}"/>`;
   }).join('');
   return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="display:block;width:100%">
     <defs><linearGradient id="${uid}" x1="0" y1="0" x2="0" y2="1">
@@ -4877,7 +4883,8 @@ document.addEventListener('mouseover',function(e){
   if(t&&t.classList&&t.classList.contains('bn-spark-dot')){
     _bnSparkTipOn=true;
     const el=_bnSparkTipEl();
-    el.textContent=t.getAttribute('data-tip')||'';
+    el.innerHTML='';
+    (t.getAttribute('data-tip')||'').split('~|~').forEach(function(l,i){ const d=document.createElement('div'); d.className=i===0?'bst-h':'bst-l'; d.textContent=l; el.appendChild(d); });
     el.style.left=(e.clientX+12)+'px'; el.style.top=(e.clientY-12)+'px'; el.style.display='block';
   }
 });
@@ -4892,9 +4899,9 @@ document.addEventListener('mouseout',function(e){
   if(t&&t.classList&&t.classList.contains('bn-spark-dot')){ _bnSparkTipOn=false; const el=document.getElementById('bn-spark-tip'); if(el) el.style.display='none'; }
 });
 function o30SparkBlock(entries, cur){
-  const series = (entries||[]).map(e=>({dateStr:e.dateStr, count:(e.o30&&e.o30.count)||0}));
-  if(series.length && series[series.length-1].dateStr===cur.dateStr) series[series.length-1].count=cur.count;
-  else series.push({dateStr:cur.dateStr, count:cur.count});
+  const series = (entries||[]).map(e=>({dateStr:e.dateStr, count:(e.o30&&e.o30.count)||0, amt:(e.o30&&e.o30.amt)||0}));
+  if(series.length && series[series.length-1].dateStr===cur.dateStr){ series[series.length-1].count=cur.count; series[series.length-1].amt=cur.amt||series[series.length-1].amt; }
+  else series.push({dateStr:cur.dateStr, count:cur.count, amt:cur.amt||0});
   const vals = series.map(s=>s.count);
   if(vals.length<2){
     return `<div style="padding:10px 14px;font-size:12px;color:var(--muted);border-bottom:1px solid var(--border);"><strong style="color:var(--text);">Trajectory:</strong> need at least two audits to chart \u2014 builds as weekly audits load.</div>`;
@@ -4908,7 +4915,7 @@ function o30SparkBlock(entries, cur){
       <div style="font-size:11px;font-weight:700;color:var(--text);">Over-30 trajectory</div>
       <div style="font-size:10px;color:var(--muted);">last ${vals.length} audits</div>
     </div>
-    <div style="flex:1;max-width:340px;">${o30Sparkline(vals,320,40,color,series.map(s=>s.dateStr))}</div>
+    <div style="flex:1;max-width:340px;">${o30Sparkline(vals,320,40,color,series.map(function(s,i){ return [s.dateStr, s.count+' over-30', s.amt?fmt$0(s.amt)+' exposure':'', i>0?_bnDeltaStr(s.count-series[i-1].count)+' vs prior':'']; }))}</div>
     <div style="text-align:right;font-family:'DM Mono',monospace;min-width:54px;">
       <div style="font-size:16px;font-weight:700;">${last}</div>
       <div style="font-size:10px;" class="${dir}">${dirTxt}</div>
@@ -4943,7 +4950,7 @@ function o30MultiSparkBlock(entries, cur){
     const dirTxt=last>first?('\u25b2 +'+(last-first)):last<first?('\u25bc \u2212'+(first-last)):'\u2014 0';
     return '<div style="display:flex;align-items:center;gap:14px;padding:7px 14px;border-bottom:1px solid var(--border);">'
       +'<div style="min-width:104px;display:flex;align-items:center;gap:7px;"><span style="width:9px;height:9px;border-radius:2px;background:'+s.color+';display:inline-block;flex:0 0 auto;"></span><span style="font-size:11.5px;font-weight:600;color:var(--text);">'+s.lbl+'</span></div>'
-      +'<div style="flex:1;max-width:300px;">'+o30Sparkline(vals,300,30,s.color,rows.map(function(r){return r.dateStr;}))+'</div>'
+      +'<div style="flex:1;max-width:300px;">'+o30Sparkline(vals,300,30,s.color,vals.map(function(v,i){ return [rows[i].dateStr, v+' '+s.lbl, i>0?_bnDeltaStr(v-vals[i-1])+' vs prior':'']; }))+'</div>'
       +'<div style="text-align:right;font-family:\'DM Mono\',monospace;min-width:70px;"><span style="font-size:15px;font-weight:700;">'+last+'</span> <span style="font-size:10px;" class="'+dir+'">'+dirTxt+'</span></div>'
       +'</div>';
   }).join('');
@@ -5592,7 +5599,9 @@ tr.bn-row-hidden{display:none;}
 .ch-chip{display:inline-block;font-family:'DM Mono',monospace;font-size:10px;background:var(--color-surface,#fff);border:1px solid var(--border);border-radius:5px;padding:1px 6px;margin:2px 3px 2px 0;}
 .bn-spark-dot{transition:fill-opacity .1s ease;}
 .bn-spark-dot:hover{fill:var(--dot,#1a5f3e);fill-opacity:.22;}
-.bn-spark-tip{position:fixed;z-index:9999;pointer-events:none;background:var(--color-surface,#fff);color:var(--color-text,#1e293b);border:1px solid var(--color-border,#e2e8f0);border-left:3px solid var(--color-primary,#1a5f3e);font:600 11px 'DM Mono',monospace;padding:6px 10px;border-radius:7px;box-shadow:var(--shadow-md,0 4px 14px rgba(0,0,0,.1),0 2px 4px rgba(0,0,0,.08));white-space:nowrap;}
+.bn-spark-tip{position:fixed;z-index:9999;pointer-events:none;background:var(--color-surface,#fff);color:var(--color-text,#1e293b);border:1px solid var(--color-border,#e2e8f0);border-left:3px solid var(--color-primary,#1a5f3e);font:600 11px 'DM Mono',monospace;padding:6px 10px;border-radius:7px;box-shadow:var(--shadow-md,0 4px 14px rgba(0,0,0,.1),0 2px 4px rgba(0,0,0,.08));white-space:nowrap;line-height:1.45;}
+.bn-spark-tip .bst-h{font-weight:700;color:var(--color-text,#1e293b);}
+.bn-spark-tip .bst-l{font-weight:500;color:var(--color-text-muted,#64748b);font-size:10px;}
 </style>
 
 <!-- Mobile sticky save bar removed — Save Dashboard now lives in the sidebar -->
