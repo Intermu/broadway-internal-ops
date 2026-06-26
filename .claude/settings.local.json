@@ -31,7 +31,20 @@
       "PowerShell($f=\"C:\\\\Users\\\\mnajarro\\\\OneDrive - Broadway National\\\\Documents\\\\GitHub\\\\broadway-internal-ops\\\\Broadway_Unified_Ops_Dashboard.html\"; $c=[System.IO.File]::ReadAllText\\($f\\); $n=\\([regex]::Matches\\($c,[char]0x01\\)\\).Count; $c=$c.Replace\\([string][char]0x01,'~|~'\\); $utf8=New-Object System.Text.UTF8Encoding\\($false\\); [System.IO.File]::WriteAllText\\($f,$c,$utf8\\); \"Replaced $n occurrences of U+0001 with ~|~\")",
       "PowerShell($f=\"C:\\\\Users\\\\mnajarro\\\\OneDrive - Broadway National\\\\Documents\\\\GitHub\\\\broadway-internal-ops\\\\Broadway_Unified_Ops_Dashboard.html\"; $c=[System.IO.File]::ReadAllText\\($f\\); \"U+0001 remaining: \" + \\([regex]::Matches\\($c,[char]0x01\\)\\).Count; \"BOM check \\(first bytes\\): \" + \\([System.IO.File]::ReadAllBytes\\($f\\)[0..2] -join ','\\); $lines=Get-Content $f; $lines[4854]; $lines[4883])",
       "PowerShell($env:PATH = \"C:\\\\Program Files\\\\Adobe\\\\Adobe Creative Cloud Experience\\\\libs;\" + $env:PATH; $f=\"Broadway_Unified_Ops_Dashboard.html\"; $c=[System.IO.File]::ReadAllText\\($f\\); \"U+0001 remaining: \"+\\([regex]::Matches\\($c,[char]0x01\\)\\).Count; \"join ~|~: \"+\\([regex]::Matches\\($c,'join\\\\\\(''~\\\\|~''\\\\\\)'\\)\\).Count+\" , split ~|~: \"+\\([regex]::Matches\\($c,'split\\\\\\(''~\\\\|~''\\\\\\)'\\)\\).Count; \"--- preflight ---\"; node scripts/preflight.js 2>&1 | Select-String -Pattern \"Broadway_Unified_Ops_Dashboard|hard failure|advisory\"; node scripts/test-bn-core.js 2>&1 | Select-String -Pattern \"parity|OK:\")",
-      "Bash(grep -n \"fmt\\\\\\\\\\\\$0\\\\|const fmt\" Broadway_Unified_Ops_Dashboard.html)"
+      "Bash(grep -n \"fmt\\\\\\\\\\\\$0\\\\|const fmt\" Broadway_Unified_Ops_Dashboard.html)",
+      "Bash(grep -n \"\\\\\\\\\\\\\\\\<\\\\/\" \"C:\\\\Users\\\\mnajarro\\\\OneDrive - Broadway National\\\\Documents\\\\GitHub\\\\broadway-internal-ops\\\\Broadway_Unified_Ops_Dashboard.html\")",
+      "Bash(grep -n \"<\\\\\\\\\\\\\\\\span\\\\|<\\\\\\\\\\\\\\\\/span\" \"C:\\\\Users\\\\mnajarro\\\\OneDrive - Broadway National\\\\Documents\\\\GitHub\\\\broadway-internal-ops\\\\Broadway_Unified_Ops_Dashboard.html\")",
+      "Bash(grep -n \"\\\\\\\\\\\\\\\\<\\\\\\\\/span\\\\|\\\\\\\\\\\\\\\\<\\\\\\\\/div\" \"C:\\\\Users\\\\mnajarro\\\\OneDrive - Broadway National\\\\Documents\\\\GitHub\\\\broadway-internal-ops\\\\Broadway_Unified_Ops_Dashboard.html\")",
+      "Bash(python3)",
+      "Bash(grep -n \"<\\\\\\\\\\\\span\\\\|<\\\\\\\\\\\\\\\\/span\" \"C:\\\\Users\\\\mnajarro\\\\OneDrive - Broadway National\\\\Documents\\\\GitHub\\\\broadway-internal-ops\\\\Broadway_Unified_Ops_Dashboard.html\")",
+      "Bash(grep \"\\\\\\\\\\\\\\\\<\")",
+      "Bash(grep -n \"<\\\\\\\\\\\\span\" \"C:\\\\Users\\\\mnajarro\\\\OneDrive - Broadway National\\\\Documents\\\\GitHub\\\\broadway-internal-ops\\\\Broadway_Unified_Ops_Dashboard.html\")",
+      "Bash(grep -P '\\\\\\\\<' \"C:\\\\Users\\\\mnajarro\\\\OneDrive - Broadway National\\\\Documents\\\\GitHub\\\\broadway-internal-ops\\\\Broadway_Unified_Ops_Dashboard.html\")",
+      "Bash(xxd)",
+      "Bash(grep -n \"<\\\\\\\\\\\\\\\\\\\\/\" \"C:\\\\Users\\\\mnajarro\\\\OneDrive - Broadway National\\\\Documents\\\\GitHub\\\\broadway-internal-ops\\\\Broadway_Unified_Ops_Dashboard.html\")",
+      "Bash(grep -n \"<\\\\\\\\\\\\\\\\span\\\\|<\\\\\\\\\\\\\\\\\\\\/\\\\|<\\\\\\\\\\\\\\\\div\" \"C:\\\\Users\\\\mnajarro\\\\OneDrive - Broadway National\\\\Documents\\\\GitHub\\\\broadway-internal-ops\\\\Broadway_Unified_Ops_Dashboard.html\")",
+      "Bash(grep -n 'd<\\\\\\\\span>' \"C:\\\\Users\\\\mnajarro\\\\OneDrive - Broadway National\\\\Documents\\\\GitHub\\\\broadway-internal-ops\\\\Broadway_Unified_Ops_Dashboard.html\")",
+      "Bash(sed -n '2437,2525p' \"C:\\\\Users\\\\mnajarro\\\\OneDrive - Broadway National\\\\Documents\\\\GitHub\\\\broadway-internal-ops\\\\Broadway_Unified_Ops_Dashboard.html\" > /tmp/search_functions.txt && wc -l /tmp/search_functions.txt)"
     ]
   }
 }
