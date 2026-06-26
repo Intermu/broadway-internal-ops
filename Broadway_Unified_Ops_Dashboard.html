@@ -196,7 +196,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .tool-mode-bar .gear-btn:hover{background:rgba(255,255,255,0.18);}
 /* Global job search (Phase 1) */
 .gsearch{position:relative;}
-.gsearch input{background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.25);color:var(--color-on-accent);height:26px;padding:0 9px;border-radius:5px;font-size:11px;font-family:'DM Sans',sans-serif;width:180px;}
+.gsearch input{background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.25);color:var(--color-on-accent);height:26px;padding:0 9px;border-radius:5px;font-size:11px;font-family:'DM Sans',sans-serif;width:120px;transition:width .15s ease;}
+.gsearch input:focus{width:180px;}
 .gsearch input::placeholder{color:rgba(255,255,255,0.6);}
 .gsearch input:focus{outline:none;border-color:var(--color-success);background:rgba(255,255,255,0.18);}
 .gsearch-results{position:absolute;top:32px;right:0;width:340px;max-height:360px;overflow-y:auto;background:var(--color-surface);border:1px solid var(--border);border-radius:8px;box-shadow:var(--shadow-md);z-index:200;display:none;}
@@ -208,6 +209,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .gs-id{font-family:'DM Mono',monospace;font-weight:700;font-size:12px;color:var(--color-brand-ink);}
 .gs-meta{display:flex;align-items:center;gap:8px;font-size:10px;color:var(--muted);margin-top:3px;flex-wrap:wrap;}
 .gs-empty{padding:12px;font-size:11px;color:var(--muted);text-align:center;}
+.gs-sec{padding:6px 11px 3px;font:700 9px 'DM Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);background:var(--color-surface-alt,#f8fafc);border-bottom:1px solid var(--color-surface-sunken);}
 .gs-item.gs-sel{background:#eef6f1;}
 
 /* ─── NEW UPLOAD PANEL DESIGN ─── */
@@ -829,7 +831,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible{
   <span class="role-pill">STAGE 2 · DASHBOARD</span>
   <span class="filler"></span>
   <span class="gsearch">
-    <input id="gsearch-input" type="text" placeholder="Find a job…" autocomplete="off" oninput="gsearch(this.value)" onfocus="gsearch(this.value)">
+    <input id="gsearch-input" type="text" placeholder="Search" autocomplete="off" oninput="gsearch(this.value)" onfocus="gsearch(this.value)">
     <div class="gsearch-results" id="gsearch-results"></div>
   </span>
   <span class="sv-wrap">
@@ -2393,31 +2395,49 @@ let _gsT;
 function gsearch(q){ clearTimeout(_gsT); _gsT=setTimeout(()=>_gsearchRun(q),150); }
 function _gsearchRun(q){
   const box=document.getElementById('gsearch-results'); if(!box) return;
-  q=(q||'').trim().toLowerCase();
-  if(!q){ box.classList.remove('open'); box.innerHTML=''; return; }
-  const hits=JOBS.filter(j=>(
-    String(j.jobId||'').toLowerCase().includes(q) ||
-    String(j.location||'').toLowerCase().includes(q) ||
-    String(j.coordinator||'').toLowerCase().includes(q) ||
-    String(j.fm||'').toLowerCase().includes(q)
-  )).slice(0,8);
-  if(!hits.length){ box.innerHTML='<div class="gs-empty">No matching jobs</div>'; box.classList.add('open'); return; }
+  const raw=(q||'').trim();
+  if(!raw){ box.classList.remove('open'); box.innerHTML=''; return; }
+  const ql=raw.toLowerCase();
+  const nq=ql.replace(/[^a-z0-9]/g,'');             // normalized for WO#/job# matching
+  const toks=ql.split(/[\s,]+/).filter(Boolean);    // AND-match tokens (name / city, state)
+  // Coordinators whose name contains every token (handles partial + reordered, e.g. "zozimo matthew").
   const order=window._coordOrder||[];
-  box.innerHTML=hits.map(j=>{
-    const idx=order.indexOf(j.coordinator);
-    const click = idx>=0 ? `onclick="gsearchOpenIdx(${idx})"` : '';
-    return `<button class="gs-item" ${click}>
+  const coordHits=order.map((name,idx)=>({name,idx})).filter(c=>{ const nl=String(c.name).toLowerCase(); return toks.every(t=>nl.indexOf(t)!==-1); }).slice(0,4);
+  // Jobs: normalized job id matches the query EITHER direction (WO# variations like
+  // "WO-01915-0647771" vs a bare stored id), or every token appears in the job blob
+  // (id / location / city / state / coordinator / FM / vendors / trades).
+  const jobHits=JOBS.filter(j=>{
+    const idn=String(j.jobId||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+    if(nq && idn.length>=4 && (idn.indexOf(nq)!==-1 || nq.indexOf(idn)!==-1)) return true;
+    const blob=(j.jobId+' '+j.location+' '+(j.city||'')+' '+(j.state||'')+' '+j.coordinator+' '+(j.fm||'')+' '+(j.vendors||'')+' '+(j.trades||'')).toLowerCase();
+    return toks.every(t=>blob.indexOf(t)!==-1);
+  }).slice(0,10);
+  if(!coordHits.length && !jobHits.length){ box.innerHTML='<div class="gs-empty">No matches</div>'; box.classList.add('open'); return; }
+  let html='';
+  if(coordHits.length){
+    html+='<div class="gs-sec">Coordinators</div>'+coordHits.map(c=>{
+      const cj=JOBS.filter(j=>j.coordinator===c.name), o30=cj.filter(j=>j.aged>30).length;
+      return `<button class="gs-item" onclick="gsearchOpenIdx(${c.idx})"><div class="gs-top"><span class="gs-id">\ud83d\udc64 ${escapeHtml(c.name)}</span></div><div class="gs-meta"><span>${cj.length} job${cj.length===1?'':'s'}</span>${o30?`<span class="c-red">${o30} over-30</span>`:''}</div></button>`;
+    }).join('');
+  }
+  if(jobHits.length){
+    html+='<div class="gs-sec">Jobs</div>'+jobHits.map(j=>`<button class="gs-item" data-jobid="${escapeHtml(j.jobId)}" onclick="gsearchOpenJob(this.dataset.jobid)">
       <div class="gs-top"><span class="gs-id">${escapeHtml(j.jobId)}</span>${statusBadge(j.status)}</div>
-      <div class="gs-meta"><span class="age-pill ${ageCls(j.aged)}">${j.aged}d</span><span>${escapeHtml(j.coordinator||'\u2014')}</span><span>${escapeHtml(j.location||'')}</span><span>${fmt$0(j.amount||0)}</span></div>
-    </button>`;
-  }).join('');
-  box.classList.add('open');
+      <div class="gs-meta"><span class="age-pill ${ageCls(j.aged)}">${j.aged}d</span><span>${escapeHtml(j.coordinator||'\u2014')}</span><span>${escapeHtml(j.location||'')}${j.city?' \u00b7 '+escapeHtml(j.city):''}${j.state?', '+escapeHtml(j.state):''}</span><span>${fmt$0(j.amount||0)}</span></div>
+    </button>`).join('');
+  }
+  box.innerHTML=html; box.classList.add('open');
 }
 function gsearchOpenIdx(idx){
   const box=document.getElementById('gsearch-results'); if(box) box.classList.remove('open');
   const inp=document.getElementById('gsearch-input'); if(inp) inp.value='';
   const btn=document.querySelector('.nav-btn[data-view="coord-'+idx+'"]');
   if(btn) nav('coord-'+idx, btn);
+}
+function gsearchOpenJob(id){
+  const box=document.getElementById('gsearch-results'); if(box) box.classList.remove('open');
+  const inp=document.getElementById('gsearch-input'); if(inp) inp.value='';
+  openJobModal(id);
 }
 document.addEventListener('click', e=>{ if(!e.target.closest('.gsearch')){ const b=document.getElementById('gsearch-results'); if(b) b.classList.remove('open'); } });
 document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ const b=document.getElementById('gsearch-results'); if(b) b.classList.remove('open'); } });
@@ -2437,7 +2457,7 @@ document.addEventListener('keydown', e=>{
   let idx=items.findIndex(it=>it.classList.contains('gs-sel'));
   if(e.key==='ArrowDown'){ e.preventDefault(); idx=(idx+1)%items.length; }
   else if(e.key==='ArrowUp'){ e.preventDefault(); idx=(idx-1+items.length)%items.length; }
-  else if(e.key==='Enter'){ if(idx>=0){ e.preventDefault(); items[idx].click(); } return; }
+  else if(e.key==='Enter'){ e.preventDefault(); items[idx>=0?idx:0].click(); return; }
   else return;
   items.forEach(it=>it.classList.remove('gs-sel'));
   items[idx].classList.add('gs-sel');
@@ -3791,12 +3811,13 @@ function _bnCoordO30Spark(name, curCount){
   hist.forEach(function(e){
     if(!e || !e.dateStr) return;
     const bc=(e.byCoord && e.byCoord[name]) || null;
-    series.push({dateStr:e.dateStr, v:(bc&&bc.o30)||0, amt:(bc&&bc.amt)||0, oldest:(bc&&bc.oldest)||0});
+    series.push({dateStr:e.dateStr, v:(bc&&bc.o30)||0, amt:(bc&&bc.amt)||0, oldest:(bc&&bc.oldest)||0, total:(e.o30&&e.o30.count)||0});
   });
   const curDate = window._reportDate ? new Date(window._reportDate).toISOString().slice(0,10) : null;
+  const _liveTot = JOBS.filter(function(j){ return j.aged>30; }).length;
   if(curDate){
-    if(series.length && series[series.length-1].dateStr===curDate) series[series.length-1].v = curCount;
-    else series.push({dateStr:curDate, v:curCount});
+    if(series.length && series[series.length-1].dateStr===curDate){ series[series.length-1].v = curCount; series[series.length-1].total = _liveTot; }
+    else series.push({dateStr:curDate, v:curCount, total:_liveTot});
   }
   const vals = series.map(function(s){ return s.v; });
   if(vals.length<2) return '';
@@ -3806,7 +3827,7 @@ function _bnCoordO30Spark(name, curCount){
   const dirTxt = last>first?('▲ +'+(last-first)):last<first?('▼ −'+(first-last)):'— 0';
   const color=(getComputedStyle(document.documentElement).getPropertyValue('--color-success-text').trim())||'#1a5f3e';
   return '<div class="em-spark"><div class="em-spark-l"><div class="em-spark-t">Over-30 trajectory</div><div class="em-spark-s">last '+vals.length+' audits</div></div>'
-    + '<div class="em-spark-c">'+o30Sparkline(vals,280,34,color,series.map(function(s,i){ return [s.dateStr, s.v+' over-30', s.amt?fmt$0(s.amt)+' exposure':'', s.oldest?s.oldest+'d oldest':'', i>0?_bnDeltaStr(s.v-series[i-1].v)+' vs prior':'']; }))+'</div>'
+    + '<div class="em-spark-c">'+o30Sparkline(vals,280,34,color,series.map(function(s,i){ return [s.dateStr, s.v+' over-30', s.amt?fmt$0(s.amt)+' exposure':'', s.oldest?s.oldest+'d oldest':'', s.total?Math.round(s.v/s.total*100)+'% of all over-30':'', i>0?_bnDeltaStr(s.v-series[i-1].v)+' vs prior':'']; }))+'</div>'
     + '<div class="em-spark-r"><span class="em-spark-n">'+last+'</span> <span class="'+dir+'">'+dirTxt+'</span></div></div>';
 }
 // Make a "+N more" truncation row clickable: reveal the hidden rows in its table
@@ -4899,9 +4920,10 @@ document.addEventListener('mouseout',function(e){
   if(t&&t.classList&&t.classList.contains('bn-spark-dot')){ _bnSparkTipOn=false; const el=document.getElementById('bn-spark-tip'); if(el) el.style.display='none'; }
 });
 function o30SparkBlock(entries, cur){
-  const series = (entries||[]).map(e=>({dateStr:e.dateStr, count:(e.o30&&e.o30.count)||0, amt:(e.o30&&e.o30.amt)||0}));
-  if(series.length && series[series.length-1].dateStr===cur.dateStr){ series[series.length-1].count=cur.count; series[series.length-1].amt=cur.amt||series[series.length-1].amt; }
-  else series.push({dateStr:cur.dateStr, count:cur.count, amt:cur.amt||0});
+  const series = (entries||[]).map(e=>({dateStr:e.dateStr, count:(e.o30&&e.o30.count)||0, amt:(e.o30&&e.o30.amt)||0, ids:(e.o30&&e.o30.ids)||[], appr:(e.appr&&e.appr.count)||0, tr:e.transitions||null}));
+  const _live={dateStr:cur.dateStr, count:cur.count, amt:cur.amt||0, ids:cur.ids||[], appr:0, tr:null};
+  if(series.length && series[series.length-1].dateStr===cur.dateStr) series[series.length-1]=_live;
+  else series.push(_live);
   const vals = series.map(s=>s.count);
   if(vals.length<2){
     return `<div style="padding:10px 14px;font-size:12px;color:var(--muted);border-bottom:1px solid var(--border);"><strong style="color:var(--text);">Trajectory:</strong> need at least two audits to chart \u2014 builds as weekly audits load.</div>`;
@@ -4915,7 +4937,7 @@ function o30SparkBlock(entries, cur){
       <div style="font-size:11px;font-weight:700;color:var(--text);">Over-30 trajectory</div>
       <div style="font-size:10px;color:var(--muted);">last ${vals.length} audits</div>
     </div>
-    <div style="flex:1;max-width:340px;">${o30Sparkline(vals,320,40,color,series.map(function(s,i){ return [s.dateStr, s.count+' over-30', s.amt?fmt$0(s.amt)+' exposure':'', i>0?_bnDeltaStr(s.count-series[i-1].count)+' vs prior':'']; }))}</div>
+    <div style="flex:1;max-width:340px;">${o30Sparkline(vals,320,40,color,series.map(function(s,i){ const dc=_o30DivCounts(s.ids); const dA=i>0?(s.amt-series[i-1].amt):null; return [s.dateStr, s.count+' over-30', (s.amt?fmt$0(s.amt)+' exposure':'')+(dA?' ('+(dA>0?'+':'−')+fmt$0(Math.abs(dA))+')':''), 'Svc '+dc.Service+' · WiFi '+dc.WiFi+' · RF '+dc.Photometrics, s.appr?s.appr+' approaching (20–30d)':'', s.tr?('▲ '+s.tr.crossed.length+' crossed · ▼ '+s.tr.cleared.length+' cleared'):(i>0?_bnDeltaStr(s.count-series[i-1].count)+' net vs prior':'')]; }))}</div>
     <div style="text-align:right;font-family:'DM Mono',monospace;min-width:54px;">
       <div style="font-size:16px;font-weight:700;">${last}</div>
       <div style="font-size:10px;" class="${dir}">${dirTxt}</div>
@@ -4950,7 +4972,7 @@ function o30MultiSparkBlock(entries, cur){
     const dirTxt=last>first?('\u25b2 +'+(last-first)):last<first?('\u25bc \u2212'+(first-last)):'\u2014 0';
     return '<div style="display:flex;align-items:center;gap:14px;padding:7px 14px;border-bottom:1px solid var(--border);">'
       +'<div style="min-width:104px;display:flex;align-items:center;gap:7px;"><span style="width:9px;height:9px;border-radius:2px;background:'+s.color+';display:inline-block;flex:0 0 auto;"></span><span style="font-size:11.5px;font-weight:600;color:var(--text);">'+s.lbl+'</span></div>'
-      +'<div style="flex:1;max-width:300px;">'+o30Sparkline(vals,300,30,s.color,vals.map(function(v,i){ return [rows[i].dateStr, v+' '+s.lbl, i>0?_bnDeltaStr(v-vals[i-1])+' vs prior':'']; }))+'</div>'
+      +'<div style="flex:1;max-width:300px;">'+o30Sparkline(vals,300,30,s.color,vals.map(function(v,i){ const tot=counts[i].overall; return [rows[i].dateStr, v+' '+s.lbl, tot?Math.round(v/tot*100)+'% of over-30':'', i>0?_bnDeltaStr(v-vals[i-1])+' vs prior':'']; }))+'</div>'
       +'<div style="text-align:right;font-family:\'DM Mono\',monospace;min-width:70px;"><span style="font-size:15px;font-weight:700;">'+last+'</span> <span style="font-size:10px;" class="'+dir+'">'+dirTxt+'</span></div>'
       +'</div>';
   }).join('');
