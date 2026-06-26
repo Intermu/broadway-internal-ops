@@ -2393,30 +2393,78 @@ function deleteSavedView(i, ev){
 // so names with apostrophes/hyphens can't break the click handler).
 let _gsT;
 function gsearch(q){ clearTimeout(_gsT); _gsT=setTimeout(()=>_gsearchRun(q),150); }
+// Recent searches: capped ring of opened jobs + past queries (localStorage).
+function _gsRecentLoad(){ try{ const a=JSON.parse(localStorage.getItem('bn_recent_search')||'[]'); return Array.isArray(a)?a:[]; }catch(_){ return []; } }
+function _gsRecentPush(kind, val, label){
+  if(!val) return;
+  let r=_gsRecentLoad().filter(x=>!(x.kind===kind && x.val===val));
+  // prune recents pointing at jobs no longer in the loaded workbook (storage hygiene)
+  if(typeof JOBS!=='undefined' && JOBS.length) r=r.filter(x=>x.kind!=='job' || JOBS.some(j=>j.jobId===x.val));
+  r.unshift({kind, val:String(val), label:String(label||val)});
+  try{ localStorage.setItem('bn_recent_search', JSON.stringify(r.slice(0,8))); }catch(_){}
+}
+function gsearchRecent(q){ const inp=document.getElementById('gsearch-input'); if(inp){ inp.value=q; inp.focus(); } _gsearchRun(q); }
+// Audit-note text for a job (note + archived next-actions), so search can look inside notes.
+function _gsNoteText(id){ const n=JOB_NOTES[id]; if(!n) return ''; let s=n.note||''; if(Array.isArray(n.naHistory)) s+=' '+n.naHistory.map(h=>(h&&h.actions?h.actions.join(' '):'')).join(' '); return s; }
+// Relevance score for a job vs the query (0 = no match). Higher tier = stronger field.
+// Age adds a small bonus (<27) that never crosses a tier, so an exact id always wins.
+function _gsJobScore(j, nq, toks){
+  const idn=String(j.jobId||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+  let s=0;
+  if(nq){
+    if(idn===nq) s=1000;
+    else if(idn.indexOf(nq)===0) s=800;
+    else if(idn.indexOf(nq)!==-1) s=600;
+    else if(idn.length>=6 && nq.indexOf(idn)!==-1) s=550;   // reverse match only for a real id core
+  }
+  if(!s){
+    const note=_gsNoteText(j.jobId);
+    const risk=(j.risk&&j.risk!=='OK')?j.risk:'';            // bare "OK" excluded — collides everywhere
+    const blob=((j.jobId||'')+' '+(j.coordinator||'')+' '+(j.fm||'')+' '+(j.status||'')+' '+(j.location||'')+' '+(j.city||'')+' '+(j.state||'')+' '+note+' '+(j.vendors||'')+' '+(j.trades||'')+' '+risk).toLowerCase();
+    if(!toks.every(t=>blob.indexOf(t)!==-1)) return 0;
+    const all=v=>{ const x=String(v||'').toLowerCase(); return toks.every(t=>x.indexOf(t)!==-1); };
+    if(all(j.coordinator)||all(j.fm)) s=400;
+    else if(all(j.status)) s=300;
+    else if(risk&&all(risk)) s=250;
+    else if(all(j.location)||all(j.city)||all(j.state)) s=200;
+    else if(all(note)) s=150;
+    else if(all(j.vendors)||all(j.trades)) s=100;
+    else s=50;                                                // tokens split across fields
+  }
+  return s + Math.min(j.aged||0,90)*0.3;
+}
 function _gsearchRun(q){
   const box=document.getElementById('gsearch-results'); if(!box) return;
   const raw=(q||'').trim();
-  if(!raw){ box.classList.remove('open'); box.innerHTML=''; return; }
+  if(!raw){
+    // Empty / focus: show Recent (opened jobs still in the workbook + past queries).
+    const rec=_gsRecentLoad().filter(x=> x.kind!=='job' || JOBS.some(j=>j.jobId===x.val));
+    if(!rec.length){ box.classList.remove('open'); box.innerHTML=''; return; }
+    box.innerHTML='<div class="gs-sec">Recent</div>'+rec.map(x=> x.kind==='job'
+      ? `<button class="gs-item" data-jobid="${escapeHtml(x.val)}" onclick="gsearchOpenJob(this.dataset.jobid)"><div class="gs-top"><span class="gs-id">🕒 ${escapeHtml(x.label)}</span></div></button>`
+      : `<button class="gs-item" data-q="${escapeHtml(x.val)}" onclick="gsearchRecent(this.dataset.q)"><div class="gs-top"><span class="gs-id">🔍 ${escapeHtml(x.label)}</span></div></button>`
+    ).join('');
+    box.classList.add('open'); return;
+  }
   const ql=raw.toLowerCase();
   const nq=ql.replace(/[^a-z0-9]/g,'');             // normalized for WO#/job# matching
   const toks=ql.split(/[\s,]+/).filter(Boolean);    // AND-match tokens (name / city, state)
   // Coordinators whose name contains every token (handles partial + reordered, e.g. "zozimo matthew").
   const order=window._coordOrder||[];
-  const coordHits=order.map((name,idx)=>({name,idx})).filter(c=>{ const nl=String(c.name).toLowerCase(); return toks.every(t=>nl.indexOf(t)!==-1); }).slice(0,4);
+  const _crank=nm=>{ const nl=String(nm).toLowerCase(); return nl===ql?3:nl.indexOf(toks[0])===0?2:1; };
+  const _co30=nm=>{ let o=0; for(const j of JOBS){ if(j.coordinator===nm&&j.aged>30) o++; } return o; };
+  const coordHits=order.map((name,idx)=>({name,idx})).filter(c=>{ const nl=String(c.name).toLowerCase(); return toks.every(t=>nl.indexOf(t)!==-1); })
+    .map(c=>({name:c.name, idx:c.idx, _r:_crank(c.name), o30:_co30(c.name)}))   // score once, not per comparator call
+    .sort((a,b)=>(b._r-a._r)||(b.o30-a.o30)).slice(0,4);
   // Jobs: normalized job id matches the query EITHER direction (WO# variations like
   // "WO-01915-0647771" vs a bare stored id), or every token appears in the job blob
   // (id / location / city / state / coordinator / FM / vendors / trades).
-  const jobHits=JOBS.filter(j=>{
-    const idn=String(j.jobId||'').toLowerCase().replace(/[^a-z0-9]/g,'');
-    if(nq && idn.length>=4 && (idn.indexOf(nq)!==-1 || nq.indexOf(idn)!==-1)) return true;
-    const blob=(j.jobId+' '+j.location+' '+(j.city||'')+' '+(j.state||'')+' '+j.coordinator+' '+(j.fm||'')+' '+(j.vendors||'')+' '+(j.trades||'')).toLowerCase();
-    return toks.every(t=>blob.indexOf(t)!==-1);
-  }).slice(0,10);
+  const jobHits=JOBS.map(j=>({j, s:_gsJobScore(j,nq,toks)})).filter(x=>x.s>0).sort((a,b)=>b.s-a.s).slice(0,10).map(x=>x.j);
   if(!coordHits.length && !jobHits.length){ box.innerHTML='<div class="gs-empty">No matches</div>'; box.classList.add('open'); return; }
   let html='';
   if(coordHits.length){
     html+='<div class="gs-sec">Coordinators</div>'+coordHits.map(c=>{
-      const cj=JOBS.filter(j=>j.coordinator===c.name), o30=cj.filter(j=>j.aged>30).length;
+      const cj=JOBS.filter(j=>j.coordinator===c.name), o30=c.o30;   // o30 precomputed during ranking
       return `<button class="gs-item" onclick="gsearchOpenIdx(${c.idx})"><div class="gs-top"><span class="gs-id">\ud83d\udc64 ${escapeHtml(c.name)}</span></div><div class="gs-meta"><span>${cj.length} job${cj.length===1?'':'s'}</span>${o30?`<span class="c-red">${o30} over-30</span>`:''}</div></button>`;
     }).join('');
   }
@@ -2429,14 +2477,19 @@ function _gsearchRun(q){
   box.innerHTML=html; box.classList.add('open');
 }
 function gsearchOpenIdx(idx){
+  const inp=document.getElementById('gsearch-input'); const q=inp?inp.value.trim():'';
+  if(q) _gsRecentPush('query', q, q);
   const box=document.getElementById('gsearch-results'); if(box) box.classList.remove('open');
-  const inp=document.getElementById('gsearch-input'); if(inp) inp.value='';
+  if(inp) inp.value='';
   const btn=document.querySelector('.nav-btn[data-view="coord-'+idx+'"]');
   if(btn) nav('coord-'+idx, btn);
 }
 function gsearchOpenJob(id){
+  const inp=document.getElementById('gsearch-input'); const q=inp?inp.value.trim():'';
+  if(q) _gsRecentPush('query', q, q);
+  _gsRecentPush('job', id, id);
   const box=document.getElementById('gsearch-results'); if(box) box.classList.remove('open');
-  const inp=document.getElementById('gsearch-input'); if(inp) inp.value='';
+  if(inp) inp.value='';
   openJobModal(id);
 }
 document.addEventListener('click', e=>{ if(!e.target.closest('.gsearch')){ const b=document.getElementById('gsearch-results'); if(b) b.classList.remove('open'); } });
