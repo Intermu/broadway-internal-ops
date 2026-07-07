@@ -202,6 +202,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .gsearch input:focus{outline:none;border-color:var(--color-success);background:rgba(255,255,255,0.18);}
 .gsearch-results{position:absolute;top:32px;right:0;width:340px;max-height:360px;overflow-y:auto;background:var(--color-surface);border:1px solid var(--border);border-radius:8px;box-shadow:var(--shadow-md);z-index:200;display:none;}
 .gsearch-results.open{display:block;}
+/* Embedded (hub bridge): the tool-mode-bar is hidden, so the results panel floats fixed instead. */
+.gsearch-results.gs-floating{position:fixed;top:10px;right:16px;z-index:1000;}
 .gs-item{display:block;width:100%;text-align:left;background:none;border:0;border-bottom:1px solid var(--color-surface-sunken);padding:8px 11px;cursor:pointer;font-family:'DM Sans',sans-serif;}
 .gs-item:hover{background:#f6f9f7;}
 .gs-item:last-child{border-bottom:0;}
@@ -2541,8 +2543,23 @@ function gsearchOpenJob(id){
   if(inp) inp.value='';
   openJobModal(id);
 }
-document.addEventListener('click', e=>{ if(!e.target.closest('.gsearch')){ const b=document.getElementById('gsearch-results'); if(b) b.classList.remove('open'); } });
+document.addEventListener('click', e=>{ if(!e.target.closest('.gsearch, .gsearch-results')){ const b=document.getElementById('gsearch-results'); if(b) b.classList.remove('open'); } });
 document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ const b=document.getElementById('gsearch-results'); if(b) b.classList.remove('open'); } });
+// GLOBAL SEARCH BRIDGE — the Projects Tracker hub forwards its top-bar query here
+// (bwn:gsearch) when this dashboard is the active embedded tab. Our own tool-mode-bar
+// is display:none while embedded, so on first use the results panel is re-parented to
+// <body> and floated (gs-floating) — all existing render/click logic stays intact.
+window.addEventListener('message', e=>{
+  if(e.origin!==location.origin || e.source!==window.parent) return;
+  const d=e.data; if(!d || d.type!=='bwn:gsearch' || typeof d.q!=='string') return;
+  const box=document.getElementById('gsearch-results');
+  if(box && document.documentElement.classList.contains('embedded') && box.parentElement!==document.body){
+    document.body.appendChild(box); box.classList.add('gs-floating');
+  }
+  const inp=document.getElementById('gsearch-input'); if(inp) inp.value=d.q;
+  if(d.q.trim()) _gsearchRun(d.q);
+  else if(box){ box.classList.remove('open'); box.innerHTML=''; }
+});
 document.addEventListener('click', e=>{ if(!e.target.closest('.sv-wrap')){ closeSavedViewsMenu(); } });
 document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ closeSavedViewsMenu(); } });
 // Keyboard nav (Phase 1): "/" focuses global search; arrows + Enter work the results.

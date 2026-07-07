@@ -841,7 +841,7 @@ tr.bn-row-hidden{display:none}
   <div class="hdr-mid">
     <div class="search-wrap">
       <span class="search-ico">&#128269;</span>
-      <input id="search-input" type="text" placeholder="Search by WO#, city, vendor, client, notes..." oninput="onSearch(this.value)">
+      <input id="search-input" type="text" placeholder="Search by WO#, city, vendor, client, notes..." oninput="onSearch(this.value)" onkeydown="if(event.key==='Escape'){this.value='';onSearch('');}">
     </div>
   </div>
   <div class="hdr-right">
@@ -1495,6 +1495,17 @@ function getGroupValue(job, field) {
 function onSearch(q){
   searchQ = q.toLowerCase().trim();
   render();
+  gsearchForward(q);   // GLOBAL SEARCH BRIDGE — mirror the query into the active embedded tool
+}
+
+// GLOBAL SEARCH BRIDGE — when a tool tab (Dashboard/Agent/Diagnostic/Check-In) is
+// active, forward the top-bar query into the embedded tool via postMessage. The
+// Dashboard listens (bwn:gsearch) and drives its own popup job search; tools
+// without a listener simply ignore it. Payload is just the search string.
+const GS_TGT = (location.origin && location.origin !== 'null') ? location.origin : '*';  // '*' only under file:// testing
+function gsearchForward(q){
+  if(!EMBED_TOOLS[view] || !_toolFrames[view]) return;
+  try{ _toolFrames[view].contentWindow.postMessage({type:'bwn:gsearch', q:String(q)}, GS_TGT); }catch(e){ /* frame not ready */ }
 }
 
 function matchesSearch(job){
@@ -2434,6 +2445,8 @@ function ensureToolFrame(key){
   if(_toolFrames[key]) return _toolFrames[key];
   const host=document.getElementById('tool-host');
   const f=document.createElement('iframe'); f.src=EMBED_TOOLS[key]; f.className='tool-iframe'; f.title=key;
+  // Bridge catch-up: if the user typed before this frame finished loading, replay the query.
+  f.addEventListener('load', ()=>{ const s=document.getElementById('search-input'); if(s && s.value.trim() && view===key) gsearchForward(s.value); });
   host.appendChild(f); _toolFrames[key]=f; return f;
 }
 function setView(v){
@@ -2453,6 +2466,7 @@ function setView(v){
     if(sbar) sbar.style.display='none';
     if(swrap) swrap.style.display='none';
     closePanel();
+    const s=document.getElementById('search-input'); if(s && s.value.trim()) gsearchForward(s.value);   // carry an existing query onto the tool tab
   } else {
     host.style.display='none';
     if(sbar) sbar.style.display='';
