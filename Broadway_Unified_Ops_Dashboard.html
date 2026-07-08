@@ -2557,7 +2557,7 @@ window.addEventListener('message', e=>{
     document.body.appendChild(box); box.classList.add('gs-floating');
   }
   const inp=document.getElementById('gsearch-input'); if(inp) inp.value=d.q;
-  if(d.q.trim()) _gsearchRun(d.q);
+  if(d.q.trim()) gsearch(d.q);   // debounced, same as native typing
   else if(box){ box.classList.remove('open'); box.innerHTML=''; }
 });
 document.addEventListener('click', e=>{ if(!e.target.closest('.sv-wrap')){ closeSavedViewsMenu(); } });
@@ -4460,6 +4460,12 @@ function handleFile(file) {
       _applyInitialView();
       toast(`✅ Loaded ${JOBS.length} jobs from ${file.name}`);
       saveOver30Snapshot(); // fire-and-forget: upsert this audit date into blob history
+      // GLOBAL SEARCH BRIDGE: a hub query may have arrived before the workbook
+      // auto-load finished (and rendered a stale "No matches") — replay it now.
+      if(document.documentElement.classList.contains('embedded')){
+        const gi=document.getElementById('gsearch-input');
+        if(gi && gi.value.trim()) _gsearchRun(gi.value);
+      }
     } catch(err) {
       setDashState('error', "Couldn't read this workbook", err.message || "Unexpected error parsing the file");
       toast('❌ '+err.message);

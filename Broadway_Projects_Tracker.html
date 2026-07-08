@@ -2466,7 +2466,7 @@ function setView(v){
     if(sbar) sbar.style.display='none';
     if(swrap) swrap.style.display='none';
     closePanel();
-    const s=document.getElementById('search-input'); if(s && s.value.trim()) gsearchForward(s.value);   // carry an existing query onto the tool tab
+    const s=document.getElementById('search-input'); if(s) gsearchForward(s.value);   // unconditional: an empty box must also CLEAR a stale popup left in the frame
   } else {
     host.style.display='none';
     if(sbar) sbar.style.display='';
