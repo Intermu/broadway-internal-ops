@@ -3855,7 +3855,11 @@ function eqPastEta(j){
 // set so the in-Umbrava checklist and this dashboard agree on when a job is "done".
 function eqTerminal(j){
   const s = (j.status||'').toLowerCase().replace(/\s+/g,' ').trim();
-  return /work complete|clocked out: complete|resolved|pending ability to bill|invoice created|invoice rejected|invoice approved|invoiced|\bpaid\b|\bclosed\b|cancell?ed|declined|revoked|\bvoid\b/.test(s);
+  // NB: "Clocked Out: Complete" is NOT terminal — it's the cost-review stage (the
+  // coordinator still confirms final PO costs before Work Complete), matching the WO
+  // Assist userscript's 'costreview' phase. Only Work Complete / Invoiced / Paid (and
+  // dead-end statuses) are terminal.
+  return /work complete|resolved|pending ability to bill|invoice created|invoice rejected|invoice approved|invoiced|\bpaid\b|\bclosed\b|cancell?ed|declined|revoked|\bvoid\b/.test(s);
 }
 
 // Reason catalog: code → {label, weight}. Weight drives the score.
