@@ -3847,6 +3847,16 @@ function eqPastEta(j){
   if(isNaN(d.getTime())) return false;
   return d < new Date(new Date().toDateString());
 }
+// Terminal / billing-side statuses. Once a job is work-complete, invoiced, paid,
+// resolved, or closed, the coordinator's work is done and billing owns it — and
+// billing does not use this queue. Such jobs are dropped from the exception queue
+// entirely (see eqReasons) so an aged, past-ECD invoiced job stops generating
+// "past ETA / chronic / stale" nags. Mirrors the WO Assist userscript's terminal
+// set so the in-Umbrava checklist and this dashboard agree on when a job is "done".
+function eqTerminal(j){
+  const s = (j.status||'').toLowerCase().replace(/\s+/g,' ').trim();
+  return /work complete|clocked out: complete|resolved|pending ability to bill|invoice created|invoice rejected|invoice approved|invoiced|\bpaid\b|\bclosed\b|cancell?ed|declined|revoked|\bvoid\b/.test(s);
+}
 
 // Reason catalog: code → {label, weight}. Weight drives the score.
 const EQ_REASONS = {
@@ -3959,6 +3969,7 @@ function bnExpandRows(cell){
 }
 function eqReasons(j){
   const r = [];
+  if(eqTerminal(j)) return r;   // completed/invoiced/closed = billing's, not the coordinator's — no exception-queue nags (mirrors the WO Assist terminal guard)
   const sb = staleBucket(j);
   if(sb==='never') r.push('never-updated');
   else if(sb==='stale') r.push('stale-7d');
