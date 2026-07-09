@@ -1891,12 +1891,37 @@ function renderNoteHtml(text){
 }
 // Pull a NEXT ACTIONS section out of a note so it can be hoisted to the top of the
 // modal (moved, not duplicated). Returns { actions:[...], rest:<note without that section> }.
+// Robust marker split — PARITY with the userscript's parseAuthoredItems so both surfaces
+// extract IDENTICAL items even when line breaks were collapsed ("…deadline.2. …"). A
+// marker is a 1–2 digit number + "." / ")" + space at an item start (segment start, a
+// newline, or the previous sentence's . ; :). Won't split "5/18" or "$4,173.77".
+function splitGlued(s, dropPre){
+  const str=String(s||'');
+  const re=/(^|[.\n;:])[ \t]*(\d{1,2})[.)]\s+/g; let mm, marks=[];
+  while((mm=re.exec(str))!==null) marks.push({m:mm.index+mm[0].indexOf(mm[2]), t:mm.index+mm[0].length});
+  if(marks.length<2) return str.replace(/\s+/g,' ').trim()?[str.replace(/\s+/g,' ').trim()]:[];
+  // pre = text before the first marker. Kept for the end-expansion caller (a glued
+  // action whose leading "1." was already stripped → this is its first sub-item), but
+  // DROPPED for the raw fallback caller, where it's just the header connector (": ") or
+  // intro prose — matching the userscript's parseAuthoredItems, which starts at marker 1.
+  const out=[]; const pre=str.slice(0,marks[0].m).replace(/^\s*(?:\d+[.)]|[•\-*])\s*/,'').replace(/\s+/g,' ').trim(); if(pre && !dropPre) out.push(pre);
+  for(let i=0;i<marks.length;i++){ const e=(i+1<marks.length)?marks[i+1].m:str.length; let t=str.slice(marks[i].t,e).replace(/\s+/g,' ').trim(); t=t.replace(/\s*(tracking\s*#|wo\s*#|status\s*:|risk flag|done so far)\b.*$/i,'').trim(); if(t) out.push(t); }
+  return out;
+}
 function extractNextActions(text){
   const src=String(text||''); const ls=src.replace(/\r/g,'').split('\n');
   const headLabel=(s)=>{ const t=s.trim(); const hm=t.match(/^#{1,6}\s+(.*)$/); const wb=t.match(/^\*\*([^*]+)\*\*$/); const lc=t.match(/^([A-Z0-9][A-Z0-9 .,'\/&()\-]{2,46}?):\s*(.*)$/); const bt=(!hm&&!wb&&!lc&&t.length<=42&&/^[A-Z0-9][A-Z0-9 .,'\/&()\-]*$/.test(t)&&(t.match(/[a-z]/g)||[]).length<=1&&/[A-Z]/.test(t))?t:null; const bare=(bt&&/STATUS|RISK FLAG|VENDOR|SUPPLIER|TIMELINE|NEXT ACTION|NEXT STEP|ACTION ITEM|BLOCK|REMAIN|DONE SO FAR/.test(bt))?bt:null; return hm?hm[1]:wb?wb[1]:lc?lc[1]:bare; };
   let start=-1;
   for(let i=0;i<ls.length;i++){ const h=headLabel(ls[i]); if(h && /NEXT ACTION|NEXT STEP|ACTION ITEM/i.test(h)){ start=i; break; } }
-  if(start<0) return { actions:[], rest:src };
+  if(start<0){
+    // Collapse fallback: no line-header found (line breaks may be stripped) — try a raw
+    // search and marker-split, matching the userscript so a note still yields its items.
+    const hm=src.match(/next\s*actions?\s*required|next\s*actions?\b|next\s*steps?\b|action\s*items?\b/i);
+    // Require ≥2 parsed items (i.e. real numbered markers) so a casual "next steps" prose
+    // mention can't hoist the whole note tail as one bogus item — mirrors the userscript.
+    if(hm){ const items=splitGlued(src.slice(hm.index+hm[0].length), true); if(items.length>=2) return { actions:items, rest:src.slice(0,hm.index).trim() }; }
+    return { actions:[], rest:src };
+  }
   let end=ls.length;
   for(let j=start+1;j<ls.length;j++){ if(headLabel(ls[j])){ end=j; break; } }
   const actions=[];
@@ -1917,7 +1942,10 @@ function extractNextActions(text){
   }
   const secEnd=start+1+cut;
   const rest=ls.slice(0,start).concat(ls.slice(secEnd)).join('\n').replace(/\n{3,}/g,'\n\n').trim();
-  return { actions, rest };
+  // Expand any item that has GLUED sub-items (collapsed line breaks) so the output matches
+  // the userscript's parseAuthoredItems exactly. Clean one-item-per-line input is unchanged.
+  const actionsOut=[]; actions.forEach(a=>splitGlued(a).forEach(x=>actionsOut.push(x)));
+  return { actions:actionsOut, rest };
 }
 // Numbered (chip) list for the hoisted Next Actions card.
 function nextActionsCardHtml(actions){
@@ -3876,9 +3904,9 @@ const EQ_REASONS = {
 // Next Actions Required report (same signal logic as the queue, one source).
 const EQ_ACTION = {
   'never-updated':'Add a status update — no notes on record',
-  'mgmt-assist':'Coordinate management assist (flagged)',
+  'mgmt-assist':'⤴ Escalate to management — flagged for assist',
   'past-eta':'Revise expected completion — past ETA',
-  'chronic':'Escalate — stuck over-30 across 3+ audits',
+  'chronic':'⤴ Escalate to management — stuck over-30 across 3+ audits',
   'stale-7d':'Update the job — no note in 7+ days',
   'no-next-step':'Schedule next onsite / set the next step',
   'high-priority':'Prioritize — high priority and aging'
