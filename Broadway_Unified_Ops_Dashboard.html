@@ -1455,6 +1455,7 @@ function openJobModal(id, fromEntity){
         ${row('Trades', escapeHtml(j.trades||'—'))}
         ${row('Vendors', vendorListHtml(j.vendors))}
       </div>
+      ${o30LineHtml(j.jobId)}
       <div class="jm-section-label">Drilldown Note</div>
       <div class="jn-doc-card">${j.notes?'<div class="np-text">'+escapeHtml(j.notes)+'</div>':'<div class="np-text np-empty">No note on file.</div>'}</div>
       ${statusHistoryHtml(j.jobId)}
@@ -1965,8 +1966,32 @@ function editJobNote(){
   const ta=document.getElementById('jnText'); if(ta) ta.focus();
 }
 function cancelJobNote(){ if(window._jnCurrentId) openJobModal(window._jnCurrentId); }
+// ── Over-30 lines (synced from the Umbrava WO HEAT batch via the connector) ──
+// { "<jobId>": { line, ts, by, prev:[{line,ts,by}] } } — each job's LATEST audit
+// line + when/who entered it. Read-only here; written via /api/wo-ingest.
+let O30_LINES = null;
+async function loadO30Lines(){
+  if(window.BROADWAY_SNAPSHOT) return;
+  const r = await bnClientGet('o30-lines');
+  O30_LINES = (r && r.exists && r.data && r.data.items && typeof r.data.items==='object') ? r.data.items : {};
+}
+function o30LineHtml(jobId){
+  if(!O30_LINES) return '';
+  // Synced keys are digits-only tracking #s; dashboard jobIds can carry prefixes
+  // ("WIFI 44832920") — fall back to a digits-normalized match (same as the server).
+  let rec = Object.prototype.hasOwnProperty.call(O30_LINES, jobId) ? O30_LINES[jobId] : null;
+  if(!rec){ const dg = String(jobId||'').replace(/\D+/g,''); if(dg && Object.prototype.hasOwnProperty.call(O30_LINES, dg)) rec = O30_LINES[dg]; }
+  if(!rec || !rec.line) return '';
+  const d = new Date(rec.ts||0);
+  const when = isNaN(d.getTime()) ? '' : (d.getMonth()+1)+'/'+d.getDate();
+  const ageD = isNaN(d.getTime()) ? null : Math.floor((Date.now()-+d)/86400000);
+  const stale = ageD!==null && ageD>7;
+  return '<div class="jm-section-label">Latest Over-30 line'+(when?' <span style="font-weight:500;color:var(--muted);">— entered '+escapeHtml(when)+(rec.by?' by '+escapeHtml(rec.by):'')+(stale?' · <span style="color:#b45309;font-weight:700;">'+ageD+'d old</span>':'')+'</span>':'')+'</div>'
+    + '<div class="jn-doc-card"><div class="np-text" style="font-family:\'DM Mono\',monospace;font-size:11.5px;">'+escapeHtml(rec.line)+'</div></div>';
+}
 async function loadJobNotes(){
   JOB_NOTES = _jnLoadLocal();
+  loadO30Lines();   // fire-and-forget — the modal renders '' until it lands
   if(!window.BROADWAY_SNAPSHOT){
     const res = await bnClientGet('job-notes');
     JN_ETAG = (res && res.etag) || null;   // baseline for If-Match on the next save

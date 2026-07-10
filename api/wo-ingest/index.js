@@ -120,10 +120,27 @@ module.exports = async function (context, req) {
     // key holder is already trusted to write coordinator activity; job-notes carries no
     // financial data (it sits at the broadway_employee gate on the dashboard side).
     if (req.method === "GET") {
+      const container = await getContainerClient();
+      // ── Bulk Over-30 line lookup: ?o30=<comma-separated tracking #s> ──────────
+      // Returns each requested job's LATEST synced "OVER 30 -" line + when/who, so
+      // the batch panel can show supervisors the last audit line per job.
+      if (params.o30) {
+        const targets = String(params.o30).split(",").map((s) => s.trim()).filter(Boolean).slice(0, 200);
+        context.log("wo-ingest GET o30 lines", client, targets.length);
+        const ol = await readJson(container, `clients/${client}/o30-lines`);
+        const outLines = {};
+        if (ol && ol.items) {
+          targets.forEach((t) => {
+            const rec = Object.prototype.hasOwnProperty.call(ol.items, t) ? ol.items[t] : null;
+            if (rec) outLines[t] = { line: rec.line || "", ts: rec.ts || null, by: rec.by || null };
+          });
+        }
+        context.res = json(200, { ok: true, lines: outLines });
+        return;
+      }
       const target = params.target ? String(params.target).slice(0, 64) : "";
       if (!target) { context.res = json(400, { error: "missing 'target'" }); return; }
       context.log("wo-ingest GET lookup", client, target);   // reads leave a telemetry trail (POSTs land in the activity log; GETs otherwise wouldn't)
-      const container = await getContainerClient();
       const out = { ok: true, job: null, eq: null };
       // Own-property lookups only (a JSON map still surfaces __proto__/constructor), with
       // a digits-equality fallback: the userscript sends the digits-only tracking #, but
@@ -154,6 +171,68 @@ module.exports = async function (context, req) {
     }
 
     const actor = body.actor ? String(body.actor).slice(0, 128) : "unknown";
+
+    // ── Over-30 sync: audit lines + board trend → clients/<client>/o30-lines ────
+    // POST { actor, o30lines:[{target,line}] } upserts each job's LATEST line (the
+    // prior one shifts into prev[], max 4) — the panel's "last Over-30 note + date".
+    // POST { actor, snapshot:{date,over30,open,bad,warn} } records the day's clean
+    // full-board scan into trend{} (90-day cap) for team-wide trending.
+    if (req.method === "POST" && (Array.isArray(body.o30lines) || body.snapshot)) {
+      const stampO = new Date().toISOString();
+      // Targets must be digits-only tracking #s (what the client sends). This is also
+      // the prototype-pollution guard: bracket-assigning "__proto__" on a JSON-parsed
+      // object would set its PROTOTYPE, not an own key.
+      const linesIn = (Array.isArray(body.o30lines) ? body.o30lines : []).slice(0, 200)
+        .map((l) => ({ target: String((l && l.target) || "").slice(0, 64), line: String((l && l.line) || "").slice(0, 300) }))
+        .filter((l) => /^\d+$/.test(l.target) && /^OVER\s*30/i.test(l.line));
+      const snapIn = body.snapshot && body.snapshot.date && /^\d{4}-\d{2}-\d{2}$/.test(String(body.snapshot.date)) ? {
+        date: String(body.snapshot.date).slice(0, 10),
+        over30: +body.snapshot.over30 || 0, open: +body.snapshot.open || 0,
+        bad: +body.snapshot.bad || 0, warn: +body.snapshot.warn || 0,
+      } : null;
+      if (!linesIn.length && !snapIn) { context.res = json(400, { error: "no valid o30 payload" }); return; }
+      const container = await getContainerClient();
+      const blobO = container.getBlockBlobClient(`clients/${client}/o30-lines`);
+      for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+        let cur = null, etag = null, exists = false;
+        try {
+          const dl = await blobO.download();
+          cur = JSON.parse(await streamToString(dl.readableStreamBody));
+          // etag MUST come from the same download response — a separate getProperties()
+          // opens a TOCTOU where another writer lands between the two calls and this
+          // upload's ifMatch passes against the NEWER etag while merging STALE content,
+          // silently erasing their write (review MAJOR; same rule as readLog above).
+          etag = dl.etag; exists = true;
+        } catch (err) { if (err.statusCode !== 404) throw err; }
+        const data = cur && typeof cur === "object" ? cur : {};
+        data.v = 1; data.items = data.items && typeof data.items === "object" ? data.items : {}; data.trend = data.trend && typeof data.trend === "object" ? data.trend : {};
+        linesIn.forEach((l) => {
+          const prevRec = Object.prototype.hasOwnProperty.call(data.items, l.target) ? data.items[l.target] : null;
+          const hist = prevRec ? [{ line: prevRec.line, ts: prevRec.ts, by: prevRec.by }].concat(prevRec.prev || []).slice(0, 4) : [];
+          data.items[l.target] = { line: l.line, ts: stampO, by: actor, prev: hist };
+        });
+        if (snapIn) {
+          data.trend[snapIn.date] = { over30: snapIn.over30, open: snapIn.open, bad: snapIn.bad, warn: snapIn.warn, by: actor, ts: stampO };
+          const tk = Object.keys(data.trend).sort();
+          while (tk.length > 90) delete data.trend[tk.shift()];
+        }
+        const ik = Object.keys(data.items);
+        if (ik.length > 500) { ik.sort((a, b) => String(data.items[a].ts || "").localeCompare(String(data.items[b].ts || ""))); while (ik.length > 500) delete data.items[ik.shift()]; }
+        const outBody = JSON.stringify(data);
+        const conditions = exists ? { ifMatch: etag } : { ifNoneMatch: "*" };
+        try {
+          await blobO.upload(outBody, Buffer.byteLength(outBody), { blobHTTPHeaders: { blobContentType: "application/json" }, conditions });
+          context.res = json(200, { ok: true, lines: linesIn.length, snapshot: !!snapIn });
+          return;
+        } catch (err) {
+          if (err.statusCode === 412 || err.statusCode === 409) continue;
+          throw err;
+        }
+      }
+      context.res = json(503, { error: "o30-lines write contended; please retry" });
+      return;
+    }
+
     const rawEvents = Array.isArray(body.events) ? body.events : (body.action ? [body] : []);
     if (!rawEvents.length) { context.res = json(400, { error: "no events" }); return; }
 

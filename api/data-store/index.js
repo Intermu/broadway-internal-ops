@@ -4,7 +4,11 @@ const CONTAINER_NAME = "broadway-data";
 
 // SLOTS are types of data. Same set for every client.
 // Adding a slot = ship code. Adding a client = edit VALID_CLIENTS below.
-const VALID_SLOTS = ["revenue", "wo-snapshot-today", "wo-snapshot-previous", "workbook", "over30-history", "job-notes", "config", "checkin", "om-bonus", "wo-audit", "exception-queue"];
+const VALID_SLOTS = ["revenue", "wo-snapshot-today", "wo-snapshot-previous", "workbook", "over30-history", "job-notes", "config", "checkin", "om-bonus", "wo-audit", "exception-queue", "o30-lines"];
+// "o30-lines": per-client Over-30 audit lines + board trend, WRITTEN by the userscript
+// connector via /api/wo-ingest (key-gated); the dashboard READS it here (AAD gate):
+//   { v:1, items:{ "<tracking>": { line, ts, by, prev:[{line,ts,by}×≤4] } },
+//     trend:{ "YYYY-MM-DD": { over30, open, bad, warn, by, ts } } }.
 // "exception-queue": one blob per client holding the ack/snooze state for the
 // Dashboard Exception Queue, keyed by Job ID:
 //   { v:1, items: { "<jobId>": { state:"ack"|"snooze", until?:"YYYY-MM-DD", by, ts, note? } } }.
@@ -209,6 +213,14 @@ module.exports = async function (context, req) {
         return;
       }
       context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { exists: true, data: result.data, metadata: result.metadata, etag: result.etag } };
+      return;
+    }
+
+    // Slots owned by the wo-ingest writer: the dashboard (and any employee) reads them
+    // here, but writes/deletes must go through /api/wo-ingest's merge logic — an
+    // unconditional data-store POST would last-write-wins clobber concurrent upserts.
+    if ((req.method === "POST" || req.method === "DELETE") && slot === "o30-lines") {
+      context.res = { status: 405, headers: { "Content-Type": "application/json" }, body: { error: "o30-lines is written via /api/wo-ingest — read-only here" } };
       return;
     }
 
