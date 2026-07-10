@@ -16,7 +16,9 @@ const { BlobServiceClient } = require("@azure/storage-blob");
 //        body { actor?, events:[{action, target?, detail?}] }  (or a single {action,...})
 //        → { ok:true, added:N }
 //
-// Fails CLOSED: 503 if WO_INGEST_KEY is not configured, 401 on a missing/wrong key.
+// Fails CLOSED: 503 if WO_INGEST_KEY is not configured, 403 on a missing/wrong key
+// (NOT 401 — staticwebapp.config.json's responseOverrides rewrite 401s into a login
+// redirect, which a client chasing redirects would misread as a 200 success).
 
 const CONTAINER_NAME = "broadway-data";
 const VALID_CLIENTS = ["pilot"];
@@ -33,7 +35,7 @@ const VALID_ACTIONS = ["na-done", "na-undone", "escalate", "ecd-set", "chase", "
 // needed — but they scope any normal-fetch caller to the Umbrava origin.
 const CORS = {
   "Access-Control-Allow-Origin": "https://app.umbrava.com",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, x-bwn-key",
   "Vary": "Origin",
 };
@@ -67,6 +69,17 @@ async function streamToString(readable) {
   return Buffer.concat(chunks).toString("utf-8");
 }
 
+// Generic JSON blob read (null when absent) — used by the GET lookup.
+async function readJson(container, name) {
+  try {
+    const dl = await container.getBlockBlobClient(name).download();
+    return JSON.parse(await streamToString(dl.readableStreamBody));
+  } catch (err) {
+    if (err.statusCode === 404) return null;
+    throw err;
+  }
+}
+
 async function readLog(blob) {
   try {
     const dl = await blob.download();
@@ -89,13 +102,56 @@ module.exports = async function (context, req) {
     // ── Key gate (fail closed) ────────────────────────────────────────────
     const expected = process.env.WO_INGEST_KEY;
     if (!expected) { context.res = json(503, { error: "ingest not configured" }); return; }
+    // 403, NOT 401: staticwebapp.config.json's responseOverrides turns 401s into a 302
+    // redirect to the AAD login page — a client following it would see 200 HTML and could
+    // misread the result. 403 passes through untouched.
     const key = req.headers && (req.headers["x-bwn-key"] || req.headers["X-BWN-KEY"]);
-    if (!key || key !== expected) { context.res = json(401, { error: "unauthorized" }); return; }
+    if (!key || key !== expected) { context.res = json(403, { error: "unauthorized" }); return; }
 
     const params = req.query || {};
     const body = req.body || {};
     const client = params.client || body.client;
     if (!client || !VALID_CLIENTS.includes(client)) { context.res = json(400, { error: "missing or unknown 'client'" }); return; }
+
+    // ── GET: dashboard record lookup for one job (userscript ← SWA direction) ──
+    // Returns the dashboard case file (note text + naHistory + updatedAt) and the
+    // exception-queue ack/snooze state for a tracking #, so the Umbrava checklist can
+    // merge the dashboard's Next Actions Required. Same key gate as the ingest — the
+    // key holder is already trusted to write coordinator activity; job-notes carries no
+    // financial data (it sits at the broadway_employee gate on the dashboard side).
+    if (req.method === "GET") {
+      const target = params.target ? String(params.target).slice(0, 64) : "";
+      if (!target) { context.res = json(400, { error: "missing 'target'" }); return; }
+      context.log("wo-ingest GET lookup", client, target);   // reads leave a telemetry trail (POSTs land in the activity log; GETs otherwise wouldn't)
+      const container = await getContainerClient();
+      const out = { ok: true, job: null, eq: null };
+      // Own-property lookups only (a JSON map still surfaces __proto__/constructor), with
+      // a digits-equality fallback: the userscript sends the digits-only tracking #, but
+      // dashboard Job IDs can carry prefixes ("WIFI 44832920") — one linear pass, small maps.
+      const lookup = (map, key) => {
+        if (!map || typeof map !== "object") return null;
+        if (Object.prototype.hasOwnProperty.call(map, key)) return map[key];
+        if (/^\d+$/.test(key)) {
+          for (const k of Object.keys(map)) { if (k.replace(/\D+/g, "") === key) return map[k]; }
+        }
+        return null;
+      };
+      const jn = await readJson(container, `clients/${client}/job-notes`);
+      const rec = lookup(jn && jn.notes, target);
+      if (rec) {
+        out.job = {
+          note: String(rec.note || "").slice(0, 20000),
+          naHistory: Array.isArray(rec.naHistory) ? rec.naHistory.slice(0, 5) : [],
+          updatedAt: rec.updatedAt || null,
+          updatedBy: rec.updatedBy || null,
+        };
+      }
+      const eq = await readJson(container, `clients/${client}/exception-queue`);
+      const st = lookup(eq && eq.items, target);
+      if (st) out.eq = { state: st.state || null, until: st.until || null, by: st.by || null };
+      context.res = json(200, out);
+      return;
+    }
 
     const actor = body.actor ? String(body.actor).slice(0, 128) : "unknown";
     const rawEvents = Array.isArray(body.events) ? body.events : (body.action ? [body] : []);
