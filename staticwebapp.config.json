@@ -20,6 +20,10 @@
     "allowedRoles": ["anonymous", "authenticated"]
   },
   {
+    "route": "/api/wo-ingest",
+    "allowedRoles": ["anonymous"]
+  },
+  {
     "route": "/api/*",
     "allowedRoles": ["broadway_employee"]
   },

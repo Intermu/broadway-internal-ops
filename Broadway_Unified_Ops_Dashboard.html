@@ -5610,6 +5610,21 @@ function _alogActPill(a){
   return `<span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;color:${c[0]};background:${c[1]};white-space:nowrap;">${escapeHtml(a||'—')}</span>`;
 }
 
+// Reporting rollup: per-user activity counts over the loaded window, so leadership can
+// see who is actually working the queue (notes/next-actions logged, acks, snoozes). This
+// is the "reporting" layer on top of the raw feed; individualized by the server-stamped
+// AAD user. Counts the loaded window (the limit selector controls how far back).
+function _alogRollup(entries){
+  if(!entries.length) return '';
+  const by={};
+  entries.forEach(e=>{ const w=e.who||'unknown'; const b=by[w]||(by[w]={total:0,note:0,ack:0,snooze:0,other:0}); b.total++; if(e.action==='note'||e.action==='na-done')b.note++; else if(e.action==='ack')b.ack++; else if(e.action==='snooze'||e.action==='unsnooze')b.snooze++; else b.other++; });
+  const rows=Object.keys(by).map(w=>Object.assign({w:w},by[w])).sort((a,b)=>b.total-a.total);
+  const cell=n=>n?`<td style="text-align:center;font-weight:600;">${n}</td>`:'<td style="text-align:center;color:var(--muted);">—</td>';
+  return `<div class="card" style="margin-bottom:12px;"><div class="card-header"><h3>Activity by user</h3><span class="card-meta">${rows.length} user${rows.length===1?'':'s'} · this window</span></div>`
+    + `<div class="card-body" style="padding:0;overflow-x:auto;"><table class="data-table"><thead><tr><th>Who</th><th style="text-align:center;">Notes / next-actions</th><th style="text-align:center;">Acks</th><th style="text-align:center;">Snoozes</th><th style="text-align:center;">Other</th><th style="text-align:center;">Total</th></tr></thead><tbody>`
+    + rows.map(r=>`<tr><td style="font-weight:600;">${escapeHtml(r.w)}</td>${cell(r.note)}${cell(r.ack)}${cell(r.snooze)}${cell(r.other)}<td style="text-align:center;font-weight:700;">${r.total}</td></tr>`).join('')
+    + `</tbody></table></div></div>`;
+}
 function renderActivityLog(mc){
   const title = `<div class="page-title">🧾 Activity Log</div>`;
   if(window.BROADWAY_SNAPSHOT){
@@ -5644,6 +5659,7 @@ function renderActivityLog(mc){
 
   mc.innerHTML = title
     + `<div class="page-sub">${entries.length} recent event${entries.length===1?'':'s'} · server-stamped user + time · newest first</div>`
+    + _alogRollup(entries)
     + `<div class="card" style="margin-bottom:12px;"><div class="card-body" style="padding:10px 14px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;">
         <input id="alog-search" type="search" placeholder="Search user / job / detail…" oninput="filterActivityRows()" style="flex:1;min-width:180px;font-size:12px;padding:7px 10px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text);">
         <select id="alog-action" onchange="filterActivityRows()" style="font-size:12px;padding:7px 10px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text);"><option value="">All actions</option>${actions.map(a=>`<option value="${escapeHtml(a)}">${escapeHtml(a)}</option>`).join('')}</select>
