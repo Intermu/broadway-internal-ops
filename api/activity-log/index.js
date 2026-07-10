@@ -81,8 +81,9 @@ async function readLog(blob) {
     const dl = await blob.download();
     const text = await streamToString(dl.readableStreamBody);
     const log = JSON.parse(text);
-    const props = await blob.getProperties();
-    return { entries: Array.isArray(log.entries) ? log.entries : [], etag: props.etag, exists: true };
+    // Etag from the SAME download response (atomic with content) — a separate
+    // getProperties() opens a TOCTOU now that wo-ingest is a second concurrent writer.
+    return { entries: Array.isArray(log.entries) ? log.entries : [], etag: dl.etag, exists: true };
   } catch (err) {
     if (err.statusCode === 404) return { entries: [], etag: null, exists: false };
     throw err;

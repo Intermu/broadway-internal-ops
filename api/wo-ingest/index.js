@@ -72,8 +72,10 @@ async function readLog(blob) {
     const dl = await blob.download();
     const text = await streamToString(dl.readableStreamBody);
     const log = JSON.parse(text);
-    const props = await blob.getProperties();
-    return { entries: Array.isArray(log.entries) ? log.entries : [], etag: props.etag, exists: true };
+    // Use the etag from the SAME download response (atomic with the content). A separate
+    // getProperties() call opens a TOCTOU: a concurrent write between the two calls pairs
+    // stale content with a newer etag, and the conditional upload then silently drops it.
+    return { entries: Array.isArray(log.entries) ? log.entries : [], etag: dl.etag, exists: true };
   } catch (err) {
     if (err.statusCode === 404) return { entries: [], etag: null, exists: false };
     throw err;
@@ -111,6 +113,7 @@ module.exports = async function (context, req) {
         who: actor,
         whoId: null,
         source: "userscript",
+        id: ev.id ? String(ev.id).slice(0, 64) : null,   // client-supplied idempotency id (dedup below)
         action,
         target: ev.target ? String(ev.target).slice(0, 128) : null,
         detail: ev.detail ? String(ev.detail).slice(0, 500) : null,
@@ -125,7 +128,14 @@ module.exports = async function (context, req) {
     // so the two writers (dashboard AAD + this key-gated ingest) never clobber the trail.
     for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
       const { entries: existing, etag, exists } = await readLog(blob);
-      let next = existing.concat(entries);
+      // Idempotency: drop any event whose id is already in the log — a client teardown
+      // between our server write and its client-side clear re-sends the batch, and that
+      // must not duplicate. Re-checked each retry against the freshly-read blob.
+      const seen = Object.create(null);
+      existing.forEach((e) => { if (e && e.id) seen[e.id] = 1; });
+      const toAdd = entries.filter((e) => !(e.id && seen[e.id]));
+      if (!toAdd.length) { context.res = json(200, { ok: true, added: 0, deduped: entries.length }); return; }
+      let next = existing.concat(toAdd);
       if (next.length > MAX_ENTRIES) next = next.slice(-MAX_ENTRIES);
       const out = JSON.stringify({ v: 1, entries: next });
       const conditions = exists ? { ifMatch: etag } : { ifNoneMatch: "*" };
@@ -134,7 +144,7 @@ module.exports = async function (context, req) {
           blobHTTPHeaders: { blobContentType: "application/json" },
           conditions,
         });
-        context.res = json(200, { ok: true, added: entries.length });
+        context.res = json(200, { ok: true, added: toAdd.length });
         return;
       } catch (err) {
         if (err.statusCode === 412 || err.statusCode === 409) continue;
