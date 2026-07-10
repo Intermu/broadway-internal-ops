@@ -1405,7 +1405,8 @@ function openJobModal(id, fromEntity){
   let flaggedHtml='';
   if(_fReasons.length){
     const _fSt=eqStatus(j.jobId);
-    const _fChips=_fReasons.map(function(c){ const rr=EQ_REASONS[c]; return '<span class="eq-chip eq-r-'+c+'">'+(rr?rr.label:c)+'</span>'; }).join('');
+    const _fProj=(jobType(j)==='WIFI'||jobType(j)==='Retrofit')?'<span class="eq-chip eq-proj" title="Project-style work (WiFi / RF) — aging past 30 is expected; not the same push-to-closure urgency as Service">📁 project-style</span>':'';
+    const _fChips=_fProj+_fReasons.map(function(c){ const rr=EQ_REASONS[c]; return '<span class="eq-chip eq-r-'+c+'">'+(rr?rr.label:c)+'</span>'; }).join('');
     const _fActs=_fReasons.map(function(c){ return '<li>'+escapeHtml(EQ_ACTION[c]||c)+'</li>'; }).join('');
     let _fState='';
     if(_fSt.state==='ack') _fState=' <span class="eq-state-pill eq-acked">✓ Ack’d'+(_fSt.by?' · '+escapeHtml(_fSt.by):'')+'</span>';
@@ -1659,6 +1660,9 @@ let JOB_NOTES = {};
 const JOB_NOTES_LS = 'bn_job_notes';
 function _jnLoadLocal(){ try{ return JSON.parse(localStorage.getItem(JOB_NOTES_LS)||'{}')||{}; }catch(_){ return {}; } }
 function _jnSaveLocal(){ try{ localStorage.setItem(JOB_NOTES_LS, JSON.stringify(JOB_NOTES)); }catch(_){} }
+// Etag of the shared job-notes blob, held for optimistic-concurrency saves (If-Match)
+// so two coordinators editing DIFFERENT jobs can't silently clobber each other.
+let JN_ETAG = null;
 // Drilldown Note history: prior "Latest status note" values per Job ID, captured as each
 // weekly audit loads. Kept in its own store (slot 'status-history') so it is independent
 // of the WO Audit Note record and its save/sync semantics. localStorage is the cache/fallback.
@@ -1965,6 +1969,7 @@ async function loadJobNotes(){
   JOB_NOTES = _jnLoadLocal();
   if(!window.BROADWAY_SNAPSHOT){
     const res = await bnClientGet('job-notes');
+    JN_ETAG = (res && res.etag) || null;   // baseline for If-Match on the next save
     if(res && res.exists && res.data && res.data.notes && typeof res.data.notes==='object'){
       const blob = res.data.notes;
       Object.keys(blob).forEach(function(id){
@@ -2093,6 +2098,39 @@ function attachJobNoteFile(input){
   rd.onload=function(e){ const ta=document.getElementById('jnText'); if(ta){ ta.value=(ta.value?ta.value+'\n\n':'')+String(e.target.result||''); } };
   rd.readAsText(f);
 }
+// Concurrency-safe job-notes save. Applies `mutate` to the shared map, writes the
+// localStorage cache, then persists with If-Match. On 412 (another coordinator saved
+// between our read and write) it re-reads the server copy, re-applies our mutation on
+// top — so we never clobber their edit to a DIFFERENT job — and retries once. Mirrors
+// saveExceptionState. Returns true when the write reached the server.
+async function saveJobNotesShared(mutate){
+  mutate(JOB_NOTES);
+  _jnSaveLocal();
+  if(window.BROADWAY_SNAPSHOT) return false;
+  _bnSaveStart();
+  for(let attempt=0; attempt<2; attempt++){
+    try{
+      const headers={'Content-Type':'application/json'};
+      if(JN_ETAG) headers['If-Match']=JN_ETAG;
+      const r=await fetch(`${DATA_API}?key=job-notes&client=${O30_CLIENT}`,{
+        method:'POST', headers,
+        body: JSON.stringify({data:{notes:JOB_NOTES, savedAt:new Date().toISOString()}, metadata:{count:String(Object.keys(JOB_NOTES).length)}})
+      });
+      if(r.status===412){
+        const cur=await fetch(`${DATA_API}?key=job-notes&client=${O30_CLIENT}`).then(x=>x.ok?x.json():null).catch(()=>null);
+        if(!cur){ _bnSaveFail(); return false; }   // couldn't re-read → do NOT fall back to an unconditional whole-map overwrite (that would wipe other coordinators' notes); cache is kept, retry later
+        JOB_NOTES=(cur.data&&cur.data.notes&&typeof cur.data.notes==='object')?cur.data.notes:{};
+        JN_ETAG=cur.etag||null;
+        mutate(JOB_NOTES);   // re-apply our change on top of the latest server state
+        _jnSaveLocal();
+        continue;
+      }
+      if(!r.ok) throw 0;
+      const j=await r.json(); JN_ETAG=(j&&j.etag)||null; _bnSaveOk(); return true;
+    }catch(_){ _bnSaveFail(); return false; }
+  }
+  _bnSaveFail(); return false;   // both attempts 412'd — release the save-indicator counter (mirrors saveExceptionState)
+}
 async function saveJobNote(){
   const id=window._jnCurrentId; if(!id) return;
   const ta=document.getElementById('jnText'); if(!ta) return;
@@ -2123,16 +2161,16 @@ async function saveJobNote(){
     if(input.trim()==='' && action==='none'){ delete JOB_NOTES[id]; }
     else { JOB_NOTES[id]=baseRec(input, Array.isArray(prev.naHistory)?prev.naHistory:[]); }
   }
-  _jnSaveLocal();
-  let synced=false;
-  if(!window.BROADWAY_SNAPSHOT){
-    const res=await bnClientPost('job-notes', {notes:JOB_NOTES, savedAt:new Date().toISOString()}, {count:String(Object.keys(JOB_NOTES).length)});
-    synced=!!(res&&res.ok);
-  }
+  // Persist with optimistic concurrency, then log the update to the server-side activity
+  // log (queryable history of note / next-action changes per coordinator + job over time).
+  // 'note' is an allowlisted verb; the server stamps WHO from the AAD principal.
+  const _final = Object.prototype.hasOwnProperty.call(JOB_NOTES, id) ? JOB_NOTES[id] : undefined;
+  const synced = await saveJobNotesShared(function(m){ if(_final===undefined) delete m[id]; else m[id]=_final; });
+  bnLogActivity('note', id, (mode==='recent'?'Recent update':'Full audit')+(action&&action!=='none'?' · '+action:''), 'job-notes');
   toast(synced?'Note saved — synced to team':'Note saved on this browser');
   if(JOBS.length) render(currentView);
   openJobModal(id); // refresh modal into rendered view mode + status pill
-  if(JOB_NOTES[id] && note.trim()!=='') generateHoldupSummary(id);
+  if(JOB_NOTES[id] && (JOB_NOTES[id].note||'').trim()!=='') generateHoldupSummary(id);   // was `note.trim()` — no such var in scope (ReferenceError), so the summary never auto-refreshed after a save
 }
 
 // ── AI HOLDUP SUMMARY (server-side via /api/generate; one sentence from full job context + WO Audit Note) ──
@@ -2182,8 +2220,9 @@ async function generateHoldupSummary(id){
     const rec=JOB_NOTES[id]||{note:'',action:'none',updatedAt:new Date().toISOString(),updatedBy:''};
     rec.summary=summary; rec.summaryAt=new Date().toISOString();
     JOB_NOTES[id]=rec;
-    _jnSaveLocal();
-    if(!window.BROADWAY_SNAPSHOT) bnClientPost('job-notes',{notes:JOB_NOTES, savedAt:new Date().toISOString()},{count:String(Object.keys(JOB_NOTES).length)});
+    // Merge-safe: apply only the summary onto whatever the current record is, so a
+    // concurrent note edit (picked up on a 412 re-read) is preserved, not overwritten.
+    await saveJobNotesShared(function(m){ const cur=m[id]||rec; cur.summary=summary; cur.summaryAt=rec.summaryAt; m[id]=cur; });
     if(window._jnCurrentId===id){
       const txt=document.getElementById('holdupText'); if(txt) txt.innerHTML='<span class="ai-tag">AI</span> '+escapeHtml(summary);
       const meta=document.getElementById('holdupMeta'); if(meta) meta.textContent='AI summary · '+new Date(rec.summaryAt).toLocaleString();
@@ -3801,12 +3840,12 @@ async function bnGetUser(){
 }
 
 // Append an entry to the server-side activity log. Fire-and-forget; never throws.
-async function bnLogActivity(action, target, detail){
+async function bnLogActivity(action, target, detail, slot){
   if(window.BROADWAY_SNAPSHOT) return; // saved copies never write
   try{
     await fetch('/api/activity-log?client='+O30_CLIENT,{
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({action, slot:'exception-queue', target, detail})
+      body: JSON.stringify({action, slot:slot||'exception-queue', target, detail})
     });
   }catch(_){}
 }
@@ -4129,7 +4168,11 @@ function renderExceptionQueue(mc, agg){
   function rowHtml(x){
     const j=x.j, st=x.st;
     const ageP = `<span class="age-pill ${ageCls(j.aged)}">${j.aged}d</span>`;
-    const chips = x.reasons.map(reasonChip).join('');
+    // Tag (don't exclude): WiFi / RF-Photometrics are project-style — they age past 30 by
+    // design, so flag them as a different urgency than Service push-to-closure. Counts/score
+    // are unchanged (per ops: over-30 numbers stay; only the framing differs).
+    const _proj = (jobType(j)==='WIFI'||jobType(j)==='Retrofit') ? '<span class="eq-chip eq-proj" title="Project-style work (WiFi / RF) — aging past 30 is expected; not the same push-to-closure urgency as Service">📁 project-style</span>' : '';
+    const chips = _proj + x.reasons.map(reasonChip).join('');
     const amt = j.amount>0?`<span class="eq-amt">${fmt$0(j.amount)}</span>`:'<span style="color:var(--muted)">—</span>';
     let actions='';
     if(ro){ actions = `<span class="eq-note">live dashboard only</span>`; }
@@ -5740,6 +5783,7 @@ updateEditBadge();
 .eq-score{font-family:'DM Mono',monospace;font-weight:700;font-size:12px;color:var(--color-success,#1a5f3e);background:var(--card2,#f6faf7);border:1px solid var(--border,#e2e8f0);border-radius:6px;padding:2px 7px;display:inline-block;min-width:30px;text-align:center}
 .eq-amt{font-family:'DM Mono',monospace;font-size:11px;font-weight:600;color:var(--muted)}
 .eq-chip{display:inline-block;font-size:10px;font-weight:600;line-height:1.5;padding:1px 7px;border-radius:10px;margin:1px 3px 1px 0;border:1px solid transparent;white-space:nowrap}
+.eq-proj{background:transparent;color:var(--muted);border:1px dashed var(--border)!important}
 .eq-r-never-updated,.eq-r-mgmt-assist,.eq-r-past-eta{background:#fef2f2;color:#991b1b;border-color:#fecaca}
 .eq-r-stale-7d,.eq-r-chronic,.eq-r-high-priority{background:#fffbeb;color:#92400e;border-color:#fde68a}
 .eq-r-no-next-step{background:#eff6ff;color:#1e40af;border-color:#bfdbfe}
