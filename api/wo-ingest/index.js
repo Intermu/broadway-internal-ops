@@ -69,6 +69,35 @@ async function streamToString(readable) {
   return Buffer.concat(chunks).toString("utf-8");
 }
 
+// Own-property map lookup with a digits-equality fallback (dashboard Job IDs can be
+// "WIFI 44832920" while userscript targets are digits-only tracking #s).
+function mapLookup(map, key) {
+  if (!map || typeof map !== "object") return null;
+  if (Object.prototype.hasOwnProperty.call(map, key)) return map[key];
+  if (/^\d+$/.test(key)) {
+    for (const k of Object.keys(map)) { if (k.replace(/\D+/g, "") === key) return map[k]; }
+  }
+  return null;
+}
+
+// The latest "OVER 30" audit line inside a dashboard WO Audit case file (job-notes
+// record). Updates are PREPENDED ("## YYYY-MM-DD — Update" blocks), so the FIRST
+// matching line in the text is the newest. Its date = the nearest update heading
+// above it (falls back to the record's updatedAt — save time, coarser).
+function latestAuditLine(rec) {
+  if (!rec || !rec.note) return null;
+  const note = String(rec.note);
+  const m = note.match(/^[ \t>*-]*((?:\d+[.)]\s*)?OVER\s*30\b[^\n]*)/im);
+  if (!m) return null;
+  let ts = rec.updatedAt || null;
+  const heads = note.slice(0, m.index).match(/##\s*\d{4}-\d{2}-\d{2}\s*—\s*Update/g);
+  if (heads && heads.length) {
+    const d = heads[heads.length - 1].match(/(\d{4}-\d{2}-\d{2})/);
+    if (d) ts = d[1] + "T12:00:00.000Z";   // date-only stamp — noon keeps day-level compares sane
+  }
+  return { line: m[1].replace(/^\d+[.)]\s*/, "").trim().slice(0, 300), ts, by: rec.updatedBy || null, src: "audit" };
+}
+
 // Generic JSON blob read (null when absent) — used by the GET lookup.
 async function readJson(container, name) {
   try {
@@ -127,14 +156,24 @@ module.exports = async function (context, req) {
       if (params.o30) {
         const targets = String(params.o30).split(",").map((s) => s.trim()).filter(Boolean).slice(0, 200);
         context.log("wo-ingest GET o30 lines", client, targets.length);
-        const ol = await readJson(container, `clients/${client}/o30-lines`);
+        // TWO sources per job, newest wins: (a) the WO AUDIT case file the coordinator
+        // maintains on the dashboard (job-notes — the authoritative audit record the
+        // user described), and (b) the panel-synced o30-lines store. The panel shows
+        // src so a coordinator knows whether it came from the dashboard audit or a sync.
+        const [ol, jn] = await Promise.all([
+          readJson(container, `clients/${client}/o30-lines`),
+          readJson(container, `clients/${client}/job-notes`),
+        ]);
         const outLines = {};
-        if (ol && ol.items) {
-          targets.forEach((t) => {
-            const rec = Object.prototype.hasOwnProperty.call(ol.items, t) ? ol.items[t] : null;
-            if (rec) outLines[t] = { line: rec.line || "", ts: rec.ts || null, by: rec.by || null };
-          });
-        }
+        targets.forEach((t) => {
+          const sy = ol && ol.items ? mapLookup(ol.items, t) : null;
+          const au = latestAuditLine(jn && jn.notes ? mapLookup(jn.notes, t) : null);
+          const tSy = sy ? (Date.parse(sy.ts || "") || 0) : -1;
+          const tAu = au ? (Date.parse(au.ts || "") || 0) : -1;
+          if (tAu > tSy && au) outLines[t] = au;
+          else if (sy) outLines[t] = { line: sy.line || "", ts: sy.ts || null, by: sy.by || null, src: "sync" };
+          else if (au) outLines[t] = au;
+        });
         context.res = json(200, { ok: true, lines: outLines });
         return;
       }
