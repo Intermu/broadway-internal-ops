@@ -193,7 +193,8 @@
       "Bash(\"C:\\\\Program Files\\\\Adobe\\\\Adobe Creative Cloud Experience\\\\libs\\\\node.exe\" t_tidy.js)",
       "Bash(\"C:\\\\Program Files\\\\Adobe\\\\Adobe Creative Cloud Experience\\\\libs\\\\node.exe\" msgmodel.js)",
       "Bash('C:/Program Files/Adobe/Adobe Creative Cloud Experience/libs/node.exe' /tmp/extract.js C:/Users/mnajarro/.claude/projects/C--Users-mnajarro-OneDrive---Broadway-National-Documents-GitHub-broadway-internal-ops/b9a0d5dc-c59f-4d55-b3a6-5560675876ea/subagents/workflows/wf_1d4e604b-8a1)",
-      "Bash('C:/Program Files/Adobe/Adobe Creative Cloud Experience/libs/node.exe' -e ' *)"
+      "Bash('C:/Program Files/Adobe/Adobe Creative Cloud Experience/libs/node.exe' -e ' *)",
+      "mcp__dba19eab-2fcd-4e32-bf6b-19df2231249e__search_vendors"
     ]
   }
 }
