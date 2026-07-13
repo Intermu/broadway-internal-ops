@@ -1437,7 +1437,7 @@ function openJobModal(id, fromEntity){
         <div class="holdup-meta" id="holdupMeta">${saved.summaryAt?'AI summary · '+escapeHtml(new Date(saved.summaryAt).toLocaleString()):''}</div>
       </div>
       ${flaggedHtml}
-      ${na.actions.length?'<div class="jm-na"><div class="jm-na-h"><span>Next Actions Required</span><button type="button" class="jm-na-copy" onclick="copyNextActions()" title="Copy these next actions">⧉ Copy</button></div>'+nextActionsCardHtml(na.actions)+naHistoryHtml(saved.naHistory)+'</div>':(saved.naHistory&&saved.naHistory.length?'<div class="jm-na">'+naHistoryHtml(saved.naHistory)+'</div>':'')}
+      ${jmNextActionsBlock(id, na, saved)}
       <div class="jm-timing">
         <div class="jt"><div class="jt-n">${j.aged}</div><div class="jt-l">Days open</div></div>
         <div class="jt"><div class="jt-n">${j.statusHrs?(j.statusHrs>=24?Math.round(j.statusHrs/24)+'d':Math.round(j.statusHrs)+'h'):'\u2014'}</div><div class="jt-l">In status</div></div>
@@ -1989,9 +1989,43 @@ function o30LineHtml(jobId){
   return '<div class="jm-section-label">Latest Over-30 line'+(when?' <span style="font-weight:500;color:var(--muted);">— entered '+escapeHtml(when)+(rec.by?' by '+escapeHtml(rec.by):'')+(stale?' · <span style="color:#b45309;font-weight:700;">'+ageD+'d old</span>':'')+'</span>':'')+'</div>'
     + '<div class="jn-doc-card"><div class="np-text" style="font-family:\'DM Mono\',monospace;font-size:11.5px;">'+escapeHtml(rec.line)+'</div></div>';
 }
+// ── Job plans (a "Next Actions Required" list authored in an Umbrava NOTE, pushed
+// job→dashboard by the connector) ──  { "<jobId>": { items:[...], src, ts, by } }.
+// Read-only here; written via /api/wo-ingest. Shown in the job modal ONLY when the
+// dashboard case file has no authored plan of its own (the case file always wins).
+let JOB_PLANS = null;
+async function loadJobPlans(){
+  if(window.BROADWAY_SNAPSHOT) return;
+  const r = await bnClientGet('job-plans');
+  JOB_PLANS = (r && r.exists && r.data && r.data.plans && typeof r.data.plans==='object') ? r.data.plans : {};
+}
+function jobPlanFor(jobId){
+  if(!JOB_PLANS) return null;
+  let rec = Object.prototype.hasOwnProperty.call(JOB_PLANS, jobId) ? JOB_PLANS[jobId] : null;
+  if(!rec){ const dg = String(jobId||'').replace(/\D+/g,''); if(dg && Object.prototype.hasOwnProperty.call(JOB_PLANS, dg)) rec = JOB_PLANS[dg]; }
+  return (rec && Array.isArray(rec.items) && rec.items.length) ? rec : null;
+}
+// The Next Actions block for the job modal: the dashboard case-file plan is
+// authoritative; if it has none, fall back to the job-pushed plan (from an Umbrava
+// note) so a plan authored in the job still lands here.
+function jmNextActionsBlock(id, na, saved){
+  if(na.actions.length){
+    window._jnNAActions = na.actions;
+    return '<div class="jm-na"><div class="jm-na-h"><span>Next Actions Required</span><button type="button" class="jm-na-copy" onclick="copyNextActions()" title="Copy these next actions">⧉ Copy</button></div>'+nextActionsCardHtml(na.actions)+naHistoryHtml(saved.naHistory)+'</div>';
+  }
+  const jp=jobPlanFor(id);
+  if(jp){
+    window._jnNAActions = jp.items.slice();   // so ⧉ Copy exports the shown list
+    const d=new Date(jp.ts||0); const when=isNaN(d.getTime())?'':(d.getMonth()+1)+'/'+d.getDate();
+    const sub='· from the job'+(when?' · '+escapeHtml(when):'')+(jp.by?' · '+escapeHtml(jp.by):'');
+    return '<div class="jm-na"><div class="jm-na-h"><span>Next Actions Required <span style="font-weight:500;color:var(--muted);">'+sub+'</span></span><button type="button" class="jm-na-copy" onclick="copyNextActions()" title="Copy these next actions">⧉ Copy</button></div>'+nextActionsCardHtml(jp.items)+naHistoryHtml(saved.naHistory)+'</div>';
+  }
+  return (saved.naHistory&&saved.naHistory.length)?'<div class="jm-na">'+naHistoryHtml(saved.naHistory)+'</div>':'';
+}
 async function loadJobNotes(){
   JOB_NOTES = _jnLoadLocal();
   loadO30Lines();   // fire-and-forget — the modal renders '' until it lands
+  loadJobPlans();   // fire-and-forget — job-authored plans mirror here once loaded
   if(!window.BROADWAY_SNAPSHOT){
     const res = await bnClientGet('job-notes');
     JN_ETAG = (res && res.etag) || null;   // baseline for If-Match on the next save

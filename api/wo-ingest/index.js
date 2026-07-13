@@ -272,6 +272,56 @@ module.exports = async function (context, req) {
       return;
     }
 
+    // ── Job Next-Actions round-trip: job → dashboard  →  clients/<client>/job-plans ──
+    // POST { actor, plans:[{target, items:[...], src}] } upserts each job's authored
+    // "Next Actions Required" plan (the one the Umbrava checklist is running off) so the
+    // dashboard can mirror it. Owned exclusively by this endpoint (like o30-lines) — the
+    // dashboard READS it (AAD gate, read-only via data-store) but never writes it, so it
+    // never contends with the coordinator's job-notes case file. This is a SEPARATE store
+    // from job-notes on purpose: the case file is the coordinator's authoritative audit
+    // record and must not be clobbered by a job-side push.
+    if (req.method === "POST" && Array.isArray(body.plans)) {
+      const stampP = new Date().toISOString();
+      // target must be a digits-only tracking # (also the prototype-pollution guard:
+      // bracket-assigning "__proto__" sets the prototype, not an own key). Cap items and
+      // each item's length so a runaway note can't bloat the blob.
+      const plansIn = body.plans.slice(0, 20)
+        .map((p) => ({
+          target: String((p && p.target) || "").slice(0, 64),
+          items: (Array.isArray(p && p.items) ? p.items : []).slice(0, 25).map((x) => String(x || "").replace(/\s+/g, " ").trim().slice(0, 300)).filter(Boolean),
+          src: String((p && p.src) || "note").slice(0, 16),
+        }))
+        .filter((p) => /^\d+$/.test(p.target) && p.items.length);
+      if (!plansIn.length) { context.res = json(400, { error: "no valid plans" }); return; }
+      const container = await getContainerClient();
+      const blobP = container.getBlockBlobClient(`clients/${client}/job-plans`);
+      for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+        let cur = null, etag = null, exists = false;
+        try {
+          const dl = await blobP.download();
+          cur = JSON.parse(await streamToString(dl.readableStreamBody));
+          etag = dl.etag; exists = true;   // etag from the SAME download — no TOCTOU (see readLog)
+        } catch (err) { if (err.statusCode !== 404) throw err; }
+        const data = cur && typeof cur === "object" ? cur : {};
+        data.v = 1; data.plans = data.plans && typeof data.plans === "object" ? data.plans : {};
+        plansIn.forEach((p) => { data.plans[p.target] = { items: p.items, src: p.src, ts: stampP, by: actor }; });
+        const pk = Object.keys(data.plans);
+        if (pk.length > 500) { pk.sort((a, b) => String(data.plans[a].ts || "").localeCompare(String(data.plans[b].ts || ""))); while (pk.length > 500) delete data.plans[pk.shift()]; }
+        const outBody = JSON.stringify(data);
+        const conditions = exists ? { ifMatch: etag } : { ifNoneMatch: "*" };
+        try {
+          await blobP.upload(outBody, Buffer.byteLength(outBody), { blobHTTPHeaders: { blobContentType: "application/json" }, conditions });
+          context.res = json(200, { ok: true, plans: plansIn.length });
+          return;
+        } catch (err) {
+          if (err.statusCode === 412 || err.statusCode === 409) continue;
+          throw err;
+        }
+      }
+      context.res = json(503, { error: "job-plans write contended; please retry" });
+      return;
+    }
+
     const rawEvents = Array.isArray(body.events) ? body.events : (body.action ? [body] : []);
     if (!rawEvents.length) { context.res = json(400, { error: "no events" }); return; }
 
