@@ -56,6 +56,10 @@
     "allowedRoles": ["broadway_employee"]
   },
   {
+    "route": "/assets/*",
+    "allowedRoles": ["anonymous"]
+  },
+  {
     "route": "/*",
     "allowedRoles": ["broadway_employee"]
   }
@@ -77,6 +81,6 @@
   },
   "navigationFallback": {
     "rewrite": "/index.html",
-    "exclude": ["/*.html", "/*.js", "/api/*", "/.auth/*"]
+    "exclude": ["/*.html", "/*.js", "/api/*", "/.auth/*", "/assets/*"]
   }
 }
