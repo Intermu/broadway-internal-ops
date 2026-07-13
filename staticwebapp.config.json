@@ -24,6 +24,10 @@
     "allowedRoles": ["anonymous"]
   },
   {
+    "route": "/api/scrape-contacts",
+    "allowedRoles": ["anonymous"]
+  },
+  {
     "route": "/api/*",
     "allowedRoles": ["broadway_employee"]
   },

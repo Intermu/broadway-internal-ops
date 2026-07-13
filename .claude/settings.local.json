@@ -198,7 +198,9 @@
       "mcp__dba19eab-2fcd-4e32-bf6b-19df2231249e__get_vendor_profile",
       "Bash(ls -la 'C:/Users/mnajarro/AppData/Local/Temp/TBG_HVAC_PM_B&F_Pricing Analysis Review_07.09.26 \\(1\\).xls')",
       "Bash(echo \"--- first bytes \\(hex\\) ---\")",
-      "Bash(head -c 16 'C:/Users/mnajarro/AppData/Local/Temp/TBG_HVAC_PM_B&F_Pricing Analysis Review_07.09.26 \\(1\\).xls')"
+      "Bash(head -c 16 'C:/Users/mnajarro/AppData/Local/Temp/TBG_HVAC_PM_B&F_Pricing Analysis Review_07.09.26 \\(1\\).xls')",
+      "WebFetch(domain:apify.com)",
+      "WebFetch(domain:stackoverflow.com)"
     ]
   }
 }
