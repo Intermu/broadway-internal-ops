@@ -216,7 +216,9 @@
       "Bash(cp api/wo-ingest/index.js \"C:/Users/mnajarro/AppData/Local/Temp/claude/C--Users-mnajarro-OneDrive---Broadway-National-Documents-GitHub-broadway-internal-ops/b9a0d5dc-c59f-4d55-b3a6-5560675876ea/scratchpad/woingest-check.js\")",
       "Bash(\"C:/Program Files/Adobe/Adobe Creative Cloud Experience/libs/node.exe\" --check \"C:/Users/mnajarro/AppData/Local/Temp/claude/C--Users-mnajarro-OneDrive---Broadway-National-Documents-GitHub-broadway-internal-ops/b9a0d5dc-c59f-4d55-b3a6-5560675876ea/scratchpad/woingest-check.js\")",
       "mcp__dba19eab-2fcd-4e32-bf6b-19df2231249e__search_work_orders",
-      "Bash(\"/c/Program Files/Adobe/Adobe Creative Cloud Experience/libs/node.exe\" --check \"C:/Users/mnajarro/AppData/Local/Temp/claude/C--Users-mnajarro-OneDrive---Broadway-National-Documents-GitHub-broadway-internal-ops/b9a0d5dc-c59f-4d55-b3a6-5560675876ea/scratchpad/wotojob_draft.js\")"
+      "Bash(\"/c/Program Files/Adobe/Adobe Creative Cloud Experience/libs/node.exe\" --check \"C:/Users/mnajarro/AppData/Local/Temp/claude/C--Users-mnajarro-OneDrive---Broadway-National-Documents-GitHub-broadway-internal-ops/b9a0d5dc-c59f-4d55-b3a6-5560675876ea/scratchpad/wotojob_draft.js\")",
+      "Bash(\"C:/Program Files/Adobe/Adobe Creative Cloud Experience/libs/node.exe\" \"C:/Users/mnajarro/AppData/Local/Temp/claude/C--Users-mnajarro-OneDrive---Broadway-National-Documents-GitHub-broadway-internal-ops/b9a0d5dc-c59f-4d55-b3a6-5560675876ea/scratchpad/sendbid_test.js\")",
+      "Bash(\"C:/Program Files/Adobe/Adobe Creative Cloud Experience/libs/node.exe\" \"C:/Users/mnajarro/AppData/Local/Temp/claude/C--Users-mnajarro-OneDrive---Broadway-National-Documents-GitHub-broadway-internal-ops/b9a0d5dc-c59f-4d55-b3a6-5560675876ea/scratchpad/bidhtml_test.js\")"
     ]
   }
 }
