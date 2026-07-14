@@ -18,7 +18,7 @@ module.exports = async function (context, req) {
     const headers = Array.isArray(body.headers) ? body.headers : [];
     const samples = (body.samples && typeof body.samples === "object") ? body.samples : {};
 
-    // Nothing to infer, or nothing to infer against — return an empty mapping
+    // Nothing to infer, or nothing to infer against - return an empty mapping
     // rather than burning a model call.
     if (!unmapped.length || !headers.length) {
       context.res = {

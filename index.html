@@ -15,7 +15,7 @@
   <script>
     // Only bounce to the hub when we're the top-level page. If this page is
     // loaded inside a frame (e.g. a tool path fell back to index), do NOT
-    // redirect — that would load the hub inside the hub and stack a header.
+    // redirect - that would load the hub inside the hub and stack a header.
     if (window.self === window.top) {
       location.replace('./Broadway_Projects_Tracker.html' + location.search + location.hash);
     } else {

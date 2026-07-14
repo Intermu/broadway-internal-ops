@@ -6,7 +6,7 @@ const { URL } = require("url");
 
 // Contact-email scraper for the BWN Bid-Out userscript. Given a list of vendor website
 // URLs (discovered via Google Places), fetch each site server-side and extract any
-// contact email printed in the served HTML — so net-new vendors (not in Umbrava) can be
+// contact email printed in the served HTML - so net-new vendors (not in Umbrava) can be
 // invited to bid. Returns ONLY emails, never page content.
 //
 // Reached ANONYMOUSLY at the SWA route layer (Umbrava is a different origin, not federated
@@ -15,7 +15,7 @@ const { URL } = require("url");
 //
 // SSRF-hardened: only http/https + standard ports; a custom DNS lookup rejects any host
 // that resolves to a private/reserved/link-local address (blocks localhost, RFC1918, CGNAT,
-// 169.254 cloud-metadata, IPv6 ULA/link-local, v4-mapped) — enforced at the socket for the
+// 169.254 cloud-metadata, IPv6 ULA/link-local, v4-mapped) - enforced at the socket for the
 // homepage AND every redirect hop, so DNS-rebinding can't reach internal targets. Per-site
 // timeout + byte cap + redirect cap, an overall wall-clock deadline, and a URL cap.
 

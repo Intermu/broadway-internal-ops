@@ -4,13 +4,13 @@ const { BlobServiceClient } = require("@azure/storage-blob");
 // clients/<client>/activity-log holding { v:1, entries:[ ... ] }, newest last.
 // Each entry is server-stamped (who + ts) so the audit trail can't be forged by
 // the browser. Mirrors data-store conventions (same container, same client
-// allowlist) but is deliberately a SEPARATE function with its own blob path —
+// allowlist) but is deliberately a SEPARATE function with its own blob path -
 // data-store's VALID_SLOTS does not include "activity-log", so a stray
 // data-store POST can never overwrite the trail.
 //
 // Writes use optimistic concurrency (If-Match / If-None-Match) with a small
 // retry loop, so two coordinators logging at the same moment can't clobber each
-// other's entries — the loser re-reads and re-appends.
+// other's entries - the loser re-reads and re-appends.
 //
 //   GET  /api/activity-log?client=pilot[&limit=N][&target=<jobId>]
 //        → { entries: [...] }  (most recent N, default 100; optional target filter)
@@ -21,7 +21,7 @@ const CONTAINER_NAME = "broadway-data";
 const VALID_CLIENTS = ["pilot"];
 
 // Bound the trail so the blob can't grow without limit. This is "append-only"
-// in spirit — the oldest entries beyond the cap roll off (a separate archive
+// in spirit - the oldest entries beyond the cap roll off (a separate archive
 // job can be added later if full retention is ever required).
 const MAX_ENTRIES = 2000;
 const MAX_RETRIES = 5;
@@ -81,7 +81,7 @@ async function readLog(blob) {
     const dl = await blob.download();
     const text = await streamToString(dl.readableStreamBody);
     const log = JSON.parse(text);
-    // Etag from the SAME download response (atomic with content) — a separate
+    // Etag from the SAME download response (atomic with content) - a separate
     // getProperties() opens a TOCTOU now that wo-ingest is a second concurrent writer.
     return { entries: Array.isArray(log.entries) ? log.entries : [], etag: dl.etag, exists: true };
   } catch (err) {
@@ -120,7 +120,7 @@ module.exports = async function (context, req) {
       }
       const who = whoFromReq(req);
       const entry = {
-        ts: new Date().toISOString(), // SERVER time — never trust a client clock
+        ts: new Date().toISOString(), // SERVER time - never trust a client clock
         who: who.name,
         whoId: who.id,
         action,

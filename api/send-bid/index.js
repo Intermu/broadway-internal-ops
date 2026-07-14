@@ -1,13 +1,13 @@
 const https = require("https");
 const { BlobServiceClient } = require("@azure/storage-blob");
 
-// Graph send for the BWN Bid-Out userscript (Phase B — one-click styled RFP email).
+// Graph send for the BWN Bid-Out userscript (Phase B - one-click styled RFP email).
 //
 // The Bid-Out tool runs inside app.umbrava.com (not federated to Broadway AAD), builds the
 // branded HTML bid email client-side, shows the coordinator a review modal (recipients +
 // rendered body), and only on their explicit Send POSTs here. This function then sends the
 // message via Microsoft Graph APP-ONLY (client credentials) from the coordinator's own
-// mailbox — it lands in their Sent Items and replies come back to them.
+// mailbox - it lands in their Sent Items and replies come back to them.
 //
 //   POST /api/send-bid   header x-bwn-key: <WO_INGEST_KEY>
 //        body { from, bcc:[emails], subject, html, tracking? }
@@ -15,14 +15,14 @@ const { BlobServiceClient } = require("@azure/storage-blob");
 //
 // Reached ANONYMOUSLY at the SWA route layer and gated by the SAME shared function key as
 // wo-ingest/scrape-contacts (x-bwn-key vs WO_INGEST_KEY). Fails CLOSED at every layer:
-//   503 — WO_INGEST_KEY unset, or the Graph app registration isn't configured yet
-//         (client id/secret absent — from BID_CLIENT_ID/BID_CLIENT_SECRET or, for the
-//         reuse-the-existing-app path, the SWA's AAD_CLIENT_ID/AAD_CLIENT_SECRET — or no
+//   503 - WO_INGEST_KEY unset, or the Graph app registration isn't configured yet
+//         (client id/secret absent - from BID_CLIENT_ID/BID_CLIENT_SECRET or, for the
+//         reuse-the-existing-app path, the SWA's AAD_CLIENT_ID/AAD_CLIENT_SECRET - or no
 //         tenant, or NEITHER BID_FROM_ALLOWED nor BID_FROM_DOMAIN set → endpoint stays dark);
-//   403 — wrong key, or `from` not permitted by the allowlist/allowed-domain.
+//   403 - wrong key, or `from` not permitted by the allowlist/allowed-domain.
 //
 // Abuse limits (this endpoint can EMAIL EXTERNAL PARTIES, so it is deliberately narrow):
-//   • `from` must match the server-side allowlist — either an exact address in
+//   • `from` must match the server-side allowlist - either an exact address in
 //     BID_FROM_ALLOWED (comma-separated) OR its domain in BID_FROM_DOMAIN (comma-separated,
 //     e.g. "broadwaynational.com" = any mailbox on the domain may send). A leaked key still
 //     cannot send as an ARBITRARY external mailbox. IT scopes the app registration to match
@@ -32,11 +32,11 @@ const { BlobServiceClient } = require("@azure/storage-blob");
 //     fixed template and escapes all content, but a leaked key could POST anything), so it
 //     is NOT trusted: active markup (<script>/<form>/<iframe>/inline on*= handlers/
 //     javascript: URIs/formaction) is rejected. This is defense-in-depth, not a full
-//     sanitizer — plain links/images still render (can't block those without breaking the
+//     sanitizer - plain links/images still render (can't block those without breaking the
 //     template), so the key gate + from-domain limit + audit log remain the real controls.
 //   • a rolling audit log in blob storage + a per-day recipient ceiling (DAILY_RECIPIENTS).
 //     The ceiling is RESERVED in the same ETag-guarded write that records the send, BEFORE
-//     the send — so concurrent requests can't all read a stale pre-send count and blow past
+//     the send - so concurrent requests can't all read a stale pre-send count and blow past
 //     it (a real risk: Functions run requests concurrently and scale out across instances).
 
 const CONTAINER_NAME = "broadway-data";
@@ -45,7 +45,7 @@ const MAX_AUDIT_ENTRIES = 1000;
 const MAX_RETRIES = 5;
 const MAX_BCC = 60;                 // matches the userscript's cap
 const MAX_SUBJECT = 300;
-const MAX_HTML = 300000;            // ~300KB — the template is ~15KB filled
+const MAX_HTML = 300000;            // ~300KB - the template is ~15KB filled
 const DAILY_RECIPIENTS = 500;       // ceiling across all senders per UTC day
 const GRAPH_HOST = "graph.microsoft.com";
 const LOGIN_HOST = "login.microsoftonline.com";
@@ -80,10 +80,10 @@ async function streamToString(readable) {
   return Buffer.concat(chunks).toString("utf8");
 }
 
-// Plain RFC-ish address check — the userscript pre-validates; this is the server backstop.
+// Plain RFC-ish address check - the userscript pre-validates; this is the server backstop.
 const EMAIL_RE = /^[^\s@<>,;"']+@[^\s@<>,;"']+\.[A-Za-z]{2,}$/;
 
-// Fixed-host HTTPS helper (login.microsoftonline.com / graph.microsoft.com only — no
+// Fixed-host HTTPS helper (login.microsoftonline.com / graph.microsoft.com only - no
 // user-supplied hosts, so no SSRF surface; scrape-contacts' guardedLookup isn't needed).
 function httpsJson(host, path, method, headers, bodyStr, timeoutMs) {
   return new Promise((resolve, reject) => {
@@ -126,7 +126,7 @@ async function getGraphToken(tenant, clientId, secret) {
 }
 
 // Best-effort: mark a reserved audit entry voided so a FAILED send doesn't consume the
-// day's budget. Fail-safe by design — if this can't land (contention/error), the entry
+// day's budget. Fail-safe by design - if this can't land (contention/error), the entry
 // stays and only TIGHTENS the cap; it never throws into the caller's response path.
 async function voidReservation(blob, id) {
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
@@ -141,7 +141,7 @@ async function voidReservation(blob, id) {
       await blob.upload(out, Buffer.byteLength(out), { blobHTTPHeaders: { blobContentType: "application/json" }, conditions: { ifMatch: dl.etag } });
       return;
     } catch (err) {
-      if (err.statusCode === 412 || err.statusCode === 409) continue;   // raced — re-read + retry
+      if (err.statusCode === 412 || err.statusCode === 409) continue;   // raced - re-read + retry
       return;   // give up quietly; over-count is the safe direction
     }
   }
@@ -151,17 +151,17 @@ module.exports = async function (context, req) {
   try {
     if (req.method === "OPTIONS") { context.res = { status: 204, headers: CORS }; return; }
 
-    // ── Key gate (fail closed; 403 not 401 — see wo-ingest for the redirect trap) ──
+    // ── Key gate (fail closed; 403 not 401 - see wo-ingest for the redirect trap) ──
     const expected = process.env.WO_INGEST_KEY;
     if (!expected) { context.res = json(503, { error: "ingest not configured" }); return; }
     const key = req.headers && (req.headers["x-bwn-key"] || req.headers["X-BWN-KEY"]);
     if (!key || key !== expected) { context.res = json(403, { error: "unauthorized" }); return; }
 
-    // ── Graph config gate — the endpoint is deploy-dark until IT provides these ──
+    // ── Graph config gate - the endpoint is deploy-dark until IT provides these ──
     // Graph app credentials. Falls back to the SWA's EXISTING Entra sign-in app
     // (AAD_CLIENT_ID / AAD_CLIENT_SECRET, already in app settings) so you can REUSE that
-    // registration — just have an admin add the Application `Mail.Send` permission + grant
-    // admin consent to it — instead of creating a new app. A dedicated app is cleaner
+    // registration - just have an admin add the Application `Mail.Send` permission + grant
+    // admin consent to it - instead of creating a new app. A dedicated app is cleaner
     // (least privilege / independent secret), but reuse works with no extra secrets: set
     // only BID_TENANT_ID (+ BID_FROM_DOMAIN). BID_* always wins if you DO make a new app.
     const tenant = process.env.BID_TENANT_ID || process.env.AAD_TENANT_ID;
@@ -214,7 +214,7 @@ module.exports = async function (context, req) {
     // read → check ceiling → append this send → conditional upload, all in ONE loop, so
     // the value that gates the send is written in the same transaction that records it.
     // Concurrent requests (same instance or scaled-out) serialize on the blob ETag: a
-    // loser gets 412, re-reads the now-higher count, and re-checks — so the cap holds.
+    // loser gets 412, re-reads the now-higher count, and re-checks - so the cap holds.
     // Only AFTER a reservation lands do we send; a failed send voids its reservation.
     const container = await getContainerClient();
     const blob = container.getBlockBlobClient(AUDIT_BLOB);
@@ -244,12 +244,12 @@ module.exports = async function (context, req) {
         await blob.upload(outBody, Buffer.byteLength(outBody), { blobHTTPHeaders: { blobContentType: "application/json" }, conditions });
         reserved = true;
       } catch (err) {
-        if (err.statusCode === 412 || err.statusCode === 409) continue;   // lost the race — re-read + re-check
+        if (err.statusCode === 412 || err.statusCode === 409) continue;   // lost the race - re-read + re-check
         throw err;
       }
     }
     if (!reserved) {
-      // Never send without a landed reservation — that is what keeps the ceiling honest.
+      // Never send without a landed reservation - that is what keeps the ceiling honest.
       context.res = json(503, { error: "send log contended; please retry" });
       return;
     }
@@ -260,7 +260,7 @@ module.exports = async function (context, req) {
         subject,
         body: { contentType: "HTML", content: html },
         // To = the sender themselves: vendors are BCC-only (they must not see each other),
-        // and every mail client renders a To — the coordinator's own address is honest.
+        // and every mail client renders a To - the coordinator's own address is honest.
         toRecipients: [{ emailAddress: { address: from } }],
         bccRecipients: bcc.map((a) => ({ emailAddress: { address: a } })),
         replyTo: [{ emailAddress: { address: from } }],
@@ -275,17 +275,17 @@ module.exports = async function (context, req) {
         { "Authorization": "Bearer " + token, "Content-Type": "application/json", "Content-Length": Buffer.byteLength(payload) },
         payload, 30000);
     } catch (err) {
-      await voidReservation(blob, entryId);   // release the reserved budget — the send didn't happen
+      await voidReservation(blob, entryId);   // release the reserved budget - the send didn't happen
       context.log.error("send-bid send error", err && err.message);
-      context.res = json(502, { error: "Graph send failed — " + String((err && err.message) || "request error").slice(0, 200) });
+      context.res = json(502, { error: "Graph send failed - " + String((err && err.message) || "request error").slice(0, 200) });
       return;
     }
     if (r.status !== 202) {
       await voidReservation(blob, entryId);
       const detail = r.body && r.body.error ? (r.body.error.code + ": " + r.body.error.message) : ("HTTP " + r.status);
       context.log.error("send-bid Graph send failed", detail);
-      // 502, not the raw Graph status — Graph's 401/403 must not be confused with OUR key gate.
-      context.res = json(502, { error: "Graph send failed — " + String(detail).slice(0, 300) });
+      // 502, not the raw Graph status - Graph's 401/403 must not be confused with OUR key gate.
+      context.res = json(502, { error: "Graph send failed - " + String(detail).slice(0, 300) });
       return;
     }
 

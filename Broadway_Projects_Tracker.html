@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com 'unsafe-inline'; style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; base-uri 'self'; form-action 'none'; frame-ancestors 'none';">
-<title>Broadway National — Projects Job Board</title>
+<title>Broadway National - Projects Job Board</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
@@ -87,7 +87,7 @@
   --transition-fast: 0.12s ease;
   --transition-base: 0.20s ease;
 }
-/* ══ DARK THEME (Phase 0.2) — screen-only, so print falls back to the light :root tokens (no print-reset needed) ══ */
+/* ══ DARK THEME (Phase 0.2) - screen-only, so print falls back to the light :root tokens (no print-reset needed) ══ */
 @media screen{
 html[data-theme="dark"]{
   --color-bg:#0f141b; --color-surface:#1a2230; --color-surface-alt:#222d3c; --color-surface-faint:#1e2734; --color-surface-sunken:#161f2b;
@@ -101,7 +101,7 @@ html[data-theme="dark"]{
   --text:#e6ebf2; --muted:#8c99ab; --bg:#0f141b; --green-bg:#13251b;
   color-scheme:dark;
 }
-/* Long-tail element dark overrides (Phase 0.2.1) — token-based so the @media print reset keeps them light */
+/* Long-tail element dark overrides (Phase 0.2.1) - token-based so the @media print reset keeps them light */
 html[data-theme="dark"] .data-mode-badge.real{background:var(--color-success-bg);color:var(--color-success-text);border-color:var(--color-success-border);}
 html[data-theme="dark"] .data-mode-badge.sample{background:var(--color-warning-bg);color:var(--color-warning-text);border-color:var(--color-warning-border);}
 html[data-theme="dark"] .upload-panel .last-pill.recent{background:var(--color-success-bg);color:var(--color-success-text);}
@@ -849,7 +849,7 @@ tr.bn-row-hidden{display:none}
     <label class="btn btn-b" style="cursor:pointer" title="Import Excel">&#8593; Import
       <input type="file" id="dz-input" accept=".xlsx,.xlsm,.xls" style="display:none" onchange="processFile(this)">
     </label>
-    <label class="btn btn-ghost" style="cursor:pointer" id="audit-sync-btn" title="Sync from WO audit (adds status hints to existing WOs only — never overrides your stages)">&#8645; Sync Audit
+    <label class="btn btn-ghost" style="cursor:pointer" id="audit-sync-btn" title="Sync from WO audit (adds status hints to existing WOs only - never overrides your stages)">&#8645; Sync Audit
       <input type="file" id="audit-input" accept=".xlsx,.xlsm,.xls,.csv" style="display:none" onchange="processAuditFile(this)">
     </label>
     <button class="btn btn-ghost" onclick="exportExcel()">&#8595; Export</button>
@@ -942,7 +942,7 @@ tr.bn-row-hidden{display:none}
     </div>
     <div class="date-strip">
       <div class="dfield"><span class="dlbl">Start Date</span><input class="dinput" type="date" id="p-start" onchange="setStartDate(this.value)"></div>
-      <div class="dfield"><span class="dlbl">Next Touch</span><input class="dinput" type="date" id="p-action" onchange="setActionDate(this.value)" title="The day this job needs to be touched next — drives the Today view"></div>
+      <div class="dfield"><span class="dlbl">Next Touch</span><input class="dinput" type="date" id="p-action" onchange="setActionDate(this.value)" title="The day this job needs to be touched next - drives the Today view"></div>
       <div class="dfield"><span class="dlbl">Proj. End</span><input class="dinput" type="date" id="p-end" readonly style="opacity:.55;cursor:default"></div>
     </div>
     <div class="panel-audit" id="panel-audit" style="display:none"></div>
@@ -1005,7 +1005,7 @@ tr.bn-row-hidden{display:none}
       </div>
       <div class="fgrp"><label class="flbl">Priority</label>
         <select class="fselect" id="f-priority">
-          <option value="">—</option><option>P1</option><option>P2</option><option>P3</option><option>P4</option>
+          <option value="">-</option><option>P1</option><option>P2</option><option>P3</option><option>P4</option>
         </select>
       </div>
     </div>
@@ -1261,7 +1261,7 @@ function makeStages(tplKey, customStr) {
 function getJob(id){ return jobs.find(j => j.id === id); }
 
 // ══════════════════════════════════════════════════════
-// PERSISTENCE — jobs survive page reloads via localStorage.
+// PERSISTENCE - jobs survive page reloads via localStorage.
 // Older Job Board exports (xlsx) don't carry stageHistory or auditHint, and
 // that's fine: those fields are populated lazily when the user next touches
 // a job, so existing data isn't disrupted by the schema additions.
@@ -1271,7 +1271,7 @@ const LS_KEY_AUDIT   = 'broadway_jobboard_audit_v1';
 const LS_KEY_TARGETS = 'broadway_jobboard_targets_v1';
 const LS_KEY_STATMAP = 'broadway_jobboard_statmap_v1';
 let auditByWo = {};   // wo -> { status, statusHrs, importedAt }
-let stageTargets = {}; // tplKey -> { stageId -> days } — user overrides, layered on template defaults
+let stageTargets = {}; // tplKey -> { stageId -> days } - user overrides, layered on template defaults
 let statusToStage = {}; // lowercased audit status -> board stage label (Title-case as shown in UI)
 
 function saveJobs()    { try { localStorage.setItem(LS_KEY_JOBS, JSON.stringify(jobs)); } catch(e){ console.warn('saveJobs', e); } }
@@ -1285,7 +1285,7 @@ function loadStatMap() { try { const s = localStorage.getItem(LS_KEY_STATMAP); i
 
 // Effective time-in-stage target (days) for a given template+stage. User
 // overrides via stageTargets win; falls back to the template stage's `dur`,
-// then to the per-job stageDur, then 0 (meaning "no target — don't flag stuck").
+// then to the per-job stageDur, then 0 (meaning "no target - don't flag stuck").
 // This is the single source of truth for "stuck" detection and Gantt segment
 // duration. Template `dur` values are reasonable defaults but rarely match a
 // shop's actual cycle time, hence the override layer.
@@ -1344,7 +1344,7 @@ function effectiveStatusMap(){
 // Does the audit status for a given board stage label count as "aligned"?
 // We accept three signals: explicit synonym match, substring either way,
 // or a normalized equality check after stripping non-alphanumerics. This
-// is intentionally permissive — false alignment is annoying but
+// is intentionally permissive - false alignment is annoying but
 // recoverable (user sees no flag); false divergence trains people to
 // ignore the flag, which is worse.
 function auditAligned(auditStatus, stageLabel){
@@ -1477,7 +1477,7 @@ function bnExpandRows(cell){
 }
 
 // ══════════════════════════════════════════════════════
-// GROUP VALUE HELPER — maps a field key to a job's value
+// GROUP VALUE HELPER - maps a field key to a job's value
 // ══════════════════════════════════════════════════════
 function getGroupValue(job, field) {
   if(field==='client')      return job.client||'No Client';
@@ -1495,10 +1495,10 @@ function getGroupValue(job, field) {
 function onSearch(q){
   searchQ = q.toLowerCase().trim();
   render();
-  gsearchForward(q);   // GLOBAL SEARCH BRIDGE — mirror the query into the active embedded tool
+  gsearchForward(q);   // GLOBAL SEARCH BRIDGE - mirror the query into the active embedded tool
 }
 
-// GLOBAL SEARCH BRIDGE — when a tool tab (Dashboard/Agent/Diagnostic/Check-In) is
+// GLOBAL SEARCH BRIDGE - when a tool tab (Dashboard/Agent/Diagnostic/Check-In) is
 // active, forward the top-bar query into the embedded tool via postMessage. The
 // Dashboard listens (bwn:gsearch) and drives its own popup job search; tools
 // without a listener simply ignore it. Payload is just the search string.
@@ -1519,7 +1519,7 @@ function matchesSearch(job){
 // ACTION-DATE DAILY MODEL + ROLE-GATED TASKS
 // "Next touch" date drives a daily "Today" view that empties as dates are
 // pushed out. Tasks are directive action items only supervisors+ can add.
-// Role is a SOFT toggle (no backend auth yet) — maps to an Entra ID security
+// Role is a SOFT toggle (no backend auth yet) - maps to an Entra ID security
 // group claim once Azure SWA sign-in is wired. Backward compatible: legacy jobs
 // have no actionDate / tasks and behave exactly as before.
 // ══════════════════════════════════════════════════════
@@ -1534,7 +1534,7 @@ function isActionDue(job){ const s=actionStatus(job); return !!s && (s.state==='
 function toggleTodayOnly(){ todayOnly=!todayOnly; render(); }
 function setActionDate(val){ const job=getJob(selId); if(!job) return; job.actionDate=val; const overridden=syncActionDateFromTasks(job) && job.actionDate!==val; saveJobs(); updatePanel(job); renderContent(); updateStatBar(); if(overridden) toast('Next Touch follows the open task (due '+job.actionDate+')'); }
 
-// Tasks — supervisor-add-only directive items. Anyone can mark done.
+// Tasks - supervisor-add-only directive items. Anyone can mark done.
 function ensureTasks(job){ if(!Array.isArray(job.tasks)) job.tasks=[]; return job.tasks; }
 function openTaskCount(job){ return (Array.isArray(job&&job.tasks)?job.tasks:[]).filter(t=>!t.done).length; }
 // Default due date for a new task: align to the job's Next Touch if set,
@@ -1548,7 +1548,7 @@ function defaultTaskDue(job){
 // Earliest due date among OPEN (not done) tasks that have a due date.
 function earliestOpenTaskDue(job){ const ts=(Array.isArray(job&&job.tasks)?job.tasks:[]).filter(t=>!t.done&&t.due); return ts.length ? ts.reduce((m,t)=>t.due<m?t.due:m, ts[0].due) : null; }
 // An open task's due date is AUTHORITATIVE and overrides the manual Next Touch
-// in either direction — a task means an escalation or a missed item, so it
+// in either direction - a task means an escalation or a missed item, so it
 // governs when the job must be touched. When no open dated task exists, the
 // manual Next Touch is left as-is (never cleared). Returns true if it changed.
 function syncActionDateFromTasks(job){ const e=earliestOpenTaskDue(job); if(e && job.actionDate!==e){ job.actionDate=e; return true; } return false; }
@@ -1741,7 +1741,7 @@ function downloadTemplate(){
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Broadway 26 Surveys');
   const inst = XLSX.utils.aoa_to_sheet([
-    ['BROADWAY NATIONAL — PROJECTS JOB BOARD IMPORT TEMPLATE'],[''],
+    ['BROADWAY NATIONAL - PROJECTS JOB BOARD IMPORT TEMPLATE'],[''],
     ['INSTRUCTIONS:'],
     ['1. Fill in job data starting at row 3 (rows 1-2 are header + example)'],
     ['2. Stage Template options: retrofit, survey_only, reactive, preventative, project, custom'],
@@ -1749,12 +1749,12 @@ function downloadTemplate(){
     ['   Custom Stages format: Stage1,Stage2,Stage3,Stage4 (comma separated)'],
     ['4. Save the file and drag it into the Job Board to import'],[''],
     ['STAGE TEMPLATES:'],
-    ['retrofit        — Survey > Photometrics > Proposal > PO Issued > Installation > Closed'],
-    ['survey_only     — Pending Dispatch > Scheduled > On-Site > Report Delivered > Closed'],
-    ['reactive        — New > Pending Schedule > Scheduled > On-Site > Work Complete > Invoiced > Closed'],
-    ['preventative    — Scheduled > On-Site > Work Complete > Invoiced > Closed'],
-    ['project         — Kickoff > Design/Scope > ATF/Approval > PO Issued > In Progress > Punch List > Closed'],
-    ['custom          — Define your own stages in the Custom Stages column'],
+    ['retrofit        - Survey > Photometrics > Proposal > PO Issued > Installation > Closed'],
+    ['survey_only     - Pending Dispatch > Scheduled > On-Site > Report Delivered > Closed'],
+    ['reactive        - New > Pending Schedule > Scheduled > On-Site > Work Complete > Invoiced > Closed'],
+    ['preventative    - Scheduled > On-Site > Work Complete > Invoiced > Closed'],
+    ['project         - Kickoff > Design/Scope > ATF/Approval > PO Issued > In Progress > Punch List > Closed'],
+    ['custom          - Define your own stages in the Custom Stages column'],
   ]);
   inst['!cols'] = [{wch:80}];
   XLSX.utils.book_append_sheet(wb, inst, 'Instructions');
@@ -1927,9 +1927,9 @@ function expFmtDateTime(s){
 }
 function expField(lbl, val){
   const empty = val === null || val === undefined || val === '';
-  return `<div class="exp-fld"><div class="exp-fld-lbl">${esc(lbl)}</div><div class="exp-fld-val${empty?' empty':''}">${empty?'—':esc(String(val))}</div></div>`;
+  return `<div class="exp-fld"><div class="exp-fld-lbl">${esc(lbl)}</div><div class="exp-fld-val${empty?' empty':''}">${empty?'-':esc(String(val))}</div></div>`;
 }
-// Editable contenteditable field — bound to a job key on the currently selected job.
+// Editable contenteditable field - bound to a job key on the currently selected job.
 function expEditField(lbl, key, val){
   const empty = val === null || val === undefined || val === '';
   return `<div class="exp-fld editable">
@@ -1985,7 +1985,7 @@ function renderExpandedView(job){
   const stage = job.stages.find(s => s.id === job.stage);
   const p = pct(job);
   const meta = [
-    `<strong>Stage:</strong> ${esc(stage?.label||'—')}`,
+    `<strong>Stage:</strong> ${esc(stage?.label||'-')}`,
     `<strong>Progress:</strong> ${p}%`,
     job.wo ? `<strong>WO:</strong> ${esc(job.wo)}` : '',
     job.srcJob ? `<strong>Source Job:</strong> ${esc(job.srcJob)}` : '',
@@ -1993,7 +1993,7 @@ function renderExpandedView(job){
   ].filter(Boolean).join(' · ');
   document.getElementById('exp-meta').innerHTML = meta;
 
-  // Stage tabs — click to move the job to that stage (the maximized-view stage selector)
+  // Stage tabs - click to move the job to that stage (the maximized-view stage selector)
   const stEl = document.getElementById('exp-stagetabs');
   if(stEl){
     stEl.innerHTML = job.stages.map(s=>`<button class="exp-stab${s.id===job.stage?' active':''}" style="${s.id===job.stage?`border-bottom-color:${s.color};color:${s.color}`:''}" onclick="expSetStage('${s.id}')">${esc(s.label)}</button>`).join('');
@@ -2009,7 +2009,7 @@ function renderExpandedView(job){
   let body = '';
 
   // ── Section: Job Identification (editable) ──
-  // Project type list — matches the dropdown used in the Add Job modal.
+  // Project type list - matches the dropdown used in the Add Job modal.
   const PROJECT_TYPES = ['Retrofit','Wifi','RF','Q/R','New Install','Service','Other'];
   body += `<div class="exp-section">
     <div class="exp-sec-hdr">Job Identification <span class="exp-sec-cnt">editable</span></div>
@@ -2056,7 +2056,7 @@ function renderExpandedView(job){
       body += `<div style="margin-top:10px" class="exp-empty">⚠ Extended audit fields (Coordinator, FM, Last Note, Next Onsite) aren't populated. Re-run "Sync Audit" to pull these in.</div>`;
     }
   } else {
-    body += `<div class="exp-empty">No audit data matched to this job. Use "Sync Audit" to import a WO Audit workbook — the tool will match by WO # or Source Job #.</div>`;
+    body += `<div class="exp-empty">No audit data matched to this job. Use "Sync Audit" to import a WO Audit workbook - the tool will match by WO # or Source Job #.</div>`;
   }
   body += `</div>`;
 
@@ -2111,8 +2111,8 @@ function renderExpandedView(job){
       const rPct = pct(r);
       return `<div class="exp-rel-item" onclick="closeExpandedView();selJob('${r.id}')">
         <span class="exp-rel-wo">${esc(r.wo || r.srcJob || r.id)}</span>
-        <span style="color:var(--t3);font-size:10px">${esc(r.client||'—')}</span>
-        <span class="exp-rel-stage">${esc(rStage?.label||'—')}</span>
+        <span style="color:var(--t3);font-size:10px">${esc(r.client||'-')}</span>
+        <span class="exp-rel-stage">${esc(rStage?.label||'-')}</span>
         <span class="exp-rel-pct">${rPct}%</span>
       </div>`;
     }).join('')}</div>`;
@@ -2306,7 +2306,7 @@ function toggleStep(jid,sid,idx){
   job.ck[sid][idx].d=!job.ck[sid][idx].d;
   if(sid===job.stage&&job.ck[sid].every(s=>s.d)){
     const ci=job.stages.findIndex(s=>s.id===job.stage);
-    if(ci<job.stages.length-1){ setJobStage(job, job.stages[ci+1].id); activeTab=job.stage; toast('Stage complete — advanced to '+job.stages[ci+1].label); }
+    if(ci<job.stages.length-1){ setJobStage(job, job.stages[ci+1].id); activeTab=job.stage; toast('Stage complete - advanced to '+job.stages[ci+1].label); }
   }
   saveJobs();
   updatePanel(job); renderContent(); updateStatBar();
@@ -2327,7 +2327,7 @@ const ctxEl = document.getElementById('ctx');
 function showCtx(e,id){
   e.preventDefault(); e.stopPropagation(); ctxId=id;
   const job=getJob(id); if(!job) return;
-  document.getElementById('ctx-lbl').textContent=(job.city||'Unknown')+(job.state?', '+job.state:'')+(job.wo?' — '+job.wo:'');
+  document.getElementById('ctx-lbl').textContent=(job.city||'Unknown')+(job.state?', '+job.state:'')+(job.wo?' - '+job.wo:'');
   // Block toggle reflects current state
   const bb=document.getElementById('ctx-block');
   if(bb){ bb.innerHTML = isBlocked(job) ? '&#9989; Unblock Job' : '&#9940; Mark Blocked'; }
@@ -2421,7 +2421,7 @@ function editStages(job){
 // ══════════════════════════════════════════════════════
 // VIEWS
 // ══════════════════════════════════════════════════════
-// Embedded tools — the Job Board is the hub; these load inline as iframes.
+// Embedded tools - the Job Board is the hub; these load inline as iframes.
 const EMBED_TOOLS = { agent:'agent.html', dashboard:'Broadway_Unified_Ops_Dashboard.html', diagnostic:'Pilot_Proposal_Diagnostic.html', checkin:'Broadway_Coordinator_CheckIn.html' };
 const _toolFrames = {};
 if(window.self!==window.top) document.documentElement.classList.add('embedded');
@@ -2491,7 +2491,7 @@ function updateStatBar(){
   Object.entries(stageCounts).forEach(([lbl,{count,color}])=>{
     h+=`<span class="sitem">${esc(lbl.toUpperCase())}: <strong style="color:${color}">${count}</strong></span>`;
   });
-  document.getElementById('sbar').innerHTML = h + `<button class="role-toggle" onclick="toggleRole()" title="Switch role — controls who can add tasks. Soft toggle until sign-in is enabled.">&#128100; ${isSupervisor()?'Supervisor+':'Coordinator'}</button>`;
+  document.getElementById('sbar').innerHTML = h + `<button class="role-toggle" onclick="toggleRole()" title="Switch role - controls who can add tasks. Soft toggle until sign-in is enabled.">&#128100; ${isSupervisor()?'Supervisor+':'Coordinator'}</button>`;
 }
 
 function renderContent(){
@@ -2510,7 +2510,7 @@ function renderContent(){
     console.error('renderContent failed for view "'+view+'"', err);
     board.innerHTML = `<div style="padding:32px;max-width:520px">
       <div style="font-weight:700;color:var(--red);margin-bottom:6px">This view hit an error and couldn't render.</div>
-      <div style="font-size:12px;color:var(--t3);margin-bottom:10px">The rest of the app still works — switch views or reload. Details are in the browser console.</div>
+      <div style="font-size:12px;color:var(--t3);margin-bottom:10px">The rest of the app still works - switch views or reload. Details are in the browser console.</div>
       <pre style="font-size:10px;background:var(--card2);border:1px solid var(--b1);border-radius:8px;padding:10px;overflow:auto;white-space:pre-wrap">${esc(String(err && err.stack || err))}</pre>
     </div>`;
   }
@@ -2563,7 +2563,7 @@ function renderBoard(el, list){
       const p=pct(job), sp=spct(job,job.stage), end=projEnd(job);
       const typeColors={'Retrofit':'#06b6d4','Survey Only':'#8b5cf6','Reactive Service':'#ef4444','Preventative PM':'#10b981','Project':'#f59e0b'};
       const tc=typeColors[job.projectType]||'#64748b';
-      // Audit hint pill — only shown when an audit hint exists AND it
+      // Audit hint pill - only shown when an audit hint exists AND it
       // diverges from the current stage label per the synonym-aware
       // auditAligned() check (so "Materials Ordered" doesn't falsely
       // flag against a "PO Issued" stage, etc.).
@@ -2582,9 +2582,9 @@ function renderBoard(el, list){
         <input type="checkbox" class="jcard-check" ${isJobSelected(job.id)?'checked':''} title="Select for bulk edit" onclick="toggleJobSelect(event,'${job.id}')">
         <button class="jcard-menu" type="button" title="Job actions" aria-label="Actions for ${esc(job.wo||job.city||'job')}" onclick="showCtx(event,'${job.id}')">&#8943;</button>
         <span class="jcard-type" style="background:${tc}22;color:${tc}">${esc(job.projectType||'Job')}</span>${isBlocked(job)?`<span class="jcard-blockflag" title="Blocked">&#9940; Blocked</span>`:''}${showAuditPill?`<span class="jcard-audit" title="Audit says: ${esc(auditHint.status)}">Audit: ${esc(auditHint.status)}</span>`:''}${attnPill}${notePill}${actionPill}${taskPill}
-        <div class="jcard-wo">WO: <span>${esc(job.wo||'—')}</span></div>
+        <div class="jcard-wo">WO: <span>${esc(job.wo||'-')}</span></div>
         <div class="jcard-city" style="color:${stage.color}">${esc(job.city||'Unknown')}${job.state?', '+esc(job.state):''}</div>
-        <div class="jcard-meta">${esc(job.client||'—')} &bull; ${esc((job.vendor||'No vendor').slice(0,20))}</div>
+        <div class="jcard-meta">${esc(job.client||'-')} &bull; ${esc((job.vendor||'No vendor').slice(0,20))}</div>
         ${job.startDate?`<div class="jcard-dates">&#128197; ${job.startDate}${end?' &rarr; '+end:''}</div>`:''}
         <div class="pbar"><div class="pfill" style="width:${sp}%;background:${stage.color}"></div></div>
         <div class="ppct">Stage: ${sp}% &bull; Overall: ${p}%</div>
@@ -2605,16 +2605,16 @@ function renderList(el, list){
     const typeColors={'Retrofit':'#06b6d4','Survey Only':'#8b5cf6','Reactive Service':'#ef4444','Preventative PM':'#10b981','Project':'#f59e0b'};
     const tc=typeColors[job.projectType]||'#64748b';
     h+=`<tr class="${selId===job.id?'sel':''}" onclick="selJob('${job.id}')" oncontextmenu="showCtx(event,'${job.id}')">
-      <td style="color:var(--green-d);font-weight:700"><button class="row-menu" type="button" title="Job actions" aria-label="Actions for ${esc(job.wo||job.city||'job')}" onclick="event.stopPropagation();showCtx(event,'${job.id}')">&#8943;</button> ${esc(job.wo||'—')}${isBlocked(job)?' <span class="rpt-flag amber">⛔</span>':''}</td>
-      <td style="font-weight:700">${esc(job.client||'—')}</td>
-      <td>${esc(job.city||'—')}${job.state?', '+esc(job.state):''}</td>
+      <td style="color:var(--green-d);font-weight:700"><button class="row-menu" type="button" title="Job actions" aria-label="Actions for ${esc(job.wo||job.city||'job')}" onclick="event.stopPropagation();showCtx(event,'${job.id}')">&#8943;</button> ${esc(job.wo||'-')}${isBlocked(job)?' <span class="rpt-flag amber">⛔</span>':''}</td>
+      <td style="font-weight:700">${esc(job.client||'-')}</td>
+      <td>${esc(job.city||'-')}${job.state?', '+esc(job.state):''}</td>
       <td><span class="badge" style="background:${tc}22;color:${tc}">${esc(job.projectType||'Job')}</span></td>
-      <td><span class="badge" style="background:${stage?.color||'#64748b'}22;color:${stage?.color||'#64748b'}">${esc(stage?.label||'—')}</span></td>
-      <td style="color:var(--t3);max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(job.vendor||'—')}</td>
+      <td><span class="badge" style="background:${stage?.color||'#64748b'}22;color:${stage?.color||'#64748b'}">${esc(stage?.label||'-')}</span></td>
+      <td style="color:var(--t3);max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(job.vendor||'-')}</td>
       <td><div class="pbar" style="width:70px;margin-bottom:2px"><div class="pfill" style="width:${sp}%;background:${stage?.color||'#64748b'}"></div></div><span style="font-size:9px;color:${stage?.color||'#64748b'}">${sp}%</span></td>
       <td style="font-weight:700">${p}%</td>
-      <td style="font-size:10px;color:var(--t3)">${job.startDate||'—'}</td>
-      <td style="font-size:10px;color:var(--green-d)">${end||'—'}</td>
+      <td style="font-size:10px;color:var(--t3)">${job.startDate||'-'}</td>
+      <td style="font-size:10px;color:var(--green-d)">${end||'-'}</td>
     </tr>`;
   });
   el.innerHTML=h+'</tbody></table></div>';
@@ -2650,11 +2650,11 @@ function renderGantt(el, list){
         <span class="gantt-seg-lbl">${wn>3?s?.label:''}</span>
       </div>`;
     });
-    h+=`<div class="gantt-row${selId===job.id?' sel':''}" onclick="openSchedule('${job.id}')" oncontextmenu="showCtx(event,'${job.id}')"><div class="gantt-label"><div class="gantt-label-city">${esc(job.city||'Unknown')}${job.state?', '+esc(job.state):''}${projected?'':' <span class="gantt-actual-tag">actual</span>'}</div><div class="gantt-label-sub" style="color:${stage?.color||'var(--t3)'}">${esc(job.wo||'—')} &bull; ${esc(stage?.label||'')} &bull; ${esc(job.projectType||'')} </div></div><div class="gantt-bar-area">${bars}</div></div>`;
+    h+=`<div class="gantt-row${selId===job.id?' sel':''}" onclick="openSchedule('${job.id}')" oncontextmenu="showCtx(event,'${job.id}')"><div class="gantt-label"><div class="gantt-label-city">${esc(job.city||'Unknown')}${job.state?', '+esc(job.state):''}${projected?'':' <span class="gantt-actual-tag">actual</span>'}</div><div class="gantt-label-sub" style="color:${stage?.color||'var(--t3)'}">${esc(job.wo||'-')} &bull; ${esc(stage?.label||'')} &bull; ${esc(job.projectType||'')} </div></div><div class="gantt-bar-area">${bars}</div></div>`;
   });
   if(jn.length){
-    h+=`<div style="padding:12px 0 5px;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:2px;color:var(--t3)">No timeline yet (${jn.length}) — set a start date or move the job through a stage</div>`;
-    jn.forEach(job=>{ const stage=job.stages.find(s=>s.id===job.stage); h+=`<div class="gantt-row" onclick="openSchedule('${job.id}')" oncontextmenu="showCtx(event,'${job.id}')"><div class="gantt-label"><div class="gantt-label-city">${esc(job.city||'Unknown')}</div><div class="gantt-label-sub" style="color:${stage?.color||'var(--t3)'}">${esc(job.wo||'—')} &bull; ${esc(stage?.label||'')} </div></div><div class="gantt-bar-area"><div class="gantt-no-date"><span>Set start date in panel to place on timeline</span></div></div></div>`; });
+    h+=`<div style="padding:12px 0 5px;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:2px;color:var(--t3)">No timeline yet (${jn.length}) - set a start date or move the job through a stage</div>`;
+    jn.forEach(job=>{ const stage=job.stages.find(s=>s.id===job.stage); h+=`<div class="gantt-row" onclick="openSchedule('${job.id}')" oncontextmenu="showCtx(event,'${job.id}')"><div class="gantt-label"><div class="gantt-label-city">${esc(job.city||'Unknown')}</div><div class="gantt-label-sub" style="color:${stage?.color||'var(--t3)'}">${esc(job.wo||'-')} &bull; ${esc(stage?.label||'')} </div></div><div class="gantt-bar-area"><div class="gantt-no-date"><span>Set start date in panel to place on timeline</span></div></div></div>`; });
   }
   el.innerHTML=h+'</div>';
 }
@@ -2665,18 +2665,18 @@ function renderGantt(el, list){
 //
 // Reports is the analytical layer over jobs. Two sections:
 //
-//   1. Overview — counts of active/complete/in-flight; per-template
+//   1. Overview - counts of active/complete/in-flight; per-template
 //      breakdown; "stuck" jobs that have been in their current stage longer
 //      than its template duration target. This is the at-a-glance health check.
 //
-//   2. Bottleneck — per-stage rollup (mean, median, P90 time-in-stage) so we
+//   2. Bottleneck - per-stage rollup (mean, median, P90 time-in-stage) so we
 //      can see *which* stage is sticking. Median is interpolated (so even-sized
 //      sets behave correctly), P90 instead of raw max (one outlier shouldn't
 //      define the column).
 //
 // All metrics derive from the Job Board's own data (stageHistory + template
 // duration targets). The audit overlay is informational only and surfaces as
-// a divergence flag — it never feeds reporting math, because Mike's policy
+// a divergence flag - it never feeds reporting math, because Mike's policy
 // is "Job Board is truth."
 
 function percentile(sortedAsc, p){
@@ -2688,7 +2688,7 @@ function percentile(sortedAsc, p){
   return sortedAsc[lo] + (sortedAsc[hi] - sortedAsc[lo]) * (idx - lo);
 }
 
-// "Closed" detection — works across templates because every shipped template
+// "Closed" detection - works across templates because every shipped template
 // ends with an id of 'closed', but be defensive in case a custom stage list omits it.
 function isJobClosed(job){
   const s = job.stages.find(x => x.id === job.stage);
@@ -2697,7 +2697,7 @@ function isJobClosed(job){
 }
 
 // rptUiState is the open/closed flags for the inline editors inside the
-// Reports view. Kept outside `jobs` so it doesn't pollute persisted state —
+// Reports view. Kept outside `jobs` so it doesn't pollute persisted state -
 // editors collapse by default each session, which is the right behavior
 // (the editor is occasional, not always-on).
 const rptUiState = { targetsOpen:false, statMapOpen:false };
@@ -2781,11 +2781,11 @@ function renderStatMapEditorHTML(){
     <label class="statmap-toggle"><input type="checkbox" id="statmap-unmapped-only" onchange="filterStatMap()"> Unmapped only${unmappedList.length?` <span class="rpt-chip-cnt">${unmappedList.length}</span>`:''}</label>
   </div>`;
   h += '<table class="rpt-table" style="margin-bottom:8px"><thead><tr><th>Audit Status</th><th>→ Board Stage</th><th></th></tr></thead><tbody id="statmap-tbody">';
-  // Unmapped audit statuses first — editable rows so they can be mapped in place.
+  // Unmapped audit statuses first - editable rows so they can be mapped in place.
   unmappedList.forEach(u => {
     h += `<tr data-status="${esc(u.status.toLowerCase())}" data-unmapped="1">
       <td style="font-family:'DM Mono',monospace;font-size:11px">${esc(u.status)} <span class="rpt-flag amber">unmapped · ${u.count}</span></td>
-      <td><select onchange="onStatMapSet('${esc(u.status.toLowerCase()).replace(/'/g,'&#39;')}', this.value)" class="rpt-editor-input"><option value="">— (no mapping)</option>${optsHTML('')}</select></td>
+      <td><select onchange="onStatMapSet('${esc(u.status.toLowerCase()).replace(/'/g,'&#39;')}', this.value)" class="rpt-editor-input"><option value="">- (no mapping)</option>${optsHTML('')}</select></td>
       <td></td>
     </tr>`;
   });
@@ -2796,7 +2796,7 @@ function renderStatMapEditorHTML(){
     if(isUnmapped) return;
     h += `<tr data-status="${esc(k)}" data-unmapped="0">
       <td style="font-family:'DM Mono',monospace;font-size:11px">${esc(k)}${isUser?' <span class="rpt-flag green">custom</span>':''}</td>
-      <td><select onchange="onStatMapSet('${esc(k).replace(/'/g,'&#39;')}', this.value)" class="rpt-editor-input"><option value="">— (no mapping)</option>${optsHTML(eff[k])}</select></td>
+      <td><select onchange="onStatMapSet('${esc(k).replace(/'/g,'&#39;')}', this.value)" class="rpt-editor-input"><option value="">- (no mapping)</option>${optsHTML(eff[k])}</select></td>
       <td>${isUser ? `<button class="btn btn-ghost" style="font-size:9px;padding:2px 6px" onclick="onStatMapClear('${esc(k).replace(/'/g,'&#39;')}')">Clear</button>` : ''}</td>
     </tr>`;
   });
@@ -2804,7 +2804,7 @@ function renderStatMapEditorHTML(){
   h += `<div style="display:flex;gap:8px;align-items:center">
     <input type="text" id="statmap-new-key" placeholder="New audit status…" class="rpt-editor-input" style="flex:1">
     <select id="statmap-new-val" class="rpt-editor-input">
-      <option value="">— pick stage —</option>
+      <option value="">- pick stage -</option>
       ${stageOpts.map(o => `<option value="${esc(o)}">${esc(o)}</option>`).join('')}
     </select>
     <button class="btn btn-g" style="font-size:10px;padding:5px 10px" onclick="onStatMapAdd()">Add</button>
@@ -2903,7 +2903,7 @@ function wipByStage(list){
 }
 
 // Audit statuses present in auditByWo that have no entry in the effective
-// status map — i.e. statuses we can't reconcile to a board stage.
+// status map - i.e. statuses we can't reconcile to a board stage.
 function unmappedStatuses(){
   const map = effectiveStatusMap();
   const seen = new Map(); // lowerStatus -> {status, count}
@@ -2949,7 +2949,7 @@ function fmtShortDate(d){
 
 function controlChartSVG(data){
   if(data.insufficient){
-    return `<div class="rpt-empty">Need at least 2 closed jobs with movement history to compute control limits.${data.excluded?` (${data.excluded} closed job${data.excluded===1?'':'s'} excluded — imported without stage history.)`:''}</div>`;
+    return `<div class="rpt-empty">Need at least 2 closed jobs with movement history to compute control limits.${data.excluded?` (${data.excluded} closed job${data.excluded===1?'':'s'} excluded - imported without stage history.)`:''}</div>`;
   }
   const W=720, H=260, padL=44, padR=16, padT=16, padB=42;
   const plotW = W-padL-padR, plotH = H-padT-padB;
@@ -2973,7 +2973,7 @@ function controlChartSVG(data){
   const dots = pts.map((p,i)=>{
     const c = p.ooc ? '#dc2626' : '#1a5f3e';
     const r = p.ooc ? 5 : 3.5;
-    return `<circle cx="${x(i).toFixed(1)}" cy="${y(p.ct).toFixed(1)}" r="${r}" fill="${c}" stroke="#fff" stroke-width="1.5"><title>${esc(p.job.wo||p.job.city||'job')} — ${fmtShortDate(p.date)} — ${p.ct.toFixed(1)}d${p.ooc?' (out of control)':''}</title></circle>`;
+    return `<circle cx="${x(i).toFixed(1)}" cy="${y(p.ct).toFixed(1)}" r="${r}" fill="${c}" stroke="#fff" stroke-width="1.5"><title>${esc(p.job.wo||p.job.city||'job')} - ${fmtShortDate(p.date)} - ${p.ct.toFixed(1)}d${p.ooc?' (out of control)':''}</title></circle>`;
   }).join('');
   return `<svg viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Cycle time control chart">
     ${grid}
@@ -3145,9 +3145,9 @@ function jobFinance(job){
   return {contract, cost, approvedCO, revised, margin, marginPct, set: !!(fin.contract||fin.cost)};
 }
 
-// ── PHASE 9: at-risk rollup — aggregate every risk signal across active jobs ──
+// ── PHASE 9: at-risk rollup - aggregate every risk signal across active jobs ──
 // Per-job compact attention flags for board cards / list rows. Read-only and
-// fully derived from existing data — adds no new stored fields. Mirrors the
+// fully derived from existing data - adds no new stored fields. Mirrors the
 // per-job signals in atRiskItems() but deliberately EXCLUDES "Blocked" (already
 // shown on the card via jcard-blockflag) and cross-job vendor conflicts. This is
 // intentionally a separate, lightweight function rather than a refactor of the
@@ -3283,7 +3283,7 @@ function renderReports(el, list){
     return {job:j, stage:s, target:tgt, days:t};
   }).filter(r => r.target && r.days !== null && r.days > r.target).sort((a,b) => b.days - a.days);
 
-  // Audit divergences — WOs that exist in both Job Board and audit, where the
+  // Audit divergences - WOs that exist in both Job Board and audit, where the
   // audit status meaningfully disagrees with the current stage label. Uses the
   // synonym-aware auditAligned() check so "Materials Ordered" matches "PO Issued"
   // and similar real-world synonyms don't show up as false divergences.
@@ -3365,7 +3365,7 @@ function renderReports(el, list){
     });
     h += '</div>';
   }
-  // Unmapped status chips — clicking opens the status-map editor.
+  // Unmapped status chips - clicking opens the status-map editor.
   if(unmapped.length){
     h += '<div class="rpt-unmapped"><span class="rpt-unmapped-lbl">Unmapped audit statuses:</span> ';
     h += unmapped.map(u => `<button class="rpt-chip" onclick="gotoMapping('${esc(u.status).replace(/'/g,'&#39;')}')" title="Map this status">${esc(u.status)} <span class="rpt-chip-cnt">${u.count}</span></button>`).join('');
@@ -3389,10 +3389,10 @@ function renderReports(el, list){
       const st = r.job.stages.find(s=>s.id===r.job.stage);
       const sev = (r.age||0) > 14 ? 'red' : (r.age||0) > 7 ? 'amber' : 'green';
       h += `<tr style="cursor:pointer" onclick="selJob('${r.job.id}')">
-        <td style="color:var(--green-d);font-weight:700">${esc(r.job.wo||'—')} <span class="rpt-flag amber">⛔ blocked</span></td>
-        <td>${esc(r.job.city||'—')}${r.job.state?', '+esc(r.job.state):''}</td>
-        <td><span class="badge" style="background:${st?.color||'#64748b'}22;color:${st?.color||'#64748b'}">${esc(st?.label||'—')}</span></td>
-        <td class="num"><span class="rpt-flag ${sev}">${r.age!=null?r.age.toFixed(1):'—'}</span></td>
+        <td style="color:var(--green-d);font-weight:700">${esc(r.job.wo||'-')} <span class="rpt-flag amber">⛔ blocked</span></td>
+        <td>${esc(r.job.city||'-')}${r.job.state?', '+esc(r.job.state):''}</td>
+        <td><span class="badge" style="background:${st?.color||'#64748b'}22;color:${st?.color||'#64748b'}">${esc(st?.label||'-')}</span></td>
+        <td class="num"><span class="rpt-flag ${sev}">${r.age!=null?r.age.toFixed(1):'-'}</span></td>
       </tr>`;
     });
     h += '</tbody></table>';
@@ -3418,7 +3418,7 @@ function renderReports(el, list){
       const badge = r.status==='Starting'?'green':r.status==='Finishing'?'amber':'';
       h += `<tr style="cursor:pointer" onclick="openSchedule('${r.job.id}')">
         <td style="font-family:'DM Mono',monospace;font-size:10px;color:var(--t3)">${fmtShortDate(new Date(r.key+'T00:00:00'))}</td>
-        <td style="font-weight:600">${esc(r.job.city||'—')}${r.job.state?', '+esc(r.job.state):''}<div style="font-size:9px;color:var(--t3)">${esc(r.job.wo||'')}</div></td>
+        <td style="font-weight:600">${esc(r.job.city||'-')}${r.job.state?', '+esc(r.job.state):''}<div style="font-size:9px;color:var(--t3)">${esc(r.job.wo||'')}</div></td>
         <td>${r.critical?'<span class="rpt-flag red">CP</span> ':''}${esc(r.task.name)}</td>
         <td style="font-family:'DM Mono',monospace;font-size:10px">${fmtSchedDate(r.start)}</td>
         <td style="font-family:'DM Mono',monospace;font-size:10px">${fmtSchedDate(r.finish)}</td>
@@ -3472,8 +3472,8 @@ function renderReports(el, list){
     h += '<table class="rpt-table"><thead><tr><th>Crew / Vendor</th><th>Job A</th><th>Job B</th><th>Overlap</th></tr></thead><tbody>';
     conflicts.forEach(c=>{
       h += `<tr><td style="font-weight:700">${esc(c.vendor)} <span class="rpt-flag red">double-booked</span></td>
-        <td style="cursor:pointer" onclick="openSchedule('${c.a.job.id}')">${esc(c.a.job.city||'—')}: ${esc(c.a.t.name)}<div style="font-size:9px;color:var(--t3)">${fmtSchedDate(c.a.start)} → ${fmtSchedDate(c.a.finish)}</div></td>
-        <td style="cursor:pointer" onclick="openSchedule('${c.b.job.id}')">${esc(c.b.job.city||'—')}: ${esc(c.b.t.name)}<div style="font-size:9px;color:var(--t3)">${fmtSchedDate(c.b.start)} → ${fmtSchedDate(c.b.finish)}</div></td>
+        <td style="cursor:pointer" onclick="openSchedule('${c.a.job.id}')">${esc(c.a.job.city||'-')}: ${esc(c.a.t.name)}<div style="font-size:9px;color:var(--t3)">${fmtSchedDate(c.a.start)} → ${fmtSchedDate(c.a.finish)}</div></td>
+        <td style="cursor:pointer" onclick="openSchedule('${c.b.job.id}')">${esc(c.b.job.city||'-')}: ${esc(c.b.t.name)}<div style="font-size:9px;color:var(--t3)">${fmtSchedDate(c.b.start)} → ${fmtSchedDate(c.b.finish)}</div></td>
         <td style="font-family:'DM Mono',monospace;font-size:10px;color:var(--red)">${fmtSchedDate(c.os)} → ${fmtSchedDate(c.oe)}</td></tr>`;
     });
     h += '</tbody></table>';
@@ -3489,7 +3489,7 @@ function renderReports(el, list){
     let tC=0,tCost=0,tM=0;
     h += '<table class="rpt-table"><thead><tr><th>Job</th><th class="num">Revised Contract</th><th class="num">Actual Cost</th><th class="num">Margin</th><th class="num">Margin %</th></tr></thead><tbody>';
     finJobs.forEach(({job,f})=>{ tC+=f.revised; tCost+=f.cost; tM+=f.margin;
-      h += `<tr style="cursor:pointer" onclick="selJob('${job.id}')"><td style="font-weight:600">${esc(job.city||'—')}${job.state?', '+esc(job.state):''}<div style="font-size:9px;color:var(--t3)">${esc(job.wo||'')}</div></td>
+      h += `<tr style="cursor:pointer" onclick="selJob('${job.id}')"><td style="font-weight:600">${esc(job.city||'-')}${job.state?', '+esc(job.state):''}<div style="font-size:9px;color:var(--t3)">${esc(job.wo||'')}</div></td>
         <td class="num">$${f.revised.toLocaleString()}</td><td class="num">$${f.cost.toLocaleString()}</td>
         <td class="num" style="font-weight:700;color:${f.margin<0?'var(--red)':'var(--green-d)'}">$${f.margin.toLocaleString()}</td>
         <td class="num"><span class="rpt-flag ${f.marginPct<0?'red':f.marginPct<10?'amber':'green'}">${f.marginPct}%</span></td></tr>`;
@@ -3503,7 +3503,7 @@ function renderReports(el, list){
   // CYCLE TIME CONTROL CHART
   h += '<div class="rpt-section">';
   h += `<div class="rpt-section-hdr">Cycle Time Control Chart <span style="color:var(--t3);font-weight:600">(closed jobs, individuals/XmR)</span></div>`;
-  h += `<div class="rpt-note">Approximation from in-tool stage history${cc.excluded?` — ${cc.excluded} closed job${cc.excluded===1?'':'s'} excluded (imported without movement history)`:''}. Limits are 3-sigma from the average moving range; LCL floored at 0.</div>`;
+  h += `<div class="rpt-note">Approximation from in-tool stage history${cc.excluded?` - ${cc.excluded} closed job${cc.excluded===1?'':'s'} excluded (imported without movement history)`:''}. Limits are 3-sigma from the average moving range; LCL floored at 0.</div>`;
   h += controlChartSVG(cc);
   // Out-of-control drill-down
   const ooc = (cc.points||[]).filter(p=>p.ooc);
@@ -3511,8 +3511,8 @@ function renderReports(el, list){
     h += '<table class="rpt-table" style="margin-top:10px"><thead><tr><th>WO</th><th>City</th><th>Completed</th><th class="num">Cycle Time (d)</th><th></th></tr></thead><tbody>';
     ooc.forEach(p => {
       h += `<tr style="cursor:pointer" onclick="selJob('${p.job.id}')">
-        <td style="color:var(--green-d);font-weight:700">${esc(p.job.wo||'—')}</td>
-        <td>${esc(p.job.city||'—')}${p.job.state?', '+esc(p.job.state):''}</td>
+        <td style="color:var(--green-d);font-weight:700">${esc(p.job.wo||'-')}</td>
+        <td>${esc(p.job.city||'-')}${p.job.state?', '+esc(p.job.state):''}</td>
         <td style="font-size:10px;color:var(--t3)">${fmtShortDate(p.date)}</td>
         <td class="num">${p.ct.toFixed(1)}</td>
         <td><span class="rpt-flag red">out of control</span></td>
@@ -3527,13 +3527,13 @@ function renderReports(el, list){
   // CUMULATIVE FLOW
   h += '<div class="rpt-section">';
   h += `<div class="rpt-section-hdr">Cumulative Flow <span style="color:var(--t3);font-weight:600">(approximation)</span></div>`;
-  h += `<div class="rpt-note">Reconstructed from stage-entry history, not daily snapshots${cfd.excluded?` — ${cfd.excluded} job${cfd.excluded===1?'':'s'} without history shown only from entry date`:''}. Treat as a directional view of flow, not an audited record.</div>`;
+  h += `<div class="rpt-note">Reconstructed from stage-entry history, not daily snapshots${cfd.excluded?` - ${cfd.excluded} job${cfd.excluded===1?'':'s'} without history shown only from entry date`:''}. Treat as a directional view of flow, not an audited record.</div>`;
   h += cfdSVG(cfd);
   h += '</div>';
 
   // BOTTLENECK
   h += '<div class="rpt-section">';
-  h += `<div class="rpt-section-hdr">Bottleneck — Time in Stage
+  h += `<div class="rpt-section-hdr">Bottleneck - Time in Stage
     <button class="btn btn-ghost" style="font-size:9px;padding:3px 8px" onclick="toggleTargetsEditor()">${rptUiState.targetsOpen?'Hide':'Edit'} Targets</button>
   </div>`;
   if(rptUiState.targetsOpen) h += renderTargetsEditorHTML();
@@ -3542,14 +3542,14 @@ function renderReports(el, list){
   } else {
     h += '<table class="rpt-table"><thead><tr><th>Stage</th><th class="num">Jobs</th><th class="num">Target (d)</th><th class="num">Median</th><th class="num">P90</th><th class="num">Mean</th><th class="num">Past Target</th><th></th></tr></thead><tbody>';
     stageRows.forEach(r => {
-      const fmt = v => v===null||v===undefined ? '—' : v.toFixed(1);
+      const fmt = v => v===null||v===undefined ? '-' : v.toFixed(1);
       const flagPill = r.flag==='red' ? '<span class="rpt-flag red">Red</span>'
                     : r.flag==='amber' ? '<span class="rpt-flag amber">Amber</span>'
                     : '<span class="rpt-flag green">Green</span>';
       h += `<tr>
         <td><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${r.color};margin-right:6px;vertical-align:middle"></span>${esc(r.label)}${flagPill}</td>
         <td class="num">${r.count}</td>
-        <td class="num">${r.target||'—'}</td>
+        <td class="num">${r.target||'-'}</td>
         <td class="num">${fmt(r.median)}</td>
         <td class="num">${fmt(r.p90)}</td>
         <td class="num">${fmt(r.mean)}</td>
@@ -3571,16 +3571,16 @@ function renderReports(el, list){
       const over = r.days - r.target;
       const sev = over > r.target ? 'red' : 'amber';
       h += `<tr class="${idx>=50?'bn-row-hidden':''}" style="cursor:pointer" onclick="selJob('${r.job.id}')">
-        <td style="color:var(--green-d);font-weight:700">${esc(r.job.wo||'—')}</td>
-        <td>${esc(r.job.city||'—')}${r.job.state?', '+esc(r.job.state):''}</td>
-        <td>${esc(r.job.client||'—')}</td>
-        <td><span class="badge" style="background:${r.stage?.color||'#64748b'}22;color:${r.stage?.color||'#64748b'}">${esc(r.stage?.label||'—')}</span></td>
+        <td style="color:var(--green-d);font-weight:700">${esc(r.job.wo||'-')}</td>
+        <td>${esc(r.job.city||'-')}${r.job.state?', '+esc(r.job.state):''}</td>
+        <td>${esc(r.job.client||'-')}</td>
+        <td><span class="badge" style="background:${r.stage?.color||'#64748b'}22;color:${r.stage?.color||'#64748b'}">${esc(r.stage?.label||'-')}</span></td>
         <td class="num">${r.days.toFixed(1)}</td>
         <td class="num">${r.target}</td>
         <td class="num"><span class="rpt-flag ${sev}">+${over.toFixed(1)}d</span></td>
       </tr>`;
     });
-    if(stuck.length > 50) h += `<tr class="bn-more-row"><td colspan="7" onclick="bnExpandRows(this)">+${stuck.length-50} more — click to show all</td></tr>`;
+    if(stuck.length > 50) h += `<tr class="bn-more-row"><td colspan="7" onclick="bnExpandRows(this)">+${stuck.length-50} more - click to show all</td></tr>`;
     h += '</tbody></table>';
   }
   h += '</div>';
@@ -3594,17 +3594,17 @@ function renderReports(el, list){
     </div>`;
     if(rptUiState.statMapOpen) h += renderStatMapEditorHTML();
     if(!auditDiverged.length){
-      h += '<div class="rpt-empty">No divergences — audit and board agree.</div>';
+      h += '<div class="rpt-empty">No divergences - audit and board agree.</div>';
     } else {
       h += '<table class="rpt-table"><thead><tr><th>WO</th><th>City</th><th>Board Stage</th><th>Audit Status</th></tr></thead><tbody>';
       auditDiverged.slice(0,50).forEach(j => {
         const stage = j.stages.find(s=>s.id===j.stage);
         const a = auditByWo[j.wo];
         h += `<tr style="cursor:pointer" onclick="selJob('${j.id}')">
-          <td style="color:var(--green-d);font-weight:700">${esc(j.wo||'—')}</td>
-          <td>${esc(j.city||'—')}${j.state?', '+esc(j.state):''}</td>
-          <td><span class="badge" style="background:${stage?.color||'#64748b'}22;color:${stage?.color||'#64748b'}">${esc(stage?.label||'—')}</span></td>
-          <td style="color:var(--t3)">${esc(a.status||'—')}</td>
+          <td style="color:var(--green-d);font-weight:700">${esc(j.wo||'-')}</td>
+          <td>${esc(j.city||'-')}${j.state?', '+esc(j.state):''}</td>
+          <td><span class="badge" style="background:${stage?.color||'#64748b'}22;color:${stage?.color||'#64748b'}">${esc(stage?.label||'-')}</span></td>
+          <td style="color:var(--t3)">${esc(a.status||'-')}</td>
         </tr>`;
       });
       h += '</tbody></table>';
@@ -3619,7 +3619,7 @@ function renderReports(el, list){
 // ── AUDIT IMPORT ──
 // Supplemental: reads a WO Audit-shaped sheet, keyed by WO # (matches against
 // existing job.wo or job.srcJob). Stores a hint per WO. Does NOT touch
-// job.stage, job.ck, or job.stageHistory — those stay manual.
+// job.stage, job.ck, or job.stageHistory - those stay manual.
 function processAuditFile(inputEl){
   const f = inputEl.files && inputEl.files[0]; if(!f) return;
   const reader = new FileReader();
@@ -3675,7 +3675,7 @@ function processAuditFile(inputEl){
       saveAudit();
       inputEl.value = '';
       render();
-      toast(`Audit synced — ${matched} matched, ${unmatched} unmatched (no override)`);
+      toast(`Audit synced - ${matched} matched, ${unmatched} unmatched (no override)`);
     } catch(err){ toast('Audit import failed: '+err.message); console.error(err); }
   };
   reader.readAsArrayBuffer(f);
@@ -3983,7 +3983,7 @@ function exportScheduleExcel(){
   const reg=sched.tasks.filter(t=>!t.summary&&t._finish);
   const projFinish=reg.length?reg.reduce((a,t)=>t._finish>a?t._finish:a,reg[0]._finish):'';
   const meta=[
-    ['Broadway National — Project Schedule'],
+    ['Broadway National - Project Schedule'],
     ['Job', (job.city||'')+(job.state?', '+job.state:'')],
     ['WO', job.wo||''],
     ['Project Start', sched.start||''],
@@ -4029,7 +4029,7 @@ function printSchedule(){
   });
   const win=window.open('','_blank');
   if(!win){ toast('Allow pop-ups to print'); return; }
-  win.document.write(`<!doctype html><html><head><title>Schedule — ${esc(job.city||'')}</title><style>
+  win.document.write(`<!doctype html><html><head><title>Schedule - ${esc(job.city||'')}</title><style>
     body{font-family:Arial,Helvetica,sans-serif;margin:22px;color:#1e293b}
     h1{font-size:17px;margin:0 0 2px;color:#1a5f3e} h2{font-size:13px;margin:18px 0 6px}
     .meta{font-size:12px;color:#475569;margin-bottom:14px}
@@ -4044,8 +4044,8 @@ function printSchedule(){
     .gb{position:absolute;top:50%;transform:translateY(-50%);height:9px;border-radius:2px}
     @media print{button{display:none}}
   </style></head><body>
-    <h1>Broadway National — Project Schedule</h1>
-    <div class="meta"><b>${esc((job.city||'')+(job.state?', '+job.state:''))}</b> &nbsp;·&nbsp; WO ${esc(job.wo||'—')} &nbsp;·&nbsp; Start ${fmtSchedDate(sched.start)} &nbsp;·&nbsp; Finish ${fmtSchedDate(mx)} &nbsp;·&nbsp; ${scheduleProgress(sched)}% complete${hasBase?' &nbsp;·&nbsp; Baseline finish '+fmtSchedDate(sched.baseline.finish):''}</div>
+    <h1>Broadway National - Project Schedule</h1>
+    <div class="meta"><b>${esc((job.city||'')+(job.state?', '+job.state:''))}</b> &nbsp;·&nbsp; WO ${esc(job.wo||'-')} &nbsp;·&nbsp; Start ${fmtSchedDate(sched.start)} &nbsp;·&nbsp; Finish ${fmtSchedDate(mx)} &nbsp;·&nbsp; ${scheduleProgress(sched)}% complete${hasBase?' &nbsp;·&nbsp; Baseline finish '+fmtSchedDate(sched.baseline.finish):''}</div>
     <table><thead><tr><th>ID</th><th>Task</th><th>Dur</th><th>Start</th><th>Finish</th><th>Float</th><th>%</th>${hasBase?'<th>Var</th>':''}<th>Predecessors</th></tr></thead><tbody>${trows}</tbody></table>
     <h2>Gantt</h2>${grows}
     <button onclick="window.print()" style="margin-top:16px;padding:8px 16px;cursor:pointer">Print / Save as PDF</button>
@@ -4082,7 +4082,7 @@ function schedDeleteTask(taskId){
   saveJobs(); renderScheduleModal(job);
 }
 
-function fmtSchedDate(ds){ if(!ds) return '—'; const d=new Date(ds+'T00:00:00'); return d.toLocaleDateString('en-US',{weekday:'short',month:'numeric',day:'numeric'}); }
+function fmtSchedDate(ds){ if(!ds) return '-'; const d=new Date(ds+'T00:00:00'); return d.toLocaleDateString('en-US',{weekday:'short',month:'numeric',day:'numeric'}); }
 
 function renderScheduleModal(job){
   const m=document.getElementById('sched-modal'); if(!m) return;
@@ -4160,11 +4160,11 @@ function renderScheduleModal(job){
       <div class="sg-c sg-dur"><input type="number" min="1" value="${t.dur||1}" onchange="schedEditTask(${t.id},'dur',this.value)" ${t.summary?'disabled':''}></div>
       <div class="sg-c sg-date">${t.summary?fmtSchedDate(t._start):`<span class="sg-startwrap${pinned?' pinned':''}">${pinned?`<input type="date" value="${t.manualStart}" onchange="schedEditTask(${t.id},'manualStart',this.value)"><button class="sg-pin" title="Clear override" onclick="schedClearPin(${t.id})">&#10005;</button>`:`${fmtSchedDate(t._start)}<button class="sg-pin" title="Pin / override date" onclick="schedPinTask(${t.id})">&#128204;</button>`}</span>`}</div>
       <div class="sg-c sg-date">${fmtSchedDate(t._finish)}</div>
-      <div class="sg-c sg-float${(!t.summary&&t._critical)?' crit':''}">${t.summary?'':(fl===''?'—':(fl+'d'))}</div>
+      <div class="sg-c sg-float${(!t.summary&&t._critical)?' crit':''}">${t.summary?'':(fl===''?'-':(fl+'d'))}</div>
       <div class="sg-c sg-pct">${t.summary?(projPct+'%'):`<input type="number" min="0" max="100" value="${t.pct||0}" onchange="schedEditTask(${t.id},'pct',this.value)">`}</div>
-      ${hasBase?`<div class="sg-c sg-var">${(()=>{ if(t.summary){ const v=baseVarStr?(curFinish>=sched.baseline.finish?bizDiff(sched.baseline.finish,curFinish):-bizDiff(curFinish,sched.baseline.finish)):null; return v==null?'—':(v>0?'<span class="var-late">+'+v+'d</span>':v<0?'<span class="var-early">'+v+'d</span>':'<span class="var-on">0</span>'); } const vv=taskVariance(sched,t); return vv==null?'—':(vv>0?'<span class="var-late">+'+vv+'d</span>':vv<0?'<span class="var-early">'+vv+'d</span>':'<span class="var-on">0</span>'); })()}</div>`:''}
-      <div class="sg-c sg-crew">${t.summary?'':`<input list="sched-vendors" value="${esc(t.vendor||'')}" placeholder="—" onchange="schedEditTask(${t.id},'vendor',this.value)">`}</div>
-      <div class="sg-c sg-preds">${t.summary?'':`<input value="${esc(predsToStr(t.preds))}" placeholder="—" onchange="schedEditTask(${t.id},'preds',this.value)">`}</div>
+      ${hasBase?`<div class="sg-c sg-var">${(()=>{ if(t.summary){ const v=baseVarStr?(curFinish>=sched.baseline.finish?bizDiff(sched.baseline.finish,curFinish):-bizDiff(curFinish,sched.baseline.finish)):null; return v==null?'-':(v>0?'<span class="var-late">+'+v+'d</span>':v<0?'<span class="var-early">'+v+'d</span>':'<span class="var-on">0</span>'); } const vv=taskVariance(sched,t); return vv==null?'-':(vv>0?'<span class="var-late">+'+vv+'d</span>':vv<0?'<span class="var-early">'+vv+'d</span>':'<span class="var-on">0</span>'); })()}</div>`:''}
+      <div class="sg-c sg-crew">${t.summary?'':`<input list="sched-vendors" value="${esc(t.vendor||'')}" placeholder="-" onchange="schedEditTask(${t.id},'vendor',this.value)">`}</div>
+      <div class="sg-c sg-preds">${t.summary?'':`<input value="${esc(predsToStr(t.preds))}" placeholder="-" onchange="schedEditTask(${t.id},'preds',this.value)">`}</div>
       <div class="sg-c sg-del">${t.summary?'':`<button onclick="schedDeleteTask(${t.id})" title="Delete task">&#10005;</button>`}</div>
     </div>`;
   });
@@ -4286,7 +4286,7 @@ function renderNotes(job){
       <select id="note-type" class="note-type-sel">${NOTE_TYPES.map(t=>`<option value="${t}"${t==='Recap'?' selected':''}>${t}</option>`).join('')}</select>
       <label class="note-pin-lbl"><input type="checkbox" id="note-pin"> Pin to top</label>
     </div>
-    <textarea id="note-text" class="note-text" placeholder="Add a note — vendor update, client approval, or a Recap (current status / next step / blocker)…" onkeydown="if((event.metaKey||event.ctrlKey)&&event.key==='Enter')addNote()"></textarea>
+    <textarea id="note-text" class="note-text" placeholder="Add a note - vendor update, client approval, or a Recap (current status / next step / blocker)…" onkeydown="if((event.metaKey||event.ctrlKey)&&event.key==='Enter')addNote()"></textarea>
     <div class="note-comp-actions"><span class="note-hint">Tip: pin a Recap to keep current status / next step / blocker at the top.</span><button class="btn btn-g" onclick="addNote()">Add Note</button></div>
   </div>`;
   // Thread
@@ -4342,8 +4342,8 @@ function renderCloseout(job){
   else { h+='<table class="co-table"><thead><tr><th>Item</th><th>Location</th><th>Responsible</th><th>Status</th><th></th></tr></thead><tbody>';
     c.punch.forEach(p=>{ const done=p.status==='Done';
       h+=`<tr class="${done?'co-done':''}"><td><input value="${esc(p.item)}" placeholder="Describe defect…" onchange="coEditPunch('${p.id}','item',this.value)"></td>
-        <td><input value="${esc(p.location)}" placeholder="—" onchange="coEditPunch('${p.id}','location',this.value)"></td>
-        <td><input value="${esc(p.vendor)}" placeholder="—" onchange="coEditPunch('${p.id}','vendor',this.value)"></td>
+        <td><input value="${esc(p.location)}" placeholder="-" onchange="coEditPunch('${p.id}','location',this.value)"></td>
+        <td><input value="${esc(p.vendor)}" placeholder="-" onchange="coEditPunch('${p.id}','vendor',this.value)"></td>
         <td><select onchange="coEditPunch('${p.id}','status',this.value)">${['Open','In Progress','Done'].map(s=>`<option ${p.status===s?'selected':''}>${s}</option>`).join('')}</select></td>
         <td class="co-del"><button onclick="coDelPunch('${p.id}')" title="Delete">&#10005;</button></td></tr>`; });
     h+='</tbody></table>'; }
@@ -4357,7 +4357,7 @@ function renderCloseout(job){
       h+=`<tr class="${fail?'co-fail':pass?'co-pass':''}"><td><input value="${esc(it.name)}" placeholder="e.g. Final CO" onchange="coEditInsp('${it.id}','name',this.value)"></td>
         <td><input type="date" value="${it.date||''}" onchange="coEditInsp('${it.id}','date',this.value)"></td>
         <td><select onchange="coEditInsp('${it.id}','result',this.value)">${['Pending','Pass','Fail'].map(s=>`<option ${it.result===s?'selected':''}>${s}</option>`).join('')}</select></td>
-        <td>${fail?`<input type="date" value="${it.reinspectDate||''}" onchange="coEditInsp('${it.id}','reinspectDate',this.value)">`:'<span class="co-na">—</span>'}</td>
+        <td>${fail?`<input type="date" value="${it.reinspectDate||''}" onchange="coEditInsp('${it.id}','reinspectDate',this.value)">`:'<span class="co-na">-</span>'}</td>
         <td class="co-del"><button onclick="coDelInsp('${it.id}')" title="Delete">&#10005;</button></td></tr>`; });
     h+='</tbody></table>'; }
   h+='</div>';
@@ -4374,7 +4374,7 @@ function renderCloseout(job){
 
 
 // ══════════════════════════════════════════════════════
-// PHASE 7: PROJECT CONTROLS — submittals, RFIs, change orders, permits
+// PHASE 7: PROJECT CONTROLS - submittals, RFIs, change orders, permits
 // ══════════════════════════════════════════════════════
 let logsJobId=null;
 function ensureLogs(job){ if(!job.logs)job.logs={}; const L=job.logs; if(!L.submittals)L.submittals=[]; if(!L.rfis)L.rfis=[]; if(!L.cos)L.cos=[]; if(!L.permits)L.permits=[]; if(!L.vendorPOs)L.vendorPOs=[]; if(!L.supplierPOs)L.supplierPOs=[]; return L; }
@@ -4429,7 +4429,7 @@ function renderLogs(job){
       <div class="fin-cell"><label>Margin %</label><div class="fin-ro strong" style="color:${F.marginPct<0?'var(--red)':'var(--green-d)'}">${F.marginPct}%</div></div>
     </div></div>`;
 
-  // Vendor POs — trade contractor assignments (NTE, scope, scheduled, status)
+  // Vendor POs - trade contractor assignments (NTE, scope, scheduled, status)
   h+=`<div class="co-sect"><div class="co-sect-hdr">Vendor POs <button class="btn btn-ghost co-add" onclick="lgAdd('vendorPOs')">+ Vendor PO</button></div>`;
   if(!L.vendorPOs.length) h+='<div class="rpt-empty">No vendor POs.</div>';
   else { h+='<table class="co-table"><thead><tr><th>Vendor</th><th>NTE ($)</th><th>Scope</th><th>Scheduled</th><th>Status</th><th></th></tr></thead><tbody>';
@@ -4437,7 +4437,7 @@ function renderLogs(job){
     h+='</tbody></table>'; }
   h+='</div>';
 
-  // Supplier POs — materials/supplier orders (NTE, items, needed-by, status)
+  // Supplier POs - materials/supplier orders (NTE, items, needed-by, status)
   h+=`<div class="co-sect"><div class="co-sect-hdr">Supplier POs <button class="btn btn-ghost co-add" onclick="lgAdd('supplierPOs')">+ Supplier PO</button></div>`;
   if(!L.supplierPOs.length) h+='<div class="rpt-empty">No supplier POs.</div>';
   else { h+='<table class="co-table"><thead><tr><th>Supplier</th><th>NTE ($)</th><th>Items / Scope</th><th>Needed</th><th>Status</th><th></th></tr></thead><tbody>';
@@ -4449,7 +4449,7 @@ function renderLogs(job){
   if(!L.submittals.length) h+='<div class="rpt-empty">No submittals.</div>';
   else { h+='<table class="co-table"><thead><tr><th>Item</th><th>Spec / Ref</th><th>Status</th><th>Submitted</th><th>Returned</th><th></th></tr></thead><tbody>';
     L.submittals.forEach(x=>{ const late=x.status!=='Approved'&&x.status!=='Rejected'&&x.submitted&&daysUntil(x.submitted)<-14;
-      h+=`<tr class="${x.status==='Approved'?'co-pass':x.status==='Rejected'?'co-fail':''}"><td>${inp('submittals',x.id,'item',x.item,'Describe…')}</td><td>${inp('submittals',x.id,'ref',x.ref,'—')}</td><td>${sel('submittals',x.id,'status',x.status,['Draft','Submitted','Approved','Rejected','Revise & Resubmit'])}${late?' <span class="lg-flag red">aging</span>':''}</td><td>${inp('submittals',x.id,'submitted',x.submitted,'','date')}</td><td>${inp('submittals',x.id,'returned',x.returned,'','date')}</td><td class="co-del"><button onclick="lgDel('submittals','${x.id}')">&#10005;</button></td></tr>`; });
+      h+=`<tr class="${x.status==='Approved'?'co-pass':x.status==='Rejected'?'co-fail':''}"><td>${inp('submittals',x.id,'item',x.item,'Describe…')}</td><td>${inp('submittals',x.id,'ref',x.ref,'-')}</td><td>${sel('submittals',x.id,'status',x.status,['Draft','Submitted','Approved','Rejected','Revise & Resubmit'])}${late?' <span class="lg-flag red">aging</span>':''}</td><td>${inp('submittals',x.id,'submitted',x.submitted,'','date')}</td><td>${inp('submittals',x.id,'returned',x.returned,'','date')}</td><td class="co-del"><button onclick="lgDel('submittals','${x.id}')">&#10005;</button></td></tr>`; });
     h+='</tbody></table>'; }
   h+='</div>';
 
@@ -4475,7 +4475,7 @@ function renderLogs(job){
   if(!L.permits.length) h+='<div class="rpt-empty">No permits.</div>';
   else { h+='<table class="co-table"><thead><tr><th>Type</th><th>Permit #</th><th>Status</th><th>Issued</th><th>Expiration</th><th></th></tr></thead><tbody>';
     L.permits.forEach(x=>{ const risk=permitRisk(x); const du=daysUntil(x.expiration);
-      h+=`<tr class="${risk==='expired'?'co-fail':risk==='expiring'?'':''}"><td>${inp('permits',x.id,'type',x.type,'e.g. Building')}</td><td>${inp('permits',x.id,'number',x.number,'—')}</td><td>${sel('permits',x.id,'status',x.status,['Not Applied','Applied','Issued','Closed','Expired'])}</td><td>${inp('permits',x.id,'issued',x.issued,'','date')}</td><td>${inp('permits',x.id,'expiration',x.expiration,'','date')}${risk==='expired'?' <span class="lg-flag red">expired</span>':risk==='expiring'?` <span class="lg-flag amber">${du}d</span>`:''}</td><td class="co-del"><button onclick="lgDel('permits','${x.id}')">&#10005;</button></td></tr>`; });
+      h+=`<tr class="${risk==='expired'?'co-fail':risk==='expiring'?'':''}"><td>${inp('permits',x.id,'type',x.type,'e.g. Building')}</td><td>${inp('permits',x.id,'number',x.number,'-')}</td><td>${sel('permits',x.id,'status',x.status,['Not Applied','Applied','Issued','Closed','Expired'])}</td><td>${inp('permits',x.id,'issued',x.issued,'','date')}</td><td>${inp('permits',x.id,'expiration',x.expiration,'','date')}${risk==='expired'?' <span class="lg-flag red">expired</span>':risk==='expiring'?` <span class="lg-flag amber">${du}d</span>`:''}</td><td class="co-del"><button onclick="lgDel('permits','${x.id}')">&#10005;</button></td></tr>`; });
     h+='</tbody></table>'; }
   h+='</div>';
 
@@ -4495,7 +4495,7 @@ loadHolidays();
 render();
 
 /* ============================================================================
-   BWN LAUNCHER RECEIVER v2 — Projects Job Board
+   BWN LAUNCHER RECEIVER v2 - Projects Job Board
    Lives at the VERY END of the big inline <script> in
    Broadway_Projects_Tracker.html. Inert unless launcher params are present.
 

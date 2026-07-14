@@ -2,13 +2,13 @@ const { BlobServiceClient } = require("@azure/storage-blob");
 
 // WO-action ingest for the BWN userscript connector (Phase 2).
 //
-// The BWN AI userscript runs inside app.umbrava.com — a DIFFERENT origin that is NOT
+// The BWN AI userscript runs inside app.umbrava.com - a DIFFERENT origin that is NOT
 // federated to Broadway's Entra tenant, so it cannot present the AAD principal the rest
 // of /api/* relies on. This endpoint is therefore reachable ANONYMOUSLY at the SWA route
 // layer (see staticwebapp.config.json) and gates itself with a shared FUNCTION KEY
 // (app setting WO_INGEST_KEY, sent as the `x-bwn-key` header). It appends WO-action events
 // to the SAME per-client activity-log blob the dashboard uses, so they show in the Activity
-// Log view + rollup — but tagged `source:"userscript"` and carrying the Umbrava-logged-in
+// Log view + rollup - but tagged `source:"userscript"` and carrying the Umbrava-logged-in
 // actor (self-declared, NOT cryptographically verified). The dashboard's AAD-stamped
 // entries remain the authoritative record; this feed is coordinator-convenience history.
 //
@@ -17,7 +17,7 @@ const { BlobServiceClient } = require("@azure/storage-blob");
 //        → { ok:true, added:N }
 //
 // Fails CLOSED: 503 if WO_INGEST_KEY is not configured, 403 on a missing/wrong key
-// (NOT 401 — staticwebapp.config.json's responseOverrides rewrite 401s into a login
+// (NOT 401 - staticwebapp.config.json's responseOverrides rewrite 401s into a login
 // redirect, which a client chasing redirects would misread as a 200 success).
 
 const CONTAINER_NAME = "broadway-data";
@@ -32,7 +32,7 @@ const VALID_ACTIONS = ["na-done", "na-undone", "escalate", "ecd-set", "chase", "
 
 // CORS is belt-and-suspenders: Tampermonkey's GM_xmlhttpRequest bypasses the browser's
 // same-origin policy (that's what @connect authorizes), so these headers aren't strictly
-// needed — but they scope any normal-fetch caller to the Umbrava origin.
+// needed - but they scope any normal-fetch caller to the Umbrava origin.
 const CORS = {
   "Access-Control-Allow-Origin": "https://app.umbrava.com",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
@@ -81,24 +81,24 @@ function mapLookup(map, key) {
 }
 
 // The latest "OVER 30" audit line inside a dashboard WO Audit case file (job-notes
-// record). Updates are PREPENDED ("## YYYY-MM-DD — Update" blocks), so the FIRST
+// record). Updates are PREPENDED ("## YYYY-MM-DD - Update" blocks), so the FIRST
 // matching line in the text is the newest. Its date = the nearest update heading
-// above it (falls back to the record's updatedAt — save time, coarser).
+// above it (falls back to the record's updatedAt - save time, coarser).
 function latestAuditLine(rec) {
   if (!rec || !rec.note) return null;
   const note = String(rec.note);
   const m = note.match(/^[ \t>*-]*((?:\d+[.)]\s*)?OVER\s*30\b[^\n]*)/im);
   if (!m) return null;
   let ts = rec.updatedAt || null;
-  const heads = note.slice(0, m.index).match(/##\s*\d{4}-\d{2}-\d{2}\s*—\s*Update/g);
+  const heads = note.slice(0, m.index).match(/##\s*\d{4}-\d{2}-\d{2}\s*-\s*Update/g);
   if (heads && heads.length) {
     const d = heads[heads.length - 1].match(/(\d{4}-\d{2}-\d{2})/);
-    if (d) ts = d[1] + "T12:00:00.000Z";   // date-only stamp — noon keeps day-level compares sane
+    if (d) ts = d[1] + "T12:00:00.000Z";   // date-only stamp - noon keeps day-level compares sane
   }
   return { line: m[1].replace(/^\d+[.)]\s*/, "").trim().slice(0, 300), ts, by: rec.updatedBy || null, src: "audit" };
 }
 
-// Generic JSON blob read (null when absent) — used by the GET lookup.
+// Generic JSON blob read (null when absent) - used by the GET lookup.
 async function readJson(container, name) {
   try {
     const dl = await container.getBlockBlobClient(name).download();
@@ -132,7 +132,7 @@ module.exports = async function (context, req) {
     const expected = process.env.WO_INGEST_KEY;
     if (!expected) { context.res = json(503, { error: "ingest not configured" }); return; }
     // 403, NOT 401: staticwebapp.config.json's responseOverrides turns 401s into a 302
-    // redirect to the AAD login page — a client following it would see 200 HTML and could
+    // redirect to the AAD login page - a client following it would see 200 HTML and could
     // misread the result. 403 passes through untouched.
     const key = req.headers && (req.headers["x-bwn-key"] || req.headers["X-BWN-KEY"]);
     if (!key || key !== expected) { context.res = json(403, { error: "unauthorized" }); return; }
@@ -145,7 +145,7 @@ module.exports = async function (context, req) {
     // ── GET: dashboard record lookup for one job (userscript ← SWA direction) ──
     // Returns the dashboard case file (note text + naHistory + updatedAt) and the
     // exception-queue ack/snooze state for a tracking #, so the Umbrava checklist can
-    // merge the dashboard's Next Actions Required. Same key gate as the ingest — the
+    // merge the dashboard's Next Actions Required. Same key gate as the ingest - the
     // key holder is already trusted to write coordinator activity; job-notes carries no
     // financial data (it sits at the broadway_employee gate on the dashboard side).
     if (req.method === "GET") {
@@ -157,7 +157,7 @@ module.exports = async function (context, req) {
         const targets = String(params.o30).split(",").map((s) => s.trim()).filter(Boolean).slice(0, 200);
         context.log("wo-ingest GET o30 lines", client, targets.length);
         // TWO sources per job, newest wins: (a) the WO AUDIT case file the coordinator
-        // maintains on the dashboard (job-notes — the authoritative audit record the
+        // maintains on the dashboard (job-notes - the authoritative audit record the
         // user described), and (b) the panel-synced o30-lines store. The panel shows
         // src so a coordinator knows whether it came from the dashboard audit or a sync.
         const [ol, jn] = await Promise.all([
@@ -183,7 +183,7 @@ module.exports = async function (context, req) {
       const out = { ok: true, job: null, eq: null, plan: null };
       // Own-property lookups only (a JSON map still surfaces __proto__/constructor), with
       // a digits-equality fallback: the userscript sends the digits-only tracking #, but
-      // dashboard Job IDs can carry prefixes ("WIFI 44832920") — one linear pass, small maps.
+      // dashboard Job IDs can carry prefixes ("WIFI 44832920") - one linear pass, small maps.
       const lookup = (map, key) => {
         if (!map || typeof map !== "object") return null;
         if (Object.prototype.hasOwnProperty.call(map, key)) return map[key];
@@ -198,7 +198,7 @@ module.exports = async function (context, req) {
         out.job = {
           note: String(rec.note || "").slice(0, 20000),
           // AI bottleneck summary + the working/done action pill live in the SAME job-notes
-          // record — surfaced (additive, 2026-07-14) so a ported job modal (the Umbrava-side
+          // record - surfaced (additive, 2026-07-14) so a ported job modal (the Umbrava-side
           // job view) can render the dashboard's Bottleneck line + action pill, not just the
           // raw case file. Same key gate, no new slot, no financial data.
           summary: rec.summary ? String(rec.summary).slice(0, 4000) : null,
@@ -230,7 +230,7 @@ module.exports = async function (context, req) {
 
     // ── Over-30 sync: audit lines + board trend → clients/<client>/o30-lines ────
     // POST { actor, o30lines:[{target,line}] } upserts each job's LATEST line (the
-    // prior one shifts into prev[], max 4) — the panel's "last Over-30 note + date".
+    // prior one shifts into prev[], max 4) - the panel's "last Over-30 note + date".
     // POST { actor, snapshot:{date,over30,open,bad,warn} } records the day's clean
     // full-board scan into trend{} (90-day cap) for team-wide trending.
     if (req.method === "POST" && (Array.isArray(body.o30lines) || body.snapshot)) {
@@ -254,7 +254,7 @@ module.exports = async function (context, req) {
         try {
           const dl = await blobO.download();
           cur = JSON.parse(await streamToString(dl.readableStreamBody));
-          // etag MUST come from the same download response — a separate getProperties()
+          // etag MUST come from the same download response - a separate getProperties()
           // opens a TOCTOU where another writer lands between the two calls and this
           // upload's ifMatch passes against the NEWER etag while merging STALE content,
           // silently erasing their write (review MAJOR; same rule as readLog above).
@@ -292,7 +292,7 @@ module.exports = async function (context, req) {
     // ── Job Next-Actions round-trip: job → dashboard  →  clients/<client>/job-plans ──
     // POST { actor, plans:[{target, items:[...], src}] } upserts each job's authored
     // "Next Actions Required" plan (the one the Umbrava checklist is running off) so the
-    // dashboard can mirror it. Owned exclusively by this endpoint (like o30-lines) — the
+    // dashboard can mirror it. Owned exclusively by this endpoint (like o30-lines) - the
     // dashboard READS it (AAD gate, read-only via data-store) but never writes it, so it
     // never contends with the coordinator's job-notes case file. This is a SEPARATE store
     // from job-notes on purpose: the case file is the coordinator's authoritative audit
@@ -317,7 +317,7 @@ module.exports = async function (context, req) {
         try {
           const dl = await blobP.download();
           cur = JSON.parse(await streamToString(dl.readableStreamBody));
-          etag = dl.etag; exists = true;   // etag from the SAME download — no TOCTOU (see readLog)
+          etag = dl.etag; exists = true;   // etag from the SAME download - no TOCTOU (see readLog)
         } catch (err) { if (err.statusCode !== 404) throw err; }
         const data = cur && typeof cur === "object" ? cur : {};
         data.v = 1; data.plans = data.plans && typeof data.plans === "object" ? data.plans : {};
@@ -369,7 +369,7 @@ module.exports = async function (context, req) {
     // so the two writers (dashboard AAD + this key-gated ingest) never clobber the trail.
     for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
       const { entries: existing, etag, exists } = await readLog(blob);
-      // Idempotency: drop any event whose id is already in the log — a client teardown
+      // Idempotency: drop any event whose id is already in the log - a client teardown
       // between our server write and its client-side clear re-sends the batch, and that
       // must not duplicate. Re-checked each retry against the freshly-read blob.
       const seen = Object.create(null);

@@ -4,7 +4,7 @@
 <meta charset='utf-8'>
 <meta name='viewport' content='width=device-width, initial-scale=1'>
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com 'unsafe-inline'; style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; base-uri 'self'; form-action 'none'; frame-ancestors 'none';">
-<title>BWN — WO Case File</title>
+<title>BWN - WO Case File</title>
 <link href='https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700;800&display=swap' rel='stylesheet'>
 <style>
 /* BN-THEME:START | Canonical theme synced from bn-theme.css. Do not edit between the sentinels; edit bn-theme.css and run: node sync-theme.js */
@@ -84,7 +84,7 @@
   --transition-fast: 0.12s ease;
   --transition-base: 0.20s ease;
 }
-/* ══ DARK THEME (Phase 0.2) — screen-only, so print falls back to the light :root tokens (no print-reset needed) ══ */
+/* ══ DARK THEME (Phase 0.2) - screen-only, so print falls back to the light :root tokens (no print-reset needed) ══ */
 @media screen{
 html[data-theme="dark"]{
   --color-bg:#0f141b; --color-surface:#1a2230; --color-surface-alt:#222d3c; --color-surface-faint:#1e2734; --color-surface-sunken:#161f2b;
@@ -98,7 +98,7 @@ html[data-theme="dark"]{
   --text:#e6ebf2; --muted:#8c99ab; --bg:#0f141b; --green-bg:#13251b;
   color-scheme:dark;
 }
-/* Long-tail element dark overrides (Phase 0.2.1) — token-based so the @media print reset keeps them light */
+/* Long-tail element dark overrides (Phase 0.2.1) - token-based so the @media print reset keeps them light */
 html[data-theme="dark"] .data-mode-badge.real{background:var(--color-success-bg);color:var(--color-success-text);border-color:var(--color-success-border);}
 html[data-theme="dark"] .data-mode-badge.sample{background:var(--color-warning-bg);color:var(--color-warning-text);border-color:var(--color-warning-border);}
 html[data-theme="dark"] .upload-panel .last-pill.recent{background:var(--color-success-bg);color:var(--color-success-text);}
@@ -122,7 +122,7 @@ html[data-theme="dark"] .pri2-other{border-color:var(--color-success-border);}
   :root{
     /* Local token names kept so existing rules don't change; values now sourced
        from the canonical bn-theme layer above (single source of truth + dark-mode
-       ready). NOTE: --green here is the DARK brand green — this declaration sits
+       ready). NOTE: --green here is the DARK brand green - this declaration sits
        after the synced region so it overrides bn-theme's bright --green. */
     --green: var(--color-primary); --green-d: var(--color-primary-strong); --accent: var(--color-accent);
     --bg: var(--color-bg); --card: var(--color-surface); --b1: var(--color-border);
@@ -275,7 +275,7 @@ html[data-theme="dark"] .pri2-other{border-color:var(--color-success-border);}
   }
 
   async function saveStore(){
-    if (OFFLINE) throw new Error('Offline preview — saving is disabled here. Deploy to the SWA to save.');
+    if (OFFLINE) throw new Error('Offline preview - saving is disabled here. Deploy to the SWA to save.');
     var n = Object.keys(STORE.items).length;
     var r = await fetch(API + '?key=' + SLOT + '&client=' + CLIENT, {
       method: 'POST', credentials: 'same-origin',
@@ -313,7 +313,7 @@ html[data-theme="dark"] .pri2-other{border-color:var(--color-success-border);}
 
   function saveParsedNote(parsed, kind){
     var key = parsed.tracking || parsed.wo;
-    if (!key) throw new Error('No TRACKING # or WO number found in the note — cannot file it.');
+    if (!key) throw new Error('No TRACKING # or WO number found in the note - cannot file it.');
     var rec = STORE.items[key] || { tracking: parsed.tracking, wo: parsed.wo, title: parsed.title, sub: parsed.sub, base: null, updates: [] };
     if (parsed.wo) rec.wo = parsed.wo;
     if (parsed.tracking) rec.tracking = parsed.tracking;
@@ -338,7 +338,7 @@ html[data-theme="dark"] .pri2-other{border-color:var(--color-success-border);}
   function el(tag, cls, txt){ var e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; }
   function shortLoc(rec){
     var s = rec.sub || rec.title || '';
-    var m = s.match(/—\s*([A-Za-z .'-]+,\s*[A-Z]{2})/);
+    var m = s.match(/-\s*([A-Za-z .'-]+,\s*[A-Z]{2})/);
     if (m) return m[1].trim();
     return (rec.title || '').replace(/^TRACKING[^|]*\|?\s*/i, '').slice(0, 42);
   }
@@ -422,7 +422,7 @@ html[data-theme="dark"] .pri2-other{border-color:var(--color-success-border);}
 
     var id = el('div', 'idcard');
     var top = el('div', 'id-top');
-    top.appendChild(el('span', 'id-wo', rec.wo ? ('WO ' + rec.wo) : 'WO —'));
+    top.appendChild(el('span', 'id-wo', rec.wo ? ('WO ' + rec.wo) : 'WO -'));
     if (rec.tracking) top.appendChild(el('span', 'id-trk', 'TRACKING #' + rec.tracking));
     id.appendChild(top);
     if (rec.title) id.appendChild(el('div', 'id-loc', rec.title));
@@ -442,7 +442,7 @@ html[data-theme="dark"] .pri2-other{border-color:var(--color-success-border);}
       var bdoc = el('div', 'doc'); renderCaseFile(bdoc, rec.base.text); bp.appendChild(bdoc);
       main.appendChild(bp);
     } else {
-      main.appendChild(el('div', 'empty', 'No full audit captured yet — run WO Audit on this WO and save it here to set the base.'));
+      main.appendChild(el('div', 'empty', 'No full audit captured yet - run WO Audit on this WO and save it here to set the base.'));
     }
 
     main.appendChild(el('div', 'sec-h', 'Recent Updates (newest first)'));
@@ -511,7 +511,7 @@ html[data-theme="dark"] .pri2-other{border-color:var(--color-success-border);}
     bits.push(capParsed.wo ? ('WO <b>' + capParsed.wo + '</b>') : '<span class="miss">no WO#</span>');
     bits.push(capParsed.tracking ? ('TRACKING <b>#' + capParsed.tracking + '</b>') : '<span class="miss">no tracking#</span>');
     bits.push('detected: <b>' + (capParsed.isUpdate ? 'Recent Update' : 'Full Audit') + '</b>');
-    info.innerHTML = 'Detected — ' + bits.join(' · ');
+    info.innerHTML = 'Detected - ' + bits.join(' · ');
     save.disabled = OFFLINE || !(capParsed.tracking || capParsed.wo);
   }
   function setSeg(kind){
@@ -541,14 +541,14 @@ html[data-theme="dark"] .pri2-other{border-color:var(--color-success-border);}
   function d(mo, da, hr){ return new Date(2026, mo - 1, da, hr || 9, 0, 0).getTime(); }
   function demoStore(){
     return { v: 1, items: {
-      '01955215': { tracking: '01955215', wo: 'W-337016', title: 'TRACKING #01955215 | WO W-337016 | CAP STORE 1042 — VEGA, TX', sub: '',
-        base: { ts: d(6, 22, 16), text: 'TRACKING #01955215 | WO W-337016 | CAP STORE 1042 — VEGA, TX\nCrossAmerica Partners | 6555 US Hwy 385, Vega, TX 79092 | PO# 44821 / CLIENT WO# 337016\nCURRENT STATUS: Light-pole base work pending; drilling slipped from 6/18 after the vendor cited storms, no firm reschedule yet.\nRISK FLAGS:\nFLAG: No firm drilling date as of 6/22 — vendor unresponsive; aging.\nTIMELINE:\n6/4 — initial outreach to vendor for scheduling\n6/18 — drilling delayed, vendor cited storms\n6/22 — still no committed drilling date\nVENDORS:\n**BSG 1946** (Tim Lillpop) — concrete / pole — awaiting committed drilling date\nNEXT ACTIONS:\n1. Daniel Russell — get a committed drilling date from BSG by 6/24.' },
+      '01955215': { tracking: '01955215', wo: 'W-337016', title: 'TRACKING #01955215 | WO W-337016 | CAP STORE 1042 - VEGA, TX', sub: '',
+        base: { ts: d(6, 22, 16), text: 'TRACKING #01955215 | WO W-337016 | CAP STORE 1042 - VEGA, TX\nCrossAmerica Partners | 6555 US Hwy 385, Vega, TX 79092 | PO# 44821 / CLIENT WO# 337016\nCURRENT STATUS: Light-pole base work pending; drilling slipped from 6/18 after the vendor cited storms, no firm reschedule yet.\nRISK FLAGS:\nFLAG: No firm drilling date as of 6/22 - vendor unresponsive; aging.\nTIMELINE:\n6/4 - initial outreach to vendor for scheduling\n6/18 - drilling delayed, vendor cited storms\n6/22 - still no committed drilling date\nVENDORS:\n**BSG 1946** (Tim Lillpop) - concrete / pole - awaiting committed drilling date\nNEXT ACTIONS:\n1. Daniel Russell - get a committed drilling date from BSG by 6/24.' },
         updates: [
-          { ts: d(6, 24, 15), win: 7, text: 'TRACKING #01955215 | WO W-337016 | CAP STORE 1042 — VEGA, TX\nCURRENT STATUS: New base poured 6/24; 5–7 day cure underway, reinstall ~7/1.\nRECENT ACTIVITY:\n6/24 — new base poured; cure window started\n6/24 — vendor flagged $827 added mobilization cost\nRISK FLAGS:\nFLAG: $827 add needs client approval before reinstall.\nNEXT ACTIONS:\n1. Daniel Russell — get client sign-off on the $827 add.' }
+          { ts: d(6, 24, 15), win: 7, text: 'TRACKING #01955215 | WO W-337016 | CAP STORE 1042 - VEGA, TX\nCURRENT STATUS: New base poured 6/24; 5–7 day cure underway, reinstall ~7/1.\nRECENT ACTIVITY:\n6/24 - new base poured; cure window started\n6/24 - vendor flagged $827 added mobilization cost\nRISK FLAGS:\nFLAG: $827 add needs client approval before reinstall.\nNEXT ACTIONS:\n1. Daniel Russell - get client sign-off on the $827 add.' }
         ] },
-      '02011890': { tracking: '02011890', wo: 'W-338221', title: 'TRACKING #02011890 | WO W-338221 | PILOT STORE 0931 — TUCUMCARI, NM', sub: '',
+      '02011890': { tracking: '02011890', wo: 'W-338221', title: 'TRACKING #02011890 | WO W-338221 | PILOT STORE 0931 - TUCUMCARI, NM', sub: '',
         base: null,
-        updates: [ { ts: d(6, 24, 10), win: 7, text: 'TRACKING #02011890 | WO W-338221 | PILOT STORE 0931 — TUCUMCARI, NM\nCURRENT STATUS: New reactive service call opened 6/23 for a down sign circuit; vendor dispatched, no onsite yet.\nRECENT ACTIVITY:\n6/23 — WO created, sign circuit reported down\n6/24 — vendor accepted dispatch, ETA pending\nRISK FLAGS:\nFLAG: No onsite ETA yet on a reactive call.\nNEXT ACTIONS:\n1. Erick Nieves-Cruz — get a firm onsite ETA today.' } ] }
+        updates: [ { ts: d(6, 24, 10), win: 7, text: 'TRACKING #02011890 | WO W-338221 | PILOT STORE 0931 - TUCUMCARI, NM\nCURRENT STATUS: New reactive service call opened 6/23 for a down sign circuit; vendor dispatched, no onsite yet.\nRECENT ACTIVITY:\n6/23 - WO created, sign circuit reported down\n6/24 - vendor accepted dispatch, ETA pending\nRISK FLAGS:\nFLAG: No onsite ETA yet on a reactive call.\nNEXT ACTIONS:\n1. Erick Nieves-Cruz - get a firm onsite ETA today.' } ] }
     } };
   }
 
@@ -567,7 +567,7 @@ html[data-theme="dark"] .pri2-other{border-color:var(--color-success-border);}
     } catch (e){
       OFFLINE = true;
       STORE = demoStore();
-      banner('offline', 'Offline preview — showing demo data. This page reads/saves live only when served from the SWA (it could not reach ' + API + ').');
+      banner('offline', 'Offline preview - showing demo data. This page reads/saves live only when served from the SWA (it could not reach ' + API + ').');
     }
     refreshCap();
     renderAll();

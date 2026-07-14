@@ -30,7 +30,7 @@ const VALID_CLIENTS = ["pilot"];
 // Slots holding financial data (GP / revenue) require Operations Manager (L4)
 // or above to READ. Everything else stays at the broadway_employee gate that
 // the SWA route config already enforces. Server-side because the front-end /
-// route checks are convenience only — this is the real boundary.
+// route checks are convenience only - this is the real boundary.
 // NOTE: "revenue" is intentionally NOT in this list -- coordinators are meant
 // to read the monthly revenue numbers (approved by Mike, 2026-06), so it stays
 // at the broadway_employee gate. The "revenue-gp" GP lookup remains Operations
@@ -113,7 +113,7 @@ async function writeBlob(container, name, data, metadata, opts) {
   const flatMeta = {};
   for (const [k, v] of Object.entries(metadata || {})) {
     if (v === null || v === undefined) continue;
-    // Blob metadata is sent as HTTP headers and must be ASCII — non-ASCII
+    // Blob metadata is sent as HTTP headers and must be ASCII - non-ASCII
     // chars (e.g. the en-dash in "Jan–May 2026") make the upload throw.
     // Replace anything outside printable ASCII with a plain hyphen.
     const s = typeof v === "string" ? v : String(v);
@@ -221,10 +221,10 @@ module.exports = async function (context, req) {
     }
 
     // Slots owned by the wo-ingest writer: the dashboard (and any employee) reads them
-    // here, but writes/deletes must go through /api/wo-ingest's merge logic — an
+    // here, but writes/deletes must go through /api/wo-ingest's merge logic - an
     // unconditional data-store POST would last-write-wins clobber concurrent upserts.
     if ((req.method === "POST" || req.method === "DELETE") && (slot === "o30-lines" || slot === "job-plans")) {
-      context.res = { status: 405, headers: { "Content-Type": "application/json" }, body: { error: slot + " is written via /api/wo-ingest — read-only here" } };
+      context.res = { status: 405, headers: { "Content-Type": "application/json" }, body: { error: slot + " is written via /api/wo-ingest - read-only here" } };
       return;
     }
 
@@ -267,7 +267,7 @@ module.exports = async function (context, req) {
         // current etag so the caller can re-read, merge, and retry.
         if (err.statusCode === 412) {
           const cur = await readBlob(container, targetName);
-          context.res = { status: 412, headers: { "Content-Type": "application/json" }, body: { error: "etag mismatch — blob changed since read", etag: cur.etag || null } };
+          context.res = { status: 412, headers: { "Content-Type": "application/json" }, body: { error: "etag mismatch - blob changed since read", etag: cur.etag || null } };
           return;
         }
         throw err;

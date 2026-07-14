@@ -6,7 +6,7 @@
 //     signed-in user so route/api gating on broadway_employee is never stripped)
 //   - the CUMULATIVE ops set: the user's level and every level below it
 //
-// Route gating then only ever names the minimum ops role — anyone at or above
+// Route gating then only ever names the minimum ops role - anyone at or above
 // clears it automatically (a VP's set includes ops_manager, ops_supervisor, etc.).
 //
 // IMPORTANT:
