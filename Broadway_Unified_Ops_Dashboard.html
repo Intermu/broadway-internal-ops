@@ -97,8 +97,8 @@
   --shadow-sm: 0 1px 3px rgba(0,0,0,.06),0 1px 2px rgba(0,0,0,.08);
   --shadow-md: 0 4px 14px rgba(0,0,0,.10),0 2px 4px rgba(0,0,0,.08);
   /* ── TYPOGRAPHY ─────────────────────────────────────────── */
-  --font-sans: 'DM Sans',system-ui,-apple-system,sans-serif;
-  --font-mono: 'DM Mono','Cascadia Code',ui-monospace,monospace;
+  --font-sans: -apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;
+  --font-mono: ui-monospace,'Segoe UI Mono','SF Mono',monospace;
   /* ── TRANSITIONS ────────────────────────────────────────── */
   --transition-fast: 0.12s ease;
   --transition-base: 0.20s ease;
@@ -139,12 +139,12 @@ html[data-theme="dark"] .pri2-other{border-color:var(--color-success-border);}
 }
 /* BN-THEME:END */
 *{margin:0;padding:0;box-sizing:border-box;}
-body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;}
 /* HEADER */
 .header{background:linear-gradient(135deg,var(--color-primary),var(--color-primary-strong));padding:16px 28px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 2px 12px rgba(0,0,0,0.2);position:sticky;top:0;z-index:100;}
 .header img{max-height:42px;mix-blend-mode:screen;}
-.header-right h1{color:var(--color-on-accent);font-size:17px;font-weight:700;}
-.header-right p{color:rgba(255,255,255,0.6);font-size:11px;font-family:'DM Mono',monospace;}
+.header-right h1{color:var(--color-on-accent);font-size:17px;font-weight:500;}
+.header-right p{color:rgba(255,255,255,0.6);font-size:11px;font-family:ui-monospace,'Segoe UI Mono','SF Mono',monospace;}
 /* ── UPLOAD BANNER (collapsible) ── */
 .upload-banner{background:var(--color-surface);border-bottom:2px solid var(--border);padding:12px 28px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;transition:padding .2s;}
 .upload-banner.compact{padding:6px 28px;}
@@ -152,17 +152,17 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .drop-zone{border:2px dashed var(--color-success-border);border-radius:9px;padding:11px 20px;display:flex;align-items:center;gap:10px;cursor:pointer;transition:all .2s;background:var(--color-surface-faint);min-width:260px;}
 .drop-zone:hover,.drop-zone.drag-over{border-color:var(--green);background:var(--green-bg);}
 .dz-icon{font-size:20px;}
-.dz-text{font-size:12px;font-weight:600;color:var(--color-brand-ink);}
+.dz-text{font-size:12px;font-weight:500;color:var(--color-brand-ink);}
 .dz-sub{font-size:11px;color:var(--muted);}
 .upload-slots{display:flex;gap:12px;flex-wrap:wrap;align-items:center;}
 .upload-slot{background:var(--color-surface-alt);border:1px solid var(--border);border-radius:7px;padding:8px 12px;min-width:180px;position:relative;}
 .upload-slot.current{border-color:var(--color-success-border);background:var(--green-bg);}
 .upload-slot.has-data{border-color:#10b981;background:#ecfdf5;}
-.us-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);}
-.us-file{font-size:11px;font-weight:600;color:var(--text);font-family:'DM Mono',monospace;}
+.us-label{font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);}
+.us-file{font-size:11px;font-weight:500;color:var(--text);font-family:ui-monospace,'Segoe UI Mono','SF Mono',monospace;}
 .us-swap{position:absolute;top:6px;right:6px;background:var(--color-surface);border:1px solid var(--border);border-radius:4px;padding:1px 6px;cursor:pointer;font-size:10px;color:var(--muted);transition:all .15s;}
 .us-swap:hover{border-color:var(--green);color:var(--color-brand-ink);background:var(--green-bg);}
-.data-mode-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:11px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;}
+.data-mode-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:11px;font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:0.4px;}
 .data-mode-badge.sample{background:#fef3c7;color:#92400e;border:1px solid #fcd34d;}
 .data-mode-badge.real{background:#dcfce7;color:#14532d;border:1px solid #86efac;}
 .toggle-banner-btn{background:transparent;border:1px solid var(--border);border-radius:5px;padding:4px 9px;font-size:11px;color:var(--muted);cursor:pointer;transition:all .15s;margin-left:auto;}
@@ -176,27 +176,27 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 /* ─── EMPTY DASHBOARD STATE — shown until a workbook is uploaded ─── */
 .empty-dashboard{max-width:560px;margin:60px auto;padding:48px 36px;text-align:center;background:var(--color-surface);border:2px dashed var(--border);border-radius:14px;}
 .empty-dashboard .empty-icon{font-size:48px;margin-bottom:14px;opacity:0.85;}
-.empty-dashboard .empty-title{font-size:18px;font-weight:700;color:var(--color-brand-ink);margin-bottom:10px;}
+.empty-dashboard .empty-title{font-size:18px;font-weight:500;color:var(--color-brand-ink);margin-bottom:10px;}
 .empty-dashboard .empty-sub{font-size:13px;color:var(--muted);line-height:1.55;margin-bottom:22px;}
-.empty-dashboard .empty-cta{background:var(--green);color:var(--color-on-accent);border:none;border-radius:6px;padding:10px 22px;font-size:13px;font-weight:600;font-family:'DM Sans',sans-serif;cursor:pointer;transition:background .15s;}
+.empty-dashboard .empty-cta{background:var(--green);color:var(--color-on-accent);border:none;border-radius:6px;padding:10px 22px;font-size:13px;font-weight:500;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;cursor:pointer;transition:background .15s;}
 .empty-dashboard .empty-cta:hover{background:var(--green-dk);}
 .empty-dashboard .empty-foot{margin-top:22px;font-size:11px;color:var(--muted);font-style:italic;}
 
 /* ─── TOOL-MODE BAR — identifies the dashboard role and provides cross-tool nav ─── */
 .tool-mode-bar{background:var(--color-primary-strong);color:#e8f5f0;padding:7px 28px;display:flex;align-items:center;gap:10px;font-size:11px;letter-spacing:0.3px;}
-.tool-mode-bar .brand{font-weight:600;color:var(--color-on-accent);}
-.tool-mode-bar .role-pill{font-size:9px;font-weight:700;padding:2px 8px;border-radius:99px;letter-spacing:0.6px;background:var(--color-success);color:var(--color-primary-strong);}
+.tool-mode-bar .brand{font-weight:500;color:var(--color-on-accent);}
+.tool-mode-bar .role-pill{font-size:9px;font-weight:500;padding:2px 8px;border-radius:99px;letter-spacing:0.6px;background:var(--color-success);color:var(--color-primary-strong);}
 .tool-mode-bar .filler{flex:1;}
-.tool-mode-bar .cross-btn{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:5px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);color:var(--color-on-accent);font-size:11px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;text-decoration:none;transition:background 0.15s;}
+.tool-mode-bar .cross-btn{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:5px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);color:var(--color-on-accent);font-size:11px;font-weight:500;cursor:pointer;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;text-decoration:none;transition:background 0.15s;}
 .tool-mode-bar .cross-btn:hover{background:rgba(255,255,255,0.18);}
 .tool-mode-bar .cross-btn.unset{opacity:0.7;}
-.tool-mode-bar .hub-btn{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:5px;background:rgba(46,204,113,0.18);border:1px solid rgba(46,204,113,0.4);color:var(--color-success-mid);font-size:11px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;text-decoration:none;transition:background 0.15s;letter-spacing:0.4px;}
+.tool-mode-bar .hub-btn{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:5px;background:rgba(46,204,113,0.18);border:1px solid rgba(46,204,113,0.4);color:var(--color-success-mid);font-size:11px;font-weight:500;cursor:pointer;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;text-decoration:none;transition:background 0.15s;letter-spacing:0.4px;}
 .tool-mode-bar .hub-btn:hover{background:rgba(46,204,113,0.32);color:var(--color-on-accent);}
 .tool-mode-bar .gear-btn{padding:4px 7px;border-radius:5px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);color:var(--color-on-accent);font-size:11px;cursor:pointer;font-family:inherit;}
 .tool-mode-bar .gear-btn:hover{background:rgba(255,255,255,0.18);}
 /* Global job search (Phase 1) */
 .gsearch{position:relative;}
-.gsearch input{background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.25);color:var(--color-on-accent);height:26px;padding:0 9px;border-radius:5px;font-size:11px;font-family:'DM Sans',sans-serif;width:120px;transition:width .15s ease;}
+.gsearch input{background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.25);color:var(--color-on-accent);height:26px;padding:0 9px;border-radius:5px;font-size:11px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;width:120px;transition:width .15s ease;}
 .gsearch input:focus{width:180px;}
 .gsearch input::placeholder{color:rgba(255,255,255,0.6);}
 .gsearch input:focus{outline:none;border-color:var(--color-success);background:rgba(255,255,255,0.18);}
@@ -204,14 +204,14 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .gsearch-results.open{display:block;}
 /* Embedded (hub bridge): the tool-mode-bar is hidden, so the results panel floats fixed instead. */
 .gsearch-results.gs-floating{position:fixed;top:10px;right:16px;z-index:1000;}
-.gs-item{display:block;width:100%;text-align:left;background:none;border:0;border-bottom:1px solid var(--color-surface-sunken);padding:8px 11px;cursor:pointer;font-family:'DM Sans',sans-serif;}
+.gs-item{display:block;width:100%;text-align:left;background:none;border:0;border-bottom:1px solid var(--color-surface-sunken);padding:8px 11px;cursor:pointer;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;}
 .gs-item:hover{background:#f6f9f7;}
 .gs-item:last-child{border-bottom:0;}
 .gs-top{display:flex;align-items:center;justify-content:space-between;gap:8px;}
-.gs-id{font-family:'DM Mono',monospace;font-weight:700;font-size:12px;color:var(--color-brand-ink);}
+.gs-id{font-family:ui-monospace,'Segoe UI Mono','SF Mono',monospace;font-weight:500;font-size:12px;color:var(--color-brand-ink);}
 .gs-meta{display:flex;align-items:center;gap:8px;font-size:10px;color:var(--muted);margin-top:3px;flex-wrap:wrap;}
 .gs-empty{padding:12px;font-size:11px;color:var(--muted);text-align:center;}
-.gs-sec{padding:6px 11px 3px;font:700 9px 'DM Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);background:var(--color-surface-alt,#f8fafc);border-bottom:1px solid var(--color-surface-sunken);}
+.gs-sec{padding:6px 11px 3px;font:500 9px ui-monospace,'Segoe UI Mono','SF Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);background:var(--color-surface-alt,#f8fafc);border-bottom:1px solid var(--color-surface-sunken);}
 .gs-hl{background:#fde68a;color:inherit;border-radius:2px;padding:0 1px;}
 .gs-item.gs-sel{background:#eef6f1;}
 
@@ -219,9 +219,9 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .upload-panel-wrap{padding:14px 28px 0;background:var(--color-surface-alt);}
 .upload-panel{background:var(--color-surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;display:flex;flex-direction:column;max-width:640px;margin:0 auto;}
 .upload-panel .panel-head{display:flex;align-items:center;justify-content:space-between;padding:9px 14px;border-bottom:1px solid var(--border);gap:10px;background:linear-gradient(180deg,var(--color-success-bg),#e8f5f0);border-bottom-color:var(--color-success-border);}
-.upload-panel .panel-title{font-size:12px;font-weight:700;color:var(--color-brand-ink);}
+.upload-panel .panel-title{font-size:12px;font-weight:500;color:var(--color-brand-ink);}
 .upload-panel .panel-sub{font-size:10px;color:var(--muted);margin-top:1px;}
-.upload-panel .last-pill{font-family:'DM Mono',monospace;font-size:9px;padding:2px 7px;border-radius:99px;background:var(--color-border);color:var(--muted);white-space:nowrap;}
+.upload-panel .last-pill{font-family:ui-monospace,'Segoe UI Mono','SF Mono',monospace;font-size:9px;padding:2px 7px;border-radius:99px;background:var(--color-border);color:var(--muted);white-space:nowrap;}
 .upload-panel .last-pill.recent{background:#dcfce7;color:#166534;}
 .upload-panel .last-pill.sample{background:#fef3c7;color:#92400e;}
 
@@ -229,13 +229,13 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .upload-panel .drop-area:hover,.upload-panel .drop-area.drag-over{border-color:var(--green);background:var(--green-bg);}
 .upload-panel .drop-area input[type=file]{display:none;}
 .upload-panel .drop-icon{font-size:24px;line-height:1;}
-.upload-panel .drop-primary{font-size:13px;font-weight:600;color:var(--text);}
+.upload-panel .drop-primary{font-size:13px;font-weight:500;color:var(--text);}
 .upload-panel .drop-secondary{font-size:11px;color:var(--muted);}
-.upload-panel .browse-btn{display:inline-flex;align-items:center;gap:5px;padding:6px 14px;border:none;border-radius:6px;font-size:11px;font-weight:600;font-family:'DM Sans',sans-serif;cursor:pointer;margin-top:4px;letter-spacing:0.2px;background:var(--green-dk);color:var(--color-on-accent);}
+.upload-panel .browse-btn{display:inline-flex;align-items:center;gap:5px;padding:6px 14px;border:none;border-radius:6px;font-size:11px;font-weight:500;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;cursor:pointer;margin-top:4px;letter-spacing:0.2px;background:var(--green-dk);color:var(--color-on-accent);}
 .upload-panel .browse-btn:hover{background:var(--color-primary-strong);}
 
 .upload-panel .panel-foot{font-size:10.5px;color:var(--muted);padding:7px 14px;background:var(--color-surface-alt);border-top:1px solid var(--border);line-height:1.5;}
-.upload-panel .panel-foot strong{color:var(--text);font-weight:600;}
+.upload-panel .panel-foot strong{color:var(--text);font-weight:500;}
 
 /* State machine for the drop area */
 .upload-panel .drop-area.processing,
@@ -248,8 +248,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .upload-panel .replace-link:hover{color:var(--text);}
 .upload-panel .spinner{width:22px;height:22px;border:2.5px solid #fff8e1;border-top-color:var(--amber);border-radius:50%;animation:dspin 0.7s linear infinite;}
 @keyframes dspin{to{transform:rotate(360deg);}}
-.upload-panel .check-icon{width:30px;height:30px;border-radius:50%;background:var(--green);color:var(--color-on-accent);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:bold;}
-.upload-panel .x-icon{width:30px;height:30px;border-radius:50%;background:var(--red);color:var(--color-on-accent);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:bold;}
+.upload-panel .check-icon{width:30px;height:30px;border-radius:50%;background:var(--green);color:var(--color-on-accent);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:500;}
+.upload-panel .x-icon{width:30px;height:30px;border-radius:50%;background:var(--red);color:var(--color-on-accent);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:500;}
 .upload-panel .state-idle,
 .upload-panel .state-processing,
 .upload-panel .state-success,
@@ -265,18 +265,18 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 /* ─── JOB DETAIL MODAL ─── */
 .job-modal-overlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,0.55);z-index:9998;align-items:flex-start;justify-content:center;padding:40px 16px;overflow-y:auto;}
 .job-modal-overlay.open{display:flex;}
-.job-modal{background:var(--color-surface);border:1px solid var(--border);border-radius:10px;max-width:1100px;width:100%;max-height:calc(100vh - 80px);display:flex;flex-direction:column;box-shadow:0 12px 40px rgba(0,0,0,0.25);font-family:'DM Sans',sans-serif;}
+.job-modal{background:var(--color-surface);border:1px solid var(--border);border-radius:10px;max-width:1100px;width:100%;max-height:calc(100vh - 80px);display:flex;flex-direction:column;box-shadow:0 12px 40px rgba(0,0,0,0.25);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;}
 .job-modal-head{display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--color-surface);border-radius:10px 10px 0 0;}
-.job-modal-head .jm-id{font-family:'DM Mono',monospace;font-weight:700;font-size:14px;color:var(--text);}
+.job-modal-head .jm-id{font-family:ui-monospace,'Segoe UI Mono','SF Mono',monospace;font-weight:500;font-size:14px;color:var(--text);}
 .job-modal-head .jm-x{margin-left:auto;background:none;border:none;font-size:20px;line-height:1;cursor:pointer;color:var(--muted);}
-.job-modal-head .jm-back{background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.35);color:#fff;font:600 11px 'DM Sans',sans-serif;padding:4px 10px;border-radius:6px;cursor:pointer;margin-right:10px;white-space:nowrap;}
+.job-modal-head .jm-back{background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.35);color:#fff;font:500 11px -apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;padding:4px 10px;border-radius:6px;cursor:pointer;margin-right:10px;white-space:nowrap;}
 .job-modal-head .jm-back:hover{background:rgba(255,255,255,.30);}
 .job-modal-body{padding:16px 18px;flex:1 1 auto;min-height:0;overflow:hidden;display:flex;flex-direction:column;}
 .jm-holdup{background:var(--color-surface-alt);border:1px solid var(--border);border-left:3px solid var(--green-dk);border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12.5px;line-height:1.5;color:var(--text);}
 .jm-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px 18px;font-size:12px;margin-bottom:14px;}
 .jm-grid .jm-k{color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:0.4px;display:block;margin-bottom:1px;}
-.jm-grid .jm-v{color:var(--text);font-weight:600;}
-.jm-section-label{font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:var(--muted);font-weight:700;margin:0 0 5px;}
+.jm-grid .jm-v{color:var(--text);font-weight:500;}
+.jm-section-label{font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:var(--muted);font-weight:500;margin:0 0 5px;}
 .jm-notes{font-size:12px;color:var(--text);line-height:1.55;white-space:pre-wrap;background:var(--color-surface-alt);border:1px solid var(--border);border-radius:8px;padding:10px 12px;max-height:260px;overflow-y:auto;}
 .data-table tbody tr.job-row{cursor:pointer;}
 .data-table tbody tr.job-row:hover{background:var(--color-surface-alt);}
@@ -285,33 +285,33 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .jn-head{display:flex;align-items:center;justify-content:space-between;}
 .jn-hint{font-size:9px;font-weight:400;color:var(--muted);text-transform:none;letter-spacing:0;}
 .jn-actions{display:flex;gap:6px;margin:8px 0;flex-wrap:wrap;}
-.jn-act{font-size:10.5px;font-weight:600;padding:4px 9px;border-radius:6px;border:1px solid var(--border);background:var(--color-surface);color:var(--muted);cursor:pointer;font-family:'DM Sans',sans-serif;}
+.jn-act{font-size:10.5px;font-weight:500;padding:4px 9px;border-radius:6px;border:1px solid var(--border);background:var(--color-surface);color:var(--muted);cursor:pointer;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;}
 .jn-act:hover{border-color:var(--green-dk);}
 .jn-act.sel.act-none{background:#fef3c7;color:#92400e;border-color:#fcd34d;}
 .jn-act.sel.act-working{background:#dbeafe;color:#1e40af;border-color:#93c5fd;}
 .jn-act.sel.act-done{background:#dcfce7;color:#166534;border-color:#86efac;}
-.jn-text{width:100%;min-height:120px;max-height:320px;resize:vertical;font-family:'DM Mono',monospace;font-size:11px;line-height:1.5;padding:9px 11px;border:1px solid var(--border);border-radius:8px;background:var(--color-surface);color:var(--text);box-sizing:border-box;white-space:pre-wrap;}
+.jn-text{width:100%;min-height:120px;max-height:320px;resize:vertical;font-family:ui-monospace,'Segoe UI Mono','SF Mono',monospace;font-size:11px;line-height:1.5;padding:9px 11px;border:1px solid var(--border);border-radius:8px;background:var(--color-surface);color:var(--text);box-sizing:border-box;white-space:pre-wrap;}
 .jn-foot{display:flex;align-items:center;gap:12px;margin-top:8px;}
-.jn-attach{font-size:10.5px;color:var(--green-dk);cursor:pointer;font-weight:600;}
+.jn-attach{font-size:10.5px;color:var(--green-dk);cursor:pointer;font-weight:500;}
 .jn-saved{font-size:10px;color:var(--muted);margin-left:auto;}
-.jn-save{font-size:11px;font-weight:700;padding:6px 14px;border-radius:7px;border:none;background:var(--green-dk);color:#fff;cursor:pointer;font-family:'DM Sans',sans-serif;}
+.jn-save{font-size:11px;font-weight:500;padding:6px 14px;border-radius:7px;border:none;background:var(--green-dk);color:#fff;cursor:pointer;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;}
 .jn-save:hover{opacity:0.9;}
-.jn-pill{display:inline-block;font-size:8.5px;font-weight:700;padding:1px 5px;border-radius:99px;letter-spacing:0.2px;font-family:'DM Sans',sans-serif;}
+.jn-pill{display:inline-block;font-size:8.5px;font-weight:500;padding:1px 5px;border-radius:99px;letter-spacing:0.2px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;}
 .jn-pill.jn-none{background:#fef3c7;color:#92400e;}
 .jn-pill.jn-working{background:#dbeafe;color:#1e40af;}
 .jn-pill.jn-done{background:#dcfce7;color:#166534;}
 .jm-holdup .holdup-row{display:flex;align-items:flex-start;gap:10px;justify-content:space-between;}
-.holdup-ai-btn{flex:none;font-size:9.5px;font-weight:700;padding:3px 8px;border-radius:6px;border:1px solid var(--border);background:var(--color-surface);color:var(--green-dk);cursor:pointer;font-family:'DM Sans',sans-serif;white-space:nowrap;}
+.holdup-ai-btn{flex:none;font-size:9.5px;font-weight:500;padding:3px 8px;border-radius:6px;border:1px solid var(--border);background:var(--color-surface);color:var(--green-dk);cursor:pointer;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;white-space:nowrap;}
 .holdup-ai-btn:hover{border-color:var(--green-dk);}
 .holdup-ai-btn:disabled{opacity:0.6;cursor:default;}
-.ai-tag{display:inline-block;font-size:8px;font-weight:800;letter-spacing:0.5px;background:var(--green-dk);color:#fff;border-radius:4px;padding:1px 4px;vertical-align:middle;margin-right:3px;}
+.ai-tag{display:inline-block;font-size:8px;font-weight:500;letter-spacing:0.5px;background:var(--green-dk);color:#fff;border-radius:4px;padding:1px 4px;vertical-align:middle;margin-right:3px;}
 .holdup-meta{font-size:9px;color:var(--muted);margin-top:5px;}
 /* Modal polish: gradient header + document-style notes */
 .job-modal{overflow:hidden;}
 .job-modal-head{background:linear-gradient(135deg,#1a5f3e,#0d3d26);border-bottom:none;}
 .job-modal-head .jm-head-l{display:flex;flex-direction:column;gap:1px;margin-right:auto;}
 .job-modal-head .jm-id{color:#fff;}
-.job-modal-head .jm-head-sub{font-size:10px;color:rgba(255,255,255,0.8);font-family:'DM Sans',sans-serif;font-weight:500;}
+.job-modal-head .jm-head-sub{font-size:10px;color:rgba(255,255,255,0.8);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;font-weight:500;}
 .job-modal-head .jm-x{color:rgba(255,255,255,0.9);}
 .job-modal-head .jm-x:hover{color:#fff;}
 .jn-doc-card{background:var(--color-surface-alt);border:1px solid var(--border);border-radius:8px;padding:15px 17px;max-height:420px;overflow-y:auto;box-shadow:inset 0 1px 2px rgba(0,0,0,0.03);}
@@ -320,19 +320,19 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .jm-col{min-width:0;min-height:0;overflow-y:auto;padding-right:6px;}
 .jm-col-r .jn-block{margin-top:0;border-top:none;padding-top:0;}
 .jm-cols .jn-doc-card{max-height:none;}
-.np-text{font-size:13px;line-height:1.55;color:#2a3530;white-space:pre-wrap;font-family:'DM Sans',sans-serif;}
+.np-text{font-size:13px;line-height:1.55;color:#2a3530;white-space:pre-wrap;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;}
 .np-text.np-empty{color:var(--muted);font-style:italic;white-space:normal;}
 .vpills{display:flex;flex-wrap:wrap;gap:4px;margin-top:2px;}
-.vpill{display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:600;line-height:1.3;padding:2px 8px;border-radius:99px;background:var(--color-surface-alt);border:1px solid var(--border);color:var(--text);font-family:'DM Sans',sans-serif;}
+.vpill{display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:500;line-height:1.3;padding:2px 8px;border-radius:99px;background:var(--color-surface-alt);border:1px solid var(--border);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;}
 .vpill-sup{background:#fdf3e0;border-color:#e8cfa0;color:#9a6a12;}
-.vpill-tag{font-size:7px;font-weight:800;letter-spacing:0.3px;opacity:0.85;}
+.vpill-tag{font-size:7px;font-weight:500;letter-spacing:0.3px;opacity:0.85;}
 .jm-timing{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:0 0 14px;}
 .jt{background:var(--color-surface-alt);border:1px solid var(--border);border-radius:8px;padding:8px 10px;text-align:center;}
-.jt-n{font:800 17px 'DM Sans',system-ui,sans-serif;color:#0d3d26;line-height:1.1;}
-.jt-l{font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;color:var(--muted);margin-top:3px;}
+.jt-n{font:500 17px -apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;color:#0d3d26;line-height:1.1;}
+.jt-l{font-size:8.5px;font-weight:500;text-transform:uppercase;letter-spacing:0.4px;color:var(--muted);margin-top:3px;}
 .lc-head{display:flex;align-items:center;gap:10px;margin:2px 0 10px;}
-.lc-title{font:700 11px 'DM Mono',monospace;color:#1a5f3e;text-transform:uppercase;letter-spacing:.12em;}
-.lc-badge{font-size:9.5px;font-weight:700;border-radius:99px;padding:2px 9px;letter-spacing:.2px;}
+.lc-title{font:500 11px ui-monospace,'Segoe UI Mono','SF Mono',monospace;color:#1a5f3e;text-transform:uppercase;letter-spacing:.12em;}
+.lc-badge{font-size:9.5px;font-weight:500;border-radius:99px;padding:2px 9px;letter-spacing:.2px;}
 .lc-badge.ok{background:#eaf5ef;color:#1a5f3e;border:1px solid #cfe7d8;}
 .lc-badge.late{background:#fdece9;color:#c0392b;border:1px solid #f1cabf;}
 .lc-rail{display:flex;align-items:flex-start;position:relative;margin:6px 2px 14px;}
@@ -344,25 +344,25 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .lc-node.done .lc-dot{background:#2ECC71;border-color:#2ECC71;}
 .lc-node.next .lc-dot{background:var(--color-surface);border-color:var(--green-dk);box-shadow:0 0 0 3px #e8f3ed;}
 .lc-node.miss .lc-dot{background:#c0392b;border-color:#c0392b;}
-.lc-date{font:700 11px 'DM Mono',monospace;color:var(--text);line-height:1.2;}
+.lc-date{font:500 11px ui-monospace,'Segoe UI Mono','SF Mono',monospace;color:var(--text);line-height:1.2;}
 .lc-node.future .lc-date,.lc-node.empty .lc-date{color:var(--muted);}
 .lc-node.miss .lc-date{color:#c0392b;}
-.lc-lbl{font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:var(--muted);margin-top:2px;}
+.lc-lbl{font-size:8.5px;font-weight:500;text-transform:uppercase;letter-spacing:.3px;color:var(--muted);margin-top:2px;}
 .o30-typebar{display:flex;flex-wrap:wrap;gap:7px;margin:0 0 14px;}
-.o30-chip{display:inline-flex;align-items:center;gap:6px;font:600 12px 'DM Sans',sans-serif;padding:5px 13px;border-radius:99px;border:1px solid var(--border);background:var(--color-surface);color:var(--text);cursor:pointer;}
+.o30-chip{display:inline-flex;align-items:center;gap:6px;font:500 12px -apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;padding:5px 13px;border-radius:99px;border:1px solid var(--border);background:var(--color-surface);color:var(--text);cursor:pointer;}
 .o30-chip:hover{border-color:var(--green-dk);}
 .o30-chip.active{background:var(--green-dk);border-color:var(--green-dk);color:#fff;}
-.o30-chip-n{font:700 11px 'DM Mono',monospace;opacity:.7;}
+.o30-chip-n{font:500 11px ui-monospace,'Segoe UI Mono','SF Mono',monospace;opacity:.7;}
 .o30-chip.active .o30-chip-n{opacity:.9;}
 .em-tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px;}
 .et{background:var(--color-surface-alt);border:1px solid var(--border);border-radius:8px;padding:8px 9px;text-align:center;}
-.et-n{font:800 16px 'DM Sans',system-ui,sans-serif;line-height:1.05;color:var(--green-dk);}
+.et-n{font:500 16px -apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;line-height:1.05;color:var(--green-dk);}
 .et-n.red{color:#c0392b;}
 .et-n.blue{color:#2f6df6;}
-.et-l{font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:var(--muted);margin-top:3px;}
-.em-seclbl{font:700 10px 'DM Mono',monospace;color:#1a5f3e;text-transform:uppercase;letter-spacing:.1em;margin:16px 0 6px;}
+.et-l{font-size:8px;font-weight:500;text-transform:uppercase;letter-spacing:.3px;color:var(--muted);margin-top:3px;}
+.em-seclbl{font:500 10px ui-monospace,'Segoe UI Mono','SF Mono',monospace;color:#1a5f3e;text-transform:uppercase;letter-spacing:.1em;margin:16px 0 6px;}
 .em-seclbl .n{color:var(--muted);font-weight:500;text-transform:none;letter-spacing:0;}
-.em-jid{font-family:'DM Mono',monospace;font-weight:600;}
+.em-jid{font-family:ui-monospace,'Segoe UI Mono','SF Mono',monospace;font-weight:500;}
 .em-mut{color:var(--muted);}
 .em-empty,.em-note{padding:14px 12px;color:var(--muted);font-size:12px;}
 .em-foot{font-size:10.5px;color:var(--muted);margin-top:5px;}
@@ -370,10 +370,10 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .data-table tr.em-click:hover td{background:#f0f7f3;}
 #entModalBox .job-modal-body{display:block;overflow-y:auto;}
 .em-kind{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--muted);margin:0 0 14px;flex-wrap:wrap;}
-.em-kind b{color:var(--green-dk);font-weight:700;}
-.em-kind-btn{font:600 11px 'DM Sans',system-ui,sans-serif;color:#1a5f3e;background:#eef6f0;border:1px solid #cfe6d8;border-radius:6px;padding:3px 9px;cursor:pointer;}
+.em-kind b{color:var(--green-dk);font-weight:500;}
+.em-kind-btn{font:500 11px -apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;color:#1a5f3e;background:#eef6f0;border:1px solid #cfe6d8;border-radius:6px;padding:3px 9px;cursor:pointer;}
 .em-kind-btn:hover{background:#e2f0e7;}
-.em-kind-ov{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:#2f6df6;background:#eaf1ff;border-radius:4px;padding:2px 5px;}
+.em-kind-ov{font-size:9px;font-weight:500;text-transform:uppercase;letter-spacing:.4px;color:#2f6df6;background:#eaf1ff;border-radius:4px;padding:2px 5px;}
 @media (max-width:900px){
   .jm-cols{grid-template-columns:1fr;grid-template-rows:auto;gap:0;flex:0 0 auto;height:auto;min-height:0;}
   .jm-col{overflow-y:visible;padding-right:0;}
@@ -381,132 +381,132 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
   .jm-col-r .jn-block{margin-top:14px;border-top:1px solid var(--border);padding-top:12px;}
   .jm-cols .jn-doc-card{max-height:420px;}
 }
-.nd-doc{font-family:'DM Sans',sans-serif;font-size:13px;line-height:1.55;color:#2a3530;}
+.nd-doc{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;font-size:13px;line-height:1.55;color:#2a3530;}
 .nd-doc>.nd-h:first-child,.nd-doc>.nd-title:first-child{margin-top:0;}
-.nd-title{font:800 19px/1.2 'DM Sans',system-ui,sans-serif;color:#0d3d26;letter-spacing:-.02em;margin:0 0 3px;}
-.nd-sub{font:600 11px 'DM Mono',monospace;color:#7c8c83;letter-spacing:.2px;margin:0 0 14px;}
-.nd-h{display:flex;align-items:center;gap:10px;margin:22px 0 11px;font:700 11px 'DM Mono',monospace;color:#1a5f3e;text-transform:uppercase;letter-spacing:.12em;}
+.nd-title{font:500 19px/1.2 -apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;color:#0d3d26;letter-spacing:-.02em;margin:0 0 3px;}
+.nd-sub{font:500 11px ui-monospace,'Segoe UI Mono','SF Mono',monospace;color:#7c8c83;letter-spacing:.2px;margin:0 0 14px;}
+.nd-h{display:flex;align-items:center;gap:10px;margin:22px 0 11px;font:500 11px ui-monospace,'Segoe UI Mono','SF Mono',monospace;color:#1a5f3e;text-transform:uppercase;letter-spacing:.12em;}
 .nd-h::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,#d6e6dd,transparent);}
 .nd-p{margin:5px 0;}
 .nd-p strong{color:#0d3d26;}
 .nd-empty{color:var(--muted);font-style:italic;}
 .nd-status{background:linear-gradient(135deg,#f1f9f4,#eaf5ef);border:1px solid #d3e8dc;border-left:4px solid #2ECC71;border-radius:10px;padding:12px 15px;margin:0 0 6px;font-size:13px;line-height:1.55;color:#234034;}
 .nd-flag{display:grid;grid-template-columns:26px 1fr;gap:11px;align-items:start;margin:8px 0;padding:11px 14px;background:#fff8ee;border:1px solid #f0ddbe;border-left:3px solid #e08a1e;border-radius:10px;font-size:13px;line-height:1.5;color:#5a4012;}
-.nd-flag .fn{font:700 11px 'DM Mono',monospace;color:#b9740f;background:#fbeacb;border-radius:6px;width:26px;height:22px;display:flex;align-items:center;justify-content:center;}
+.nd-flag .fn{font:500 11px ui-monospace,'Segoe UI Mono','SF Mono',monospace;color:#b9740f;background:#fbeacb;border-radius:6px;width:26px;height:22px;display:flex;align-items:center;justify-content:center;}
 .nd-flag.hot{background:#fdece9;border-color:#f1cabf;border-left-color:#c0392b;color:#6e2018;}
 .nd-flag.hot .fn{color:#fff;background:#c0392b;}
 .nd-vend{display:grid;grid-template-columns:1fr 112px;gap:14px;align-items:start;margin:8px 0;padding:12px 15px;background:#fff;border:1px solid #e4ece7;border-radius:10px;}
 .nd-vend .vn-main{min-width:0;}
 .nd-vend .vn-head{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;}
-.nd-vend .vn-name{font:700 13.5px 'DM Sans',system-ui,sans-serif;color:#0d3d26;}
-.nd-vend .vn-role{font:600 10.5px 'DM Mono',monospace;color:#1a5f3e;background:#e8f3ed;border:1px solid #d3e8dc;border-radius:999px;padding:2px 9px;letter-spacing:.2px;}
-.nd-vend .vn-people{font:500 11.5px 'DM Mono',monospace;color:#90a097;margin:3px 0 0;}
+.nd-vend .vn-name{font:500 13.5px -apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;color:#0d3d26;}
+.nd-vend .vn-role{font:500 10.5px ui-monospace,'Segoe UI Mono','SF Mono',monospace;color:#1a5f3e;background:#e8f3ed;border:1px solid #d3e8dc;border-radius:999px;padding:2px 9px;letter-spacing:.2px;}
+.nd-vend .vn-people{font:500 11.5px ui-monospace,'Segoe UI Mono','SF Mono',monospace;color:#90a097;margin:3px 0 0;}
 .nd-vend .vn-det{list-style:none;margin:8px 0 0;padding:0;}
 .nd-vend .vn-det li{position:relative;padding-left:15px;margin:3px 0;font-size:12.5px;line-height:1.45;color:#3c4842;}
 .nd-vend .vn-det li::before{content:"";position:absolute;left:2px;top:8px;width:4px;height:4px;border-radius:50%;background:#9fc7ac;}
 .nd-vend .vn-det li strong{color:#0d3d26;}
 .nd-vend .vn-money{display:flex;flex-direction:column;gap:4px;align-items:flex-end;border-left:1px solid #eef2f4;padding-left:12px;}
-.nd-vend .vn-amt{font:700 12.5px 'DM Mono',monospace;color:#1a5f3e;white-space:nowrap;}
+.nd-vend .vn-amt{font:500 12.5px ui-monospace,'Segoe UI Mono','SF Mono',monospace;color:#1a5f3e;white-space:nowrap;}
 .nd-vend .vn-amt.none{color:#c2ccc6;font-weight:500;}
 .nd-table{width:100%;border-collapse:collapse;margin:8px 0 12px;font-size:11px;}
-.nd-table th{text-align:left;background:var(--color-surface-alt);color:var(--green-dk);font-weight:700;font-size:9.5px;text-transform:uppercase;letter-spacing:0.4px;padding:6px 9px;border:1px solid var(--border);}
+.nd-table th{text-align:left;background:var(--color-surface-alt);color:var(--green-dk);font-weight:500;font-size:9.5px;text-transform:uppercase;letter-spacing:0.4px;padding:6px 9px;border:1px solid var(--border);}
 .nd-table td{padding:6px 9px;border:1px solid var(--border);vertical-align:top;}
 .nd-table tr:nth-child(even) td{background:rgba(15,61,38,0.025);}
 .nd-tl{display:flex;flex-direction:column;margin:8px 0 14px;border:1px solid #e7eee9;border-radius:11px;overflow:hidden;}
 .nd-tlrow{display:grid;grid-template-columns:104px 1fr;gap:14px;padding:8px 14px;border-bottom:1px solid #f1f5f2;font-size:13px;line-height:1.45;}
 .nd-tlrow:last-child{border-bottom:none;}
 .nd-tlrow:nth-child(even){background:#fafcfb;}
-.nd-tldate{font:700 11px 'DM Mono',monospace;color:#1a5f3e;white-space:nowrap;padding-top:1px;}
+.nd-tldate{font:500 11px ui-monospace,'Segoe UI Mono','SF Mono',monospace;color:#1a5f3e;white-space:nowrap;padding-top:1px;}
 .nd-tltext{color:#2a3530;min-width:0;}
 .nd-tlrow.hot{background:#fdece9;}
 .nd-tlrow.hot .nd-tldate{color:#c0392b;}
 .nd-ol{margin:6px 0 14px;padding-left:0;list-style:none;counter-reset:nd;}
 .nd-ol li{position:relative;counter-increment:nd;padding:5px 0 5px 34px;line-height:1.5;border-bottom:1px solid #f3f6f4;}
 .nd-ol li:last-child{border-bottom:none;}
-.nd-ol li::before{content:counter(nd);position:absolute;left:0;top:5px;width:22px;height:22px;border-radius:7px;background:#e8f3ed;color:#1a5f3e;font:700 11px 'DM Mono',monospace;display:flex;align-items:center;justify-content:center;}
+.nd-ol li::before{content:counter(nd);position:absolute;left:0;top:5px;width:22px;height:22px;border-radius:7px;background:#e8f3ed;color:#1a5f3e;font:500 11px ui-monospace,'Segoe UI Mono','SF Mono',monospace;display:flex;align-items:center;justify-content:center;}
 .nd-ul{margin:6px 0 14px;padding-left:4px;list-style:none;}
 .nd-ul li{position:relative;margin:5px 0;padding-left:18px;line-height:1.5;}
 .nd-ul li::before{content:"";position:absolute;left:3px;top:9px;width:5px;height:5px;border-radius:50%;background:#2ECC71;}
-.nd-kind{display:inline-block;margin-left:6px;font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;padding:1px 5px;border-radius:4px;vertical-align:middle;}
+.nd-kind{display:inline-block;margin-left:6px;font-size:8.5px;font-weight:500;text-transform:uppercase;letter-spacing:0.4px;padding:1px 5px;border-radius:4px;vertical-align:middle;}
 .nd-sup{background:#fdf3e0;color:#9a6a12;border:1px solid #e8cfa0;}
 .vnd-sep{margin:0 5px;color:var(--muted);}
 .jm-na{background:linear-gradient(135deg,#f1f9f4,#eaf5ef);border:1px solid #d3e8dc;border-radius:8px;padding:11px 14px 6px;margin-bottom:14px;}
-.jm-na-h{display:flex;align-items:center;justify-content:space-between;gap:8px;font:700 10.5px 'DM Mono',monospace;color:#0d3d26;text-transform:uppercase;letter-spacing:.1em;margin-bottom:5px;}
-.jm-na-copy{flex:none;font:600 9.5px 'DM Mono',monospace;text-transform:none;letter-spacing:0;color:#1a5f3e;background:#fff;border:1px solid #cfe3d7;border-radius:6px;padding:3px 8px;cursor:pointer;transition:background .12s,border-color .12s;}
+.jm-na-h{display:flex;align-items:center;justify-content:space-between;gap:8px;font:500 10.5px ui-monospace,'Segoe UI Mono','SF Mono',monospace;color:#0d3d26;text-transform:uppercase;letter-spacing:.1em;margin-bottom:5px;}
+.jm-na-copy{flex:none;font:500 9.5px ui-monospace,'Segoe UI Mono','SF Mono',monospace;text-transform:none;letter-spacing:0;color:#1a5f3e;background:#fff;border:1px solid #cfe3d7;border-radius:6px;padding:3px 8px;cursor:pointer;transition:background .12s,border-color .12s;}
 .jm-na-copy:hover{background:#f0fdf4;border-color:#86efac;}
 .jm-na-copy:active{transform:translateY(1px);}
 .jm-na .nd-ol{margin:2px 0 4px;}
 .jm-na .nd-ol li{font-size:12.5px;border-bottom-color:#d8e8de;}
 .jn-head{margin-bottom:7px;}
-.jn-edit{font-size:10.5px;font-weight:700;padding:5px 11px;border-radius:7px;border:1px solid var(--border);background:var(--color-surface);color:var(--green-dk);cursor:pointer;font-family:'DM Sans',sans-serif;}
+.jn-edit{font-size:10.5px;font-weight:500;padding:5px 11px;border-radius:7px;border:1px solid var(--border);background:var(--color-surface);color:var(--green-dk);cursor:pointer;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;}
 .jn-edit:hover{border-color:var(--green-dk);}
-.jn-cancel{font-size:11px;font-weight:600;padding:6px 12px;border-radius:7px;border:1px solid var(--border);background:var(--color-surface);color:var(--muted);cursor:pointer;font-family:'DM Sans',sans-serif;}
+.jn-cancel{font-size:11px;font-weight:500;padding:6px 12px;border-radius:7px;border:1px solid var(--border);background:var(--color-surface);color:var(--muted);cursor:pointer;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;}
 .jn-mode{display:flex;gap:4px;background:var(--color-surface-alt,#f8fafc);border:1px solid var(--border);border-radius:8px;padding:3px;margin:4px 0 6px;}
-.jn-mode-btn{flex:1;font-size:10.5px;font-weight:700;padding:5px 8px;border-radius:6px;border:1px solid transparent;background:transparent;color:var(--muted);cursor:pointer;font-family:'DM Sans',sans-serif;transition:background .12s,color .12s;}
+.jn-mode-btn{flex:1;font-size:10.5px;font-weight:500;padding:5px 8px;border-radius:6px;border:1px solid transparent;background:transparent;color:var(--muted);cursor:pointer;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;transition:background .12s,color .12s;}
 .jn-mode-btn:hover{color:var(--green-dk);}
 .jn-mode-btn.sel{background:var(--color-surface);color:#0d3d26;border-color:#d3e8dc;box-shadow:0 1px 2px rgba(13,61,38,.08);}
 .jn-mode-hint{font-size:9.5px;line-height:1.4;color:var(--muted);margin:0 0 7px;}
 .jm-na-hist{margin-top:8px;border-top:1px dashed #cfe3d7;padding-top:6px;}
-.jm-na-hist>summary{font:700 9.5px 'DM Mono',monospace;color:#3f6b54;text-transform:uppercase;letter-spacing:.08em;cursor:pointer;list-style:none;outline:none;}
+.jm-na-hist>summary{font:500 9.5px ui-monospace,'Segoe UI Mono','SF Mono',monospace;color:#3f6b54;text-transform:uppercase;letter-spacing:.08em;cursor:pointer;list-style:none;outline:none;}
 .jm-na-hist>summary::-webkit-details-marker{display:none;}
 .jm-na-hist>summary::before{content:'▸ ';color:#7aa890;}
 .jm-na-hist[open]>summary::before{content:'▾ ';}
 .jm-na-hist-blk{margin:6px 0 0;}
-.jm-na-hist-dt{font:600 9.5px 'DM Mono',monospace;color:#7a8b82;margin-bottom:2px;}
+.jm-na-hist-dt{font:500 9.5px ui-monospace,'Segoe UI Mono','SF Mono',monospace;color:#7a8b82;margin-bottom:2px;}
 .jm-na-hist .nd-ol{margin:2px 0 6px;}
 .jm-na-hist .nd-ol li{font-size:11.5px;opacity:.85;}
 .nd-shist{margin:8px 0 4px;}
-.nd-shist>summary{font:700 9.5px 'DM Mono',monospace;color:#3f6b54;text-transform:uppercase;letter-spacing:.08em;cursor:pointer;list-style:none;outline:none;}
+.nd-shist>summary{font:500 9.5px ui-monospace,'Segoe UI Mono','SF Mono',monospace;color:#3f6b54;text-transform:uppercase;letter-spacing:.08em;cursor:pointer;list-style:none;outline:none;}
 .nd-shist>summary::-webkit-details-marker{display:none;}
 .nd-shist>summary::before{content:'▸ ';color:#7aa890;}
 .nd-shist[open]>summary::before{content:'▾ ';}
 .nd-shist-blk{margin:7px 0 0;padding:8px 11px;background:var(--color-surface-alt);border:1px solid var(--border);border-radius:8px;}
-.nd-shist-dt{font:600 9.5px 'DM Mono',monospace;color:#7a8b82;margin-bottom:3px;}
-.nd-shist-tx{font:400 11.5px 'DM Mono',monospace;color:var(--color-text);line-height:1.5;white-space:pre-wrap;}
+.nd-shist-dt{font:500 9.5px ui-monospace,'Segoe UI Mono','SF Mono',monospace;color:#7a8b82;margin-bottom:3px;}
+.nd-shist-tx{font:400 11.5px ui-monospace,'Segoe UI Mono','SF Mono',monospace;color:var(--color-text);line-height:1.5;white-space:pre-wrap;}
 
 /* ─── SLIM POST-LOAD STATUS STRIP ─── */
 .slim-strip{display:none;align-items:center;gap:10px;padding:9px 14px;border-radius:8px;background:var(--color-success-bg);border:1px solid var(--color-success-border);font-size:11.5px;max-width:640px;margin:0 auto;}
 .upload-panel-wrap.collapsed .slim-strip{display:flex;}
-.slim-strip .check{color:var(--color-brand-ink);font-weight:700;font-size:14px;}
-.slim-strip .file-name{font-family:'DM Mono',monospace;font-size:11px;color:var(--text);font-weight:600;}
-.slim-strip .meta{color:var(--muted);font-family:'DM Mono',monospace;font-size:10.5px;}
+.slim-strip .check{color:var(--color-brand-ink);font-weight:500;font-size:14px;}
+.slim-strip .file-name{font-family:ui-monospace,'Segoe UI Mono','SF Mono',monospace;font-size:11px;color:var(--text);font-weight:500;}
+.slim-strip .meta{color:var(--muted);font-family:ui-monospace,'Segoe UI Mono','SF Mono',monospace;font-size:10.5px;}
 .slim-strip .actions{margin-left:auto;display:flex;gap:6px;}
-.slim-strip .ghost-btn{font-size:10px;padding:4px 9px;border-radius:5px;background:var(--color-surface);border:1px solid var(--color-success-border);color:var(--color-brand-ink);cursor:pointer;font-family:inherit;font-weight:600;}
+.slim-strip .ghost-btn{font-size:10px;padding:4px 9px;border-radius:5px;background:var(--color-surface);border:1px solid var(--color-success-border);color:var(--color-brand-ink);cursor:pointer;font-family:inherit;font-weight:500;}
 .slim-strip .ghost-btn:hover{background:#e8f5f0;}
-.slim-strip .save-dash-btn{font-size:10px;padding:4px 11px;border-radius:5px;background:var(--green-dk);color:var(--color-on-accent);border:none;cursor:pointer;font-family:inherit;font-weight:600;display:inline-flex;align-items:center;gap:4px;}
+.slim-strip .save-dash-btn{font-size:10px;padding:4px 11px;border-radius:5px;background:var(--green-dk);color:var(--color-on-accent);border:none;cursor:pointer;font-family:inherit;font-weight:500;display:inline-flex;align-items:center;gap:4px;}
 .slim-strip .save-dash-btn:hover{background:var(--color-primary-strong);}
 /* LAYOUT */
 .layout{display:grid;grid-template-columns:240px 1fr;min-height:calc(100vh - 110px);}
 .sidebar{background:var(--color-sidebar);overflow-y:auto;}
 .sb-section{padding:14px 0 4px;}
-.sb-title{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--color-text-soft);padding:0 16px 6px;cursor:pointer;user-select:none;display:flex;align-items:center;justify-content:space-between;}
+.sb-title{font-size:9px;font-weight:500;text-transform:uppercase;letter-spacing:1.2px;color:var(--color-text-soft);padding:0 16px 6px;cursor:pointer;user-select:none;display:flex;align-items:center;justify-content:space-between;}
 .sb-title:hover{color:var(--color-text-ghost);}
 .sb-title::after{content:'▾';font-size:8px;opacity:0.5;transition:transform .15s;}
 .sb-section.collapsed .sb-title::after{transform:rotate(-90deg);}
 .sb-section.collapsed > button,.sb-section.collapsed > div:not(.sb-title){display:none !important;}
 .sb-divider{height:1px;background:#2d3748;margin:6px 14px;}
-.nav-btn{width:100%;padding:9px 16px;background:none;border:none;cursor:pointer;text-align:left;color:var(--color-text-ghost);font-family:'DM Sans',sans-serif;font-size:12px;font-weight:500;display:flex;align-items:center;justify-content:space-between;transition:all .15s;border-left:3px solid transparent;}
+.nav-btn{width:100%;padding:9px 16px;background:none;border:none;cursor:pointer;text-align:left;color:var(--color-text-ghost);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;font-size:12px;font-weight:500;display:flex;align-items:center;justify-content:space-between;transition:all .15s;border-left:3px solid transparent;}
 .nav-btn:hover{background:rgba(255,255,255,.05);color:var(--color-on-accent);}
-.nav-btn.active{background:rgba(46,204,113,.12);color:var(--color-success);border-left-color:var(--color-success);font-weight:700;}
+.nav-btn.active{background:rgba(46,204,113,.12);color:var(--color-success);border-left-color:var(--color-success);font-weight:500;}
 .nav-btn.active .nb-count{background:rgba(46,204,113,.2);color:var(--color-success);}
 .nav-btn.nav-escalate .nb-count{background:rgba(231,76,60,.22);color:#ff8875;}
 .nav-btn.nav-escalate.active{background:rgba(231,76,60,.12);color:#ff8875;border-left-color:var(--color-danger);}
 .nav-btn.nav-escalate.active .nb-count{background:rgba(231,76,60,.28);color:#ff8875;}
-.nb-count{font-size:10px;font-family:'DM Mono',monospace;background:rgba(255,255,255,.08);padding:1px 7px;border-radius:99px;}
+.nb-count{font-size:10px;font-family:ui-monospace,'Segoe UI Mono','SF Mono',monospace;background:rgba(255,255,255,.08);padding:1px 7px;border-radius:99px;}
 /* EXPORT BUTTON */
-.export-btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;background:var(--color-primary);color:var(--color-on-accent);border:none;border-radius:7px;font-family:'DM Sans',sans-serif;font-size:12px;font-weight:600;cursor:pointer;transition:all .15s;}
+.export-btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;background:var(--color-primary);color:var(--color-on-accent);border:none;border-radius:7px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;font-size:12px;font-weight:500;cursor:pointer;transition:all .15s;}
 .export-btn:hover{background:var(--color-primary-strong);box-shadow:0 3px 8px rgba(26,95,62,.3);}
 .export-btn:disabled{background:var(--color-text-ghost);cursor:not-allowed;box-shadow:none;}
-.edit-badge{background:var(--amber);color:var(--color-on-accent);font-family:'DM Mono',monospace;font-size:10px;font-weight:700;padding:1px 6px;border-radius:99px;margin-left:4px;}
+.edit-badge{background:var(--amber);color:var(--color-on-accent);font-family:ui-monospace,'Segoe UI Mono','SF Mono',monospace;font-size:10px;font-weight:500;padding:1px 6px;border-radius:99px;margin-left:4px;}
 /* PRIORITY PILLS */
-.pri-pill{display:inline-flex;align-items:center;padding:2px 8px;border-radius:99px;font-size:10px;font-weight:700;font-family:'DM Mono',monospace;letter-spacing:.3px;}
+.pri-pill{display:inline-flex;align-items:center;padding:2px 8px;border-radius:99px;font-size:10px;font-weight:500;font-family:ui-monospace,'Segoe UI Mono','SF Mono',monospace;letter-spacing:.3px;}
 .pri-high{background:var(--color-danger-bg-alt);color:var(--color-danger-text);}
 .pri-med{background:var(--color-warning-bg-alt);color:var(--color-warning-text);}
 .pri-low{background:var(--color-info-bg);color:var(--color-info-text);}
 .pri-none{background:var(--color-surface-sunken);color:var(--color-text-muted);}
 /* SOURCE PRIORITY PILLS — distinct from Mgmt Escalation pills above. Reflect the
    raw "Priority" field from the audit drop (P1–P4 + Red/Yellow/Blue). */
-.pri2{display:inline-flex;align-items:center;padding:1px 6px;border-radius:4px;font-size:9px;font-weight:700;font-family:'DM Mono',monospace;letter-spacing:.2px;white-space:nowrap;border:1px solid transparent;}
+.pri2{display:inline-flex;align-items:center;padding:1px 6px;border-radius:4px;font-size:9px;font-weight:500;font-family:ui-monospace,'Segoe UI Mono','SF Mono',monospace;letter-spacing:.2px;white-space:nowrap;border:1px solid transparent;}
 .pri2-p1,.pri2-red{background:var(--color-danger-bg-alt);color:var(--color-danger-text);border-color:var(--color-danger-border);}
 .pri2-p2,.pri2-yellow{background:var(--color-warning-bg-alt);color:var(--color-warning-text);border-color:var(--color-warning-border);}
 .pri2-p3{background:var(--color-info-bg);color:var(--color-info-text);border-color:var(--color-info-border);}
@@ -514,17 +514,17 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .pri2-other{background:var(--color-success-bg);color:var(--color-brand-ink);border-color:#bcebd0;}
 /* TRADE / VENDOR CHIPS */
 .tv-cell{font-size:10px;color:var(--color-text-soft);line-height:1.4;max-width:200px;}
-.tv-chip{display:inline-block;padding:1px 6px;border-radius:3px;background:#eef2f7;color:#334155;font-size:10px;margin:1px 2px 1px 0;font-family:'DM Mono',monospace;white-space:nowrap;}
+.tv-chip{display:inline-block;padding:1px 6px;border-radius:3px;background:#eef2f7;color:#334155;font-size:10px;margin:1px 2px 1px 0;font-family:ui-monospace,'Segoe UI Mono','SF Mono',monospace;white-space:nowrap;}
 /* UPDATE PILLS */
-.upd-pill{display:inline-flex;align-items:center;padding:2px 7px;border-radius:99px;font-size:10px;font-weight:700;font-family:'DM Mono',monospace;white-space:nowrap;}
+.upd-pill{display:inline-flex;align-items:center;padding:2px 7px;border-radius:99px;font-size:10px;font-weight:500;font-family:ui-monospace,'Segoe UI Mono','SF Mono',monospace;white-space:nowrap;}
 .upd-never{background:var(--color-danger-bg-alt);color:var(--color-danger-text);}
 .upd-stale{background:var(--color-warning-bg-alt);color:var(--color-warning-text);}
 .upd-recent{background:var(--color-success-bg);color:var(--color-brand-ink);}
 /* REVIEWER PILL — who last touched the WO */
-.reviewer-pill{display:inline-flex;align-items:center;padding:2px 8px;border-radius:99px;font-size:10px;font-weight:600;font-family:'DM Mono',monospace;background:#eef2f7;color:var(--color-text-soft);border:1px solid #dde3ed;}
+.reviewer-pill{display:inline-flex;align-items:center;padding:2px 8px;border-radius:99px;font-size:10px;font-weight:500;font-family:ui-monospace,'Segoe UI Mono','SF Mono',monospace;background:#eef2f7;color:var(--color-text-soft);border:1px solid #dde3ed;}
 /* ESCALATION CARDS */
 .esc-group{margin-bottom:22px;}
-.esc-group-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px;display:flex;align-items:center;gap:8px;}
+.esc-group-title{font-size:12px;font-weight:500;text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px;display:flex;align-items:center;gap:8px;}
 .esc-card{background:var(--color-surface);border-radius:9px;padding:14px 16px;border:1px solid var(--border);border-left:4px solid var(--muted);margin-bottom:10px;}
 .esc-card.pri-card-high{border-left-color:var(--red);}
 .esc-card.pri-card-med{border-left-color:var(--amber);}
@@ -532,39 +532,39 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .esc-card.pri-card-none{border-left-color:var(--color-border-strong);}
 .esc-card-hdr{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:8px;flex-wrap:wrap;}
 .esc-card-hdr-l{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
-.esc-card-meta{font-size:10px;color:var(--muted);font-family:'DM Mono',monospace;text-align:right;}
+.esc-card-meta{font-size:10px;color:var(--muted);font-family:ui-monospace,'Segoe UI Mono','SF Mono',monospace;text-align:right;}
 .esc-team-update{background:var(--color-surface-alt);border-radius:6px;padding:9px 11px;font-size:12px;line-height:1.5;margin-top:8px;border-left:3px solid var(--color-border-strong);}
-.esc-team-update strong{display:block;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:3px;}
+.esc-team-update strong{display:block;font-size:9px;font-weight:500;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:3px;}
 .esc-mgmt-notes{background:var(--color-success-bg);border-radius:6px;padding:9px 11px;font-size:12px;line-height:1.5;margin-top:6px;border-left:3px solid var(--green);}
-.esc-mgmt-notes strong{display:block;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--color-brand-ink);margin-bottom:3px;}
-.mgmt-edit{width:100%;min-height:44px;border:1px solid var(--color-success-mid);border-radius:5px;padding:6px 8px;font-family:'DM Sans',sans-serif;font-size:12px;line-height:1.4;resize:vertical;background:var(--color-surface);color:var(--text);}
+.esc-mgmt-notes strong{display:block;font-size:9px;font-weight:500;text-transform:uppercase;letter-spacing:.5px;color:var(--color-brand-ink);margin-bottom:3px;}
+.mgmt-edit{width:100%;min-height:44px;border:1px solid var(--color-success-mid);border-radius:5px;padding:6px 8px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;font-size:12px;line-height:1.4;resize:vertical;background:var(--color-surface);color:var(--text);}
 .mgmt-edit:focus{outline:none;border-color:var(--green);box-shadow:0 0 0 2px rgba(46,204,113,.15);}
 .mgmt-edit.edited{border-color:var(--amber);background:#fffbea;}
 .esc-toggle{display:inline-flex;gap:4px;background:var(--color-surface-sunken);border-radius:7px;padding:3px;margin-bottom:14px;}
-.esc-toggle button{background:none;border:none;padding:5px 12px;border-radius:5px;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;color:var(--muted);}
+.esc-toggle button{background:none;border:none;padding:5px 12px;border-radius:5px;cursor:pointer;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;font-size:11px;font-weight:500;color:var(--muted);}
 .esc-toggle button.active{background:var(--color-surface);color:var(--text);box-shadow:0 1px 2px rgba(0,0,0,.08);}
 /* MAIN */
 .main{padding:24px 28px;overflow-y:auto;}
-.page-title{font-size:20px;font-weight:700;margin-bottom:2px;}
-.page-sub{font-size:12px;color:var(--muted);margin-bottom:20px;font-family:'DM Mono',monospace;}
+.page-title{font-size:20px;font-weight:500;margin-bottom:2px;}
+.page-sub{font-size:12px;color:var(--muted);margin-bottom:20px;font-family:ui-monospace,'Segoe UI Mono','SF Mono',monospace;}
 /* STAT GRID */
 .stat-grid{display:grid;gap:12px;margin-bottom:18px;}
 .sg-4{grid-template-columns:repeat(4,1fr);}
 .sg-5{grid-template-columns:repeat(5,1fr);}
 .sg-3{grid-template-columns:repeat(3,1fr);}
 .stat-box{background:var(--color-surface);border-radius:9px;padding:14px 16px;border:1px solid var(--border);}
-.sb-num{font-size:24px;font-weight:700;font-family:'DM Mono',monospace;margin-bottom:2px;line-height:1;}
-.sb-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);}
-.sb-sub{font-size:10px;color:var(--color-text-ghost);margin-top:2px;font-family:'DM Mono',monospace;}
+.sb-num{font-size:24px;font-weight:500;font-family:ui-monospace,'Segoe UI Mono','SF Mono',monospace;margin-bottom:2px;line-height:1;}
+.sb-lbl{font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);}
+.sb-sub{font-size:10px;color:var(--color-text-ghost);margin-top:2px;font-family:ui-monospace,'Segoe UI Mono','SF Mono',monospace;}
 .c-green{color:var(--green);} .c-red{color:var(--red);} .c-amber{color:var(--amber);} .c-blue{color:var(--blue);}
 /* CARDS */
 .card{background:var(--color-surface);border-radius:9px;border:1px solid var(--border);margin-bottom:16px;overflow:hidden;}
 .card-header{padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
-.card-header h3{font-size:13px;font-weight:700;}
-.card-meta{font-size:10px;color:var(--muted);font-family:'DM Mono',monospace;}
+.card-header h3{font-size:13px;font-weight:500;}
+.card-meta{font-size:10px;color:var(--muted);font-family:ui-monospace,'Segoe UI Mono','SF Mono',monospace;}
 .card-body{padding:16px;}
 /* BADGES */
-.badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:99px;font-size:10px;font-weight:700;}
+.badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:99px;font-size:10px;font-weight:500;}
 .b-green{background:var(--color-success-mid);color:var(--color-brand-ink);}
 .b-amber{background:var(--color-warning-bg-alt);color:var(--color-warning-text);}
 .b-red{background:var(--color-danger-bg-alt);color:var(--color-danger-text);}
@@ -572,7 +572,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .b-gray{background:var(--color-surface-sunken);color:var(--color-text-muted);}
 /* TABLE */
 .data-table{width:100%;border-collapse:collapse;font-size:11px;}
-.data-table thead th{text-align:left;padding:7px 9px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);border-bottom:2px solid var(--border);background:var(--color-surface-alt);white-space:nowrap;}
+.data-table thead th{text-align:left;padding:7px 9px;font-size:9px;font-weight:500;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);border-bottom:2px solid var(--border);background:var(--color-surface-alt);white-space:nowrap;}
 .data-table th.sortable{cursor:pointer;user-select:none;position:relative;padding-right:18px;}
 .data-table th.sortable:hover{background:#eef2f6;color:var(--color-brand-ink);}
 .data-table th.sortable::after{content:'↕';position:absolute;right:6px;top:50%;transform:translateY(-50%);font-size:10px;opacity:0.4;}
@@ -596,12 +596,12 @@ html.density-compact .data-table thead th{padding-top:3px;padding-bottom:3px;}
 html.density-compact .data-table tbody td{padding-top:3px;padding-bottom:3px;}
 .data-table tbody tr:hover{background:var(--color-surface-faint);}
 .data-table tbody tr:last-child td{border-bottom:none;}
-.age-pill{font-family:'DM Mono',monospace;font-weight:700;font-size:10px;padding:2px 6px;border-radius:99px;}
+.age-pill{font-family:ui-monospace,'Segoe UI Mono','SF Mono',monospace;font-weight:500;font-size:10px;padding:2px 6px;border-radius:99px;}
 .age-ok{background:var(--color-success-bg);color:var(--color-brand-ink);}
 .age-warn{background:var(--color-warning-bg);color:var(--color-warning-text);}
 .age-high{background:var(--color-danger-bg-alt);color:var(--color-danger-text);}
-.jid{font-family:'DM Mono',monospace;font-weight:600;font-size:10px;}
-.amt{font-family:'DM Mono',monospace;font-size:10px;font-weight:600;}
+.jid{font-family:ui-monospace,'Segoe UI Mono','SF Mono',monospace;font-weight:500;font-size:10px;}
+.amt{font-family:ui-monospace,'Segoe UI Mono','SF Mono',monospace;font-size:10px;font-weight:500;}
 /* KPI TABLE */
 .kpi-row-good{background:var(--color-success-bg);}
 .kpi-row-warn{background:var(--color-warning-bg);}
@@ -611,14 +611,14 @@ html.density-compact .data-table tbody td{padding-top:3px;padding-bottom:3px;}
 .risk-bar{height:5px;border-radius:99px;}
 /* FILTER */
 .filter-bar{display:flex;gap:8px;margin-bottom:12px;align-items:center;flex-wrap:wrap;}
-.filter-bar input,.filter-bar select{padding:6px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:11px;font-family:'DM Sans',sans-serif;background:var(--color-surface);}
+.filter-bar input,.filter-bar select{padding:6px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:11px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;background:var(--color-surface);}
 .filter-bar input:focus,.filter-bar select:focus{outline:none;border-color:var(--green);}
 /* TOAST */
-.toast{position:fixed;bottom:20px;right:20px;background:var(--color-primary);color:var(--color-on-accent);padding:10px 18px;border-radius:9px;font-size:12px;font-weight:600;transform:translateY(80px);opacity:0;transition:all .3s;z-index:9999;}
+.toast{position:fixed;bottom:20px;right:20px;background:var(--color-primary);color:var(--color-on-accent);padding:10px 18px;border-radius:9px;font-size:12px;font-weight:500;transform:translateY(80px);opacity:0;transition:all .3s;z-index:9999;}
 .toast.show{transform:translateY(0);opacity:1;}
 /* REFERENCE TABLE */
 .ref-table{width:100%;border-collapse:collapse;font-size:12px;}
-.ref-table th{background:var(--color-primary);color:var(--color-on-accent);padding:9px 12px;font-size:11px;font-weight:700;text-align:left;}
+.ref-table th{background:var(--color-primary);color:var(--color-on-accent);padding:9px 12px;font-size:11px;font-weight:500;text-align:left;}
 .ref-table td{padding:8px 12px;border-bottom:1px solid var(--border);}
 .ref-table tbody tr:nth-child(even){background:var(--color-surface-alt);}
 .tier-5{background:var(--color-success-mid);color:var(--color-brand-ink);}
@@ -627,7 +627,7 @@ html.density-compact .data-table tbody td{padding-top:3px;padding-bottom:3px;}
 .tier-21{background:var(--color-danger-bg-alt);color:var(--color-danger-text);}
 .tier-30{background:var(--color-surface-sunken);color:var(--color-text-muted);}
 @media(max-width:900px){.layout{grid-template-columns:1fr;}.sg-4,.sg-5{grid-template-columns:repeat(2,1fr);}.sidebar{position:fixed;top:0;left:0;bottom:0;width:240px;z-index:100;transform:translateX(-100%);transition:transform .25s;box-shadow:2px 0 12px rgba(0,0,0,0.2);}.sidebar.open{transform:translateX(0);}.mobile-menu-btn{display:inline-flex !important;}.mobile-menu-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:99;}.mobile-menu-overlay.open{display:block;}}
-.mobile-menu-btn{display:none;align-items:center;justify-content:center;background:var(--green-dk);color:var(--color-on-accent);border:0;border-radius:6px;padding:6px 12px;font-size:13px;font-weight:700;cursor:pointer;margin-right:10px;}
+.mobile-menu-btn{display:none;align-items:center;justify-content:center;background:var(--green-dk);color:var(--color-on-accent);border:0;border-radius:6px;padding:6px 12px;font-size:13px;font-weight:500;cursor:pointer;margin-right:10px;}
 .print-header{display:none;}
 @media print{
   @page{size:letter;margin:0.5in;}
@@ -635,8 +635,8 @@ html.density-compact .data-table tbody td{padding-top:3px;padding-bottom:3px;}
   .sidebar,.header,.upload-banner,.tool-mode-bar,.upload-panel-wrap,.filter-bar,.toast,.pagination-bar,.mobile-menu-btn,.mobile-menu-overlay,.us-swap,.toggle-banner-btn,.no-print,.screen-title{display:none!important;}
   *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}
   .print-header{display:flex!important;align-items:center;justify-content:space-between;gap:12px;background:var(--color-primary);color:var(--color-on-accent);padding:12px 16px;border-radius:6px;margin-bottom:14px;}
-  .print-header .ph-brand{font-family:'DM Sans',sans-serif;font-weight:800;font-size:15px;letter-spacing:0.5px;}
-  .print-header .ph-title{font-family:'DM Sans',sans-serif;font-size:12px;text-align:right;}
+  .print-header .ph-brand{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;font-weight:500;font-size:15px;letter-spacing:0.5px;}
+  .print-header .ph-title{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;font-size:12px;text-align:right;}
   .layout{grid-template-columns:1fr;}
   .main{padding:8px;}
   .card,.stat-box{break-inside:avoid;border:1px solid #ddd;}
@@ -665,7 +665,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible{
 .filter-chip{
   display:inline-flex;align-items:center;gap:4px;
   padding:3px 8px;border-radius:var(--radius-pill);
-  font-size:10px;font-weight:600;font-family:var(--font-mono);
+  font-size:10px;font-weight:500;font-family:var(--font-mono);
   background:#dcfce7;color:var(--color-brand-ink);
   border:1px solid var(--color-primary-mid);
 }
@@ -785,7 +785,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible{
 .wb-health.wb-crit{border-left-color:var(--red);}
 .wb-health-head{display:flex;align-items:center;gap:10px;padding:9px 13px;cursor:pointer;user-select:none;}
 .wb-health-ico{font-size:14px;line-height:1;flex:0 0 auto;}
-.wb-health-msg{flex:1;color:var(--text);font-weight:600;font-size:12.5px;}
+.wb-health-msg{flex:1;color:var(--text);font-weight:500;font-size:12.5px;}
 .wb-health-msg small{display:block;font-weight:400;color:var(--muted);margin-top:1px;font-size:11px;}
 .wb-health-tog{font-size:11px;color:var(--muted);flex:0 0 auto;}
 .wb-health-body{border-top:1px solid var(--border);background:var(--color-surface-alt);padding:10px 13px;display:none;}
@@ -799,12 +799,12 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible{
 .sv-menu.open{display:block;}
 .sv-head{font-size:10px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);padding:5px 7px 6px;}
 .sv-row{display:flex;align-items:center;gap:4px;}
-.sv-item{flex:1;min-width:0;text-align:left;background:none;border:0;border-radius:6px;padding:7px 8px;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:12px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.sv-item{flex:1;min-width:0;text-align:left;background:none;border:0;border-radius:6px;padding:7px 8px;cursor:pointer;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;font-size:12px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .sv-item:hover{background:var(--color-surface-alt);}
 .sv-del{flex:0 0 auto;background:none;border:0;color:var(--muted);cursor:pointer;font-size:12px;padding:4px 7px;border-radius:6px;line-height:1;}
 .sv-del:hover{color:var(--red);background:var(--color-surface-alt);}
 .sv-empty{font-size:11px;color:var(--muted);padding:7px 8px 9px;line-height:1.5;}
-.sv-save{display:block;width:100%;text-align:left;margin-top:4px;border:0;border-top:1px solid var(--border);background:none;padding:8px 8px 6px;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:12px;font-weight:600;color:var(--green-dk);}
+.sv-save{display:block;width:100%;text-align:left;margin-top:4px;border:0;border-top:1px solid var(--border);background:none;padding:8px 8px 6px;cursor:pointer;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;font-size:12px;font-weight:500;color:var(--green-dk);}
 .sv-save:hover{color:var(--green);}
 </style>
 <style>html.embedded .header,html.embedded .tool-mode-bar{display:none}</style>
@@ -915,8 +915,8 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible{
     <div class="sb-section" id="sbFileSection" style="display:none;">
       <div class="sb-title">Loaded File</div>
       <div class="us-file" id="sideFileName" style="padding:2px 6px 8px;word-break:break-all;line-height:1.3;">No file loaded</div>
-      <button class="save-dash-btn" id="saveDashBtnSide" style="width:100%;justify-content:center;margin-bottom:6px;font-size:11px;padding:8px 11px;border-radius:6px;background:var(--green-dk);color:var(--color-on-accent);border:none;cursor:pointer;font-family:inherit;font-weight:600;display:inline-flex;align-items:center;gap:4px;" title="Save a self-contained HTML copy with current data baked in">💾 Save Dashboard <span class="edit-badge" id="editBadgeSide" style="display:none;">0</span></button>
-      <button class="ghost-btn" id="sideReplaceBtn" style="width:100%;justify-content:center;font-size:11px;padding:7px 11px;border-radius:6px;background:var(--color-surface);border:1px solid var(--color-success-border);color:var(--color-brand-ink);cursor:pointer;font-family:inherit;font-weight:600;display:inline-flex;align-items:center;gap:4px;" title="Load a different workbook">↻ Replace file</button>
+      <button class="save-dash-btn" id="saveDashBtnSide" style="width:100%;justify-content:center;margin-bottom:6px;font-size:11px;padding:8px 11px;border-radius:6px;background:var(--green-dk);color:var(--color-on-accent);border:none;cursor:pointer;font-family:inherit;font-weight:500;display:inline-flex;align-items:center;gap:4px;" title="Save a self-contained HTML copy with current data baked in">💾 Save Dashboard <span class="edit-badge" id="editBadgeSide" style="display:none;">0</span></button>
+      <button class="ghost-btn" id="sideReplaceBtn" style="width:100%;justify-content:center;font-size:11px;padding:7px 11px;border-radius:6px;background:var(--color-surface);border:1px solid var(--color-success-border);color:var(--color-brand-ink);cursor:pointer;font-family:inherit;font-weight:500;display:inline-flex;align-items:center;gap:4px;" title="Load a different workbook">↻ Replace file</button>
     </div>
     <div class="sb-divider" id="sbFileDivider" style="display:none;"></div>
     <div class="sb-section">
@@ -1340,7 +1340,7 @@ function jobTable(jobs, mode='', showCoord=true) {
       <td>${priorityPill(j.priority)||'<span style="color:var(--muted);font-size:10px;">—</span>'}</td>
       <td class="tv-cell">${chipList(j.trades,3)}</td>
       <td class="tv-cell">${chipList(j.vendors,2)}</td>
-      <td>${updatePill(j)}${j.lastReviewedBy?`<div style="margin-top:2px;font-size:9px;color:var(--muted);font-family:'DM Mono',monospace;">✎ ${escapeHtml(j.lastReviewedBy)}</div>`:''}</td>
+      <td>${updatePill(j)}${j.lastReviewedBy?`<div style="margin-top:2px;font-size:9px;color:var(--muted);font-family:ui-monospace,'Segoe UI Mono','SF Mono',monospace;">✎ ${escapeHtml(j.lastReviewedBy)}</div>`:''}</td>
       <td style="font-size:11px;">${escapeHtml(j.fm||'-')}</td>
       <td style="font-size:11px;color:#64748b;">${escapeHtml(j.location)}</td>
       <td style="font-size:10px;color:#475569;max-width:220px;" title="${escapeHtml(j.notes||'')}">${j.notes?escapeHtml(j.notes).slice(0,180)+(j.notes.length>180?'…':''):'-'}</td>
@@ -1986,8 +1986,8 @@ function o30LineHtml(jobId){
   const when = isNaN(d.getTime()) ? '' : (d.getMonth()+1)+'/'+d.getDate();
   const ageD = isNaN(d.getTime()) ? null : Math.floor((Date.now()-+d)/86400000);
   const stale = ageD!==null && ageD>7;
-  return '<div class="jm-section-label">Latest Over-30 line'+(when?' <span style="font-weight:500;color:var(--muted);">— entered '+escapeHtml(when)+(rec.by?' by '+escapeHtml(rec.by):'')+(stale?' · <span style="color:#b45309;font-weight:700;">'+ageD+'d old</span>':'')+'</span>':'')+'</div>'
-    + '<div class="jn-doc-card"><div class="np-text" style="font-family:\'DM Mono\',monospace;font-size:11.5px;">'+escapeHtml(rec.line)+'</div></div>';
+  return '<div class="jm-section-label">Latest Over-30 line'+(when?' <span style="font-weight:500;color:var(--muted);">— entered '+escapeHtml(when)+(rec.by?' by '+escapeHtml(rec.by):'')+(stale?' · <span style="color:#b45309;font-weight:500;">'+ageD+'d old</span>':'')+'</span>':'')+'</div>'
+    + '<div class="jn-doc-card"><div class="np-text" style="font-family:ui-monospace,\'Segoe UI Mono\',\'SF Mono\',monospace;font-size:11.5px;">'+escapeHtml(rec.line)+'</div></div>';
 }
 // ── Job plans (a "Next Actions Required" list authored in an Umbrava NOTE, pushed
 // job→dashboard by the connector) ──  { "<jobId>": { items:[...], src, ts, by } }.
@@ -2994,14 +2994,14 @@ function renderOverview(mc, agg) {
     const safeName = escapeHtml(name);
     const naN = _bnNextActions(c.jobs).length;
     return `<tr>
-      <td><button style="background:none;border:none;cursor:pointer;font-weight:700;color:#1a5f3e;font-size:11px;text-decoration:underline;font-family:'DM Mono',monospace;" data-nav-name="${safeName}">${safeName}</button>${naN?` <span class="na-badge" title="${naN} open action${naN===1?'':'s'} required">${naN}</span>`:''}</td>
-      <td style="font-family:'DM Mono',monospace;font-weight:700;font-size:11px;">${n}</td>
+      <td><button style="background:none;border:none;cursor:pointer;font-weight:500;color:#1a5f3e;font-size:11px;text-decoration:underline;font-family:ui-monospace,'Segoe UI Mono','SF Mono',monospace;" data-nav-name="${safeName}">${safeName}</button>${naN?` <span class="na-badge" title="${naN} open action${naN===1?'':'s'} required">${naN}</span>`:''}</td>
+      <td style="font-family:ui-monospace,'Segoe UI Mono','SF Mono',monospace;font-weight:500;font-size:11px;">${n}</td>
       <td><span class="badge ${parseInt(sr)>=80?'b-green':'b-red'}">${sr}%</span></td>
-      <td style="font-family:'DM Mono',monospace;font-size:11px;">${c.violations}</td>
-      <td style="font-family:'DM Mono',monospace;font-size:11px;">${c.highRisk}</td>
-      <td style="font-family:'DM Mono',monospace;font-size:11px;"><span class="o30-heat"><span class="o30-num">${o30}</span><span class="o30-bar"><i style="width:${n>0?Math.min(100,Math.round(o30/n*100)):0}%;background:${o30HeatColor(n>0?o30/n:0)};"></i></span></span></td>
-      <td style="font-family:'DM Mono',monospace;font-size:11px;"><span class="age-pill ${ageCls(c.maxAge)}">${c.maxAge}d</span></td>
-      <td style="font-family:'DM Mono',monospace;font-size:11px;">${fmt$0(amt)}</td>
+      <td style="font-family:ui-monospace,'Segoe UI Mono','SF Mono',monospace;font-size:11px;">${c.violations}</td>
+      <td style="font-family:ui-monospace,'Segoe UI Mono','SF Mono',monospace;font-size:11px;">${c.highRisk}</td>
+      <td style="font-family:ui-monospace,'Segoe UI Mono','SF Mono',monospace;font-size:11px;"><span class="o30-heat"><span class="o30-num">${o30}</span><span class="o30-bar"><i style="width:${n>0?Math.min(100,Math.round(o30/n*100)):0}%;background:${o30HeatColor(n>0?o30/n:0)};"></i></span></span></td>
+      <td style="font-family:ui-monospace,'Segoe UI Mono','SF Mono',monospace;font-size:11px;"><span class="age-pill ${ageCls(c.maxAge)}">${c.maxAge}d</span></td>
+      <td style="font-family:ui-monospace,'Segoe UI Mono','SF Mono',monospace;font-size:11px;">${fmt$0(amt)}</td>
       ${ytd?`<td><span class="badge ${ytd.vsGoal.includes('✅')?'b-green':ytd.vsGoal.includes('⚠')?'b-amber':'b-red'}">${escapeHtml(ytd.gpPct)}</span></td>`:'<td>—</td>'}
     </tr>`;
   }).join('');
@@ -3012,7 +3012,7 @@ function renderOverview(mc, agg) {
 
     ${thresholdBanner(agg)}
     <!-- Parse summary banner -->
-    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-left:4px solid #16a34a;border-radius:6px;padding:8px 14px;margin-bottom:12px;font-size:11px;color:#14532d;font-family:'DM Mono',monospace;">
+    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-left:4px solid #16a34a;border-radius:6px;padding:8px 14px;margin-bottom:12px;font-size:11px;color:#14532d;font-family:ui-monospace,'Segoe UI Mono','SF Mono',monospace;">
       <strong>📋 Parse summary:</strong> Loaded <strong>${total}</strong> jobs · <strong>${fmt$0(totalAmt)}</strong> approved · HIGH RISK: <strong>${hr.length}</strong> · Over 30: <strong>${over30.length}</strong> (${over30Pct}%) · Service: <strong>${service.length}</strong> · WIFI: <strong>${wifi.length}</strong> · Retrofit: <strong>${retrofit.length}</strong> · ${Object.keys(coords).length} coordinators
     </div>
 
@@ -3043,7 +3043,7 @@ function renderOverview(mc, agg) {
             <div style="flex:1;background:var(--color-surface-sunken);border-radius:99px;height:6px;overflow:hidden;">
               <div style="width:${total>0?(arr.length/total*100).toFixed(0):0}%;height:100%;background:${col};border-radius:99px;"></div>
             </div>
-            <div style="width:50px;text-align:right;font-family:'DM Mono',monospace;font-size:11px;font-weight:700;">${arr.length}</div>
+            <div style="width:50px;text-align:right;font-family:ui-monospace,'Segoe UI Mono','SF Mono',monospace;font-size:11px;font-weight:500;">${arr.length}</div>
             <div style="width:45px;text-align:right;font-size:10px;color:var(--muted);">${pct(arr.length,total)}</div>
           </div>`).join('')}
         </div>
@@ -3053,11 +3053,11 @@ function renderOverview(mc, agg) {
         <div class="card-body" style="padding:10px 16px;">
           ${[['🔧 Service',service,'b-blue'],['📶 WIFI',wifi,'b-amber'],['🏗 Retrofit',retrofit,'b-green']].map(([label,arr,cls])=>`
           <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
-            <div style="width:90px;font-size:11px;font-weight:600;">${label}</div>
+            <div style="width:90px;font-size:11px;font-weight:500;">${label}</div>
             <div style="flex:1;background:var(--color-surface-sunken);border-radius:99px;height:6px;overflow:hidden;">
               <div style="width:${total>0?(arr.length/total*100).toFixed(0):0}%;height:100%;background:var(--green);border-radius:99px;"></div>
             </div>
-            <div style="width:60px;text-align:right;font-family:'DM Mono',monospace;font-size:11px;font-weight:700;">${arr.length} (${pct(arr.length,total)})</div>
+            <div style="width:60px;text-align:right;font-family:ui-monospace,'Segoe UI Mono','SF Mono',monospace;font-size:11px;font-weight:500;">${arr.length} (${pct(arr.length,total)})</div>
           </div>`).join('')}
           <div style="margin-top:10px;border-top:1px solid var(--border);padding-top:8px;font-size:10px;color:var(--muted);">
             Service: ${fmt$0(service.reduce((s,j)=>s+j.amount,0))} · WIFI: ${fmt$0(wifi.reduce((s,j)=>s+j.amount,0))} · Retrofit: ${fmt$0(retrofit.reduce((s,j)=>s+j.amount,0))}
@@ -3071,11 +3071,11 @@ function renderOverview(mc, agg) {
             const count = JOBS.filter(j=>j.aged>=lo&&j.aged<=hi).length;
             const label = hi===999?'90+ Days':`${lo}–${hi} Days`;
             return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
-              <div style="width:80px;font-size:10px;font-weight:600;color:var(--muted);">${label}</div>
+              <div style="width:80px;font-size:10px;font-weight:500;color:var(--muted);">${label}</div>
               <div style="flex:1;background:var(--color-surface-sunken);border-radius:99px;height:5px;overflow:hidden;">
                 <div style="width:${total>0?(count/total*100).toFixed(0):0}%;height:100%;background:var(--green);border-radius:99px;"></div>
               </div>
-              <div style="width:30px;text-align:right;font-family:'DM Mono',monospace;font-size:10px;font-weight:700;" class="${cls}">${count}</div>
+              <div style="width:30px;text-align:right;font-family:ui-monospace,'Segoe UI Mono','SF Mono',monospace;font-size:10px;font-weight:500;" class="${cls}">${count}</div>
             </div>`;
           }).join('')}
         </div>
@@ -3243,7 +3243,7 @@ function renderO30Compare(){
   const cj=window._closedJobs||[];
   if(!cj.length){
     slot.innerHTML = `<div class="card no-print"><div class="card-body" style="padding:14px 16px;">
-      <div style="font-size:12px;color:var(--text);font-weight:600;margin-bottom:4px;">Open vs Closed comparison</div>
+      <div style="font-size:12px;color:var(--text);font-weight:500;margin-bottom:4px;">Open vs Closed comparison</div>
       <div style="font-size:11px;color:var(--muted);margin-bottom:10px;">Load the completed/invoiced export (2026 Pilot Revenue) to benchmark these open over-30s against how long jobs actually take to finish.</div>
       <input type="file" id="closedFileInput" accept=".xlsx,.xls" style="display:none;" onchange="if(this.files.length)handleClosedFile(this.files[0]);">
       <button class="browse-btn" onclick="document.getElementById('closedFileInput').click();">\uff0b Load completed/invoiced export</button>
@@ -3275,7 +3275,7 @@ function renderO30Compare(){
     <div class="card-body" style="padding:0;"><table class="data-table">
     <thead><tr><th>Type</th><th>Closed avg days</th><th>Closed jobs</th><th>Open &gt;30</th><th>Oldest open</th></tr></thead>
     <tbody>${typeRows.map(r=>`<tr>
-      <td style="font-weight:600;">${r.label}${r.carve?' <span style="font-size:9px;color:var(--muted);font-weight:400;">diff. cadence</span>':''}</td>
+      <td style="font-weight:500;">${r.label}${r.carve?' <span style="font-size:9px;color:var(--muted);font-weight:400;">diff. cadence</span>':''}</td>
       <td>${r.cAvg!=null?r.cAvg+'d':'\u2014'}</td>
       <td>${r.cCount||'\u2014'}</td>
       <td><strong class="${r.oOpen>10?'c-red':r.oOpen>5?'c-amber':'c-green'}">${r.oOpen}</strong></td>
@@ -3290,7 +3290,7 @@ function renderO30Compare(){
     <div class="card-body" style="padding:0;"><table class="data-table">
     <thead><tr><th>Coordinator</th><th>Open &gt;30</th><th>Oldest open</th><th>Closed avg days</th><th>Closed jobs</th></tr></thead>
     <tbody>${coordRows.map(r=>`<tr>
-      <td style="font-weight:600;">${escapeHtml(r.name)}</td>
+      <td style="font-weight:500;">${escapeHtml(r.name)}</td>
       <td><strong class="${r.open>10?'c-red':r.open>5?'c-amber':'c-green'}">${r.open}</strong></td>
       <td>${r.oldest?`<span class="age-pill ${ageCls(r.oldest)}">${r.oldest}d</span>`:'\u2014'}</td>
       <td>${r.cAvg!=null?r.cAvg+'d':'\u2014'}</td>
@@ -3374,7 +3374,7 @@ function renderOver30(mc, agg) {
   const coordTable = `<table class="data-table">
     <thead><tr><th>Coordinator</th><th>Over 30</th><th>20–30</th><th>Over-30 $</th><th>Oldest</th><th>Closed avg days</th><th>Closed jobs</th></tr></thead>
     <tbody>${rows.map((r,i)=>`<tr class="em-click" onclick="openEntityModal('coord',${i})">
-      <td style="font-weight:600;">${r.name}</td>
+      <td style="font-weight:500;">${r.name}</td>
       <td><strong class="${r.o30>10?'c-red':r.o30>5?'c-amber':'c-green'}">${r.o30}</strong></td>
       <td>${r.appr}</td>
       <td class="amt">${r.amt>0?fmt$0(r.amt):'-'}</td>
@@ -3413,7 +3413,7 @@ function renderOver30(mc, agg) {
   const vendorTable=vRows.length?`<table class="data-table">
     <thead><tr><th>Vendor</th><th>Over 30</th><th>20–30</th><th>Oldest</th></tr></thead>
     <tbody>${vTop.map(function(r,i){return `<tr class="em-click" onclick="openEntityModal('vendor',${i})">
-      <td style="font-weight:600;">${escapeHtml(r.name)}${r.sup?' <span class="nd-kind nd-sup">SUP</span>':''}</td>
+      <td style="font-weight:500;">${escapeHtml(r.name)}${r.sup?' <span class="nd-kind nd-sup">SUP</span>':''}</td>
       <td><strong class="${r.o30>10?'c-red':r.o30>5?'c-amber':'c-green'}">${r.o30}</strong></td>
       <td>${r.appr||'-'}</td>
       <td>${r.oldest?`<span class="age-pill ${ageCls(r.oldest)}">${r.oldest}d</span>`:'-'}</td>
@@ -3441,7 +3441,7 @@ function renderOver30(mc, agg) {
   const tradeTable=tRows.length?`<table class="data-table">
     <thead><tr><th>Trade</th><th>Over 30</th><th>20–30</th><th>Oldest</th></tr></thead>
     <tbody>${tTop.map(function(r,i){return `<tr class="em-click" onclick="openEntityModal('trade',${i})">
-      <td style="font-weight:600;">${escapeHtml(r.name)}</td>
+      <td style="font-weight:500;">${escapeHtml(r.name)}</td>
       <td><strong class="${r.o30>10?'c-red':r.o30>5?'c-amber':'c-green'}">${r.o30}</strong></td>
       <td>${r.appr||'-'}</td>
       <td>${r.oldest?`<span class="age-pill ${ageCls(r.oldest)}">${r.oldest}d</span>`:'-'}</td>
@@ -3456,7 +3456,7 @@ function renderOver30(mc, agg) {
     <div class="page-title screen-title">Over-30 Weekly Review</div>
     <div class="page-sub screen-title">${document.getElementById('reportDateLabel').textContent} · jobs aged by days since creation</div>
     ${typeBar}
-    <button class="no-print" onclick="window.print()" style="margin-bottom:12px;padding:6px 12px;border:1px solid var(--border);border-radius:6px;background:var(--color-surface);color:var(--color-brand-ink);font-size:11px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;">🖨 Print / Save PDF</button>
+    <button class="no-print" onclick="window.print()" style="margin-bottom:12px;padding:6px 12px;border:1px solid var(--border);border-radius:6px;background:var(--color-surface);color:var(--color-brand-ink);font-size:11px;font-weight:500;cursor:pointer;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;">🖨 Print / Save PDF</button>
     <div class="stat-grid sg-4" style="margin-bottom:14px;">
       <div class="stat-box"><div class="sb-num c-red">${over30.length}</div><div class="sb-lbl">Over 30 Days</div><div class="sb-sub">${fmt$0(o30Amt)} exposure</div></div>
       <div class="stat-box"><div class="sb-num c-blue">${fmt$0(o30Amt)}</div><div class="sb-lbl">Over-30 $ Exposure</div><div class="sb-sub">approved value</div></div>
@@ -3561,7 +3561,7 @@ function renderCompareCoords(mc, agg) {
     const cells = stats.map(s => {
       const v = getVal(s);
       const val = (v == null || v === undefined) ? '—' : (isMoney ? fmt$0(v) : v);
-      return `<td style="font-family:'DM Mono',monospace;font-weight:700;font-size:12px;text-align:right;">${val}</td>`;
+      return `<td style="font-family:ui-monospace,'Segoe UI Mono','SF Mono',monospace;font-weight:500;font-size:12px;text-align:right;">${val}</td>`;
     }).join('');
     return `<tr><td style="font-size:11px;color:var(--muted);">${label}</td>${cells}</tr>`;
   };
@@ -3589,7 +3589,7 @@ function renderCompareCoords(mc, agg) {
     const safeName = escapeHtml(s.name);
     const hr = s.c.jobs.filter(j => j.risk === 'HIGH RISK').slice(0, 5);
     if(!hr.length) return `<div class="card" style="flex:1;min-width:280px;"><div class="card-header"><h3 style="font-size:12px;">${safeName} — HIGH RISK</h3></div><div class="card-body" style="padding:14px;color:var(--muted);font-size:11px;">No HIGH RISK jobs.</div></div>`;
-    const rows = hr.map(j => `<tr><td style="font-family:'DM Mono',monospace;font-size:10px;">${escapeHtml(j.jobId||'—')}</td><td style="font-size:10px;"><span class="age-pill ${ageCls(j.aged)}">${j.aged}d</span></td><td style="font-size:10px;">${j.amount>0?fmt$0(j.amount):'—'}</td></tr>`).join('');
+    const rows = hr.map(j => `<tr><td style="font-family:ui-monospace,'Segoe UI Mono','SF Mono',monospace;font-size:10px;">${escapeHtml(j.jobId||'—')}</td><td style="font-size:10px;"><span class="age-pill ${ageCls(j.aged)}">${j.aged}d</span></td><td style="font-size:10px;">${j.amount>0?fmt$0(j.amount):'—'}</td></tr>`).join('');
     const total = s.c.jobs.filter(j=>j.risk==='HIGH RISK').length;
     return `<div class="card" style="flex:1;min-width:280px;"><div class="card-header"><h3 style="font-size:12px;">${safeName} — HIGH RISK (${total} total)</h3></div><div class="card-body" style="padding:0;"><table class="data-table"><thead><tr><th>Job ID</th><th>Age</th><th>$</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
   }).join('');
@@ -3599,7 +3599,7 @@ function renderCompareCoords(mc, agg) {
     <div class="page-sub">Pick any 2–4 coordinators to see their workload side-by-side</div>
 
     <div style="background:var(--color-surface-alt);border:1px solid var(--border);border-radius:7px;padding:12px 14px;margin-bottom:14px;">
-      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--muted);margin-bottom:8px;">Select Coordinators (max 4)</div>
+      <div style="font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:0.5px;color:var(--muted);margin-bottom:8px;">Select Coordinators (max 4)</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;">${checkboxes}</div>
     </div>
 
@@ -3640,10 +3640,10 @@ function renderKPI(mc) {
     const emoji = isBad?'🔴':isGood?'✅':'⚠';
     const cleanStatus = (m.status||'').replace('🔴 ','').replace('⚠ ','').replace('✅ ','');
     return `<tr class="${cls}">
-      <td style="font-weight:700;font-size:12px;">${escapeHtml(k)}</td>
-      <td style="font-family:'DM Mono',monospace;font-size:11px;">${escapeHtml(m.goal)}</td>
-      <td style="font-family:'DM Mono',monospace;font-size:11px;">${escapeHtml(m.target)}</td>
-      <td style="font-family:'DM Mono',monospace;font-size:12px;font-weight:700;">${escapeHtml(m.current)}</td>
+      <td style="font-weight:500;font-size:12px;">${escapeHtml(k)}</td>
+      <td style="font-family:ui-monospace,'Segoe UI Mono','SF Mono',monospace;font-size:11px;">${escapeHtml(m.goal)}</td>
+      <td style="font-family:ui-monospace,'Segoe UI Mono','SF Mono',monospace;font-size:11px;">${escapeHtml(m.target)}</td>
+      <td style="font-family:ui-monospace,'Segoe UI Mono','SF Mono',monospace;font-size:12px;font-weight:500;">${escapeHtml(m.current)}</td>
       <td>${emoji} ${escapeHtml(cleanStatus)}</td>
     </tr>`;
   }).join('');
@@ -3653,11 +3653,11 @@ function renderKPI(mc) {
     const isOk = r.vsGoal.includes('✅');
     const cls = isBad?'kpi-row-bad':isOk?'kpi-row-good':'kpi-row-warn';
     return `<tr class="${cls}">
-      <td style="font-weight:600;font-size:12px;">${escapeHtml(r.name)}</td>
-      <td style="font-family:'DM Mono',monospace;font-size:11px;">${fmt$0(r.revenue)}</td>
-      <td style="font-family:'DM Mono',monospace;font-size:11px;">${fmt$0(r.gp)}</td>
-      <td style="font-family:'DM Mono',monospace;font-size:12px;font-weight:700;">${escapeHtml(r.gpPct)}</td>
-      <td style="font-family:'DM Mono',monospace;font-size:11px;">${escapeHtml(r.propTurnover)}</td>
+      <td style="font-weight:500;font-size:12px;">${escapeHtml(r.name)}</td>
+      <td style="font-family:ui-monospace,'Segoe UI Mono','SF Mono',monospace;font-size:11px;">${fmt$0(r.revenue)}</td>
+      <td style="font-family:ui-monospace,'Segoe UI Mono','SF Mono',monospace;font-size:11px;">${fmt$0(r.gp)}</td>
+      <td style="font-family:ui-monospace,'Segoe UI Mono','SF Mono',monospace;font-size:12px;font-weight:500;">${escapeHtml(r.gpPct)}</td>
+      <td style="font-family:ui-monospace,'Segoe UI Mono','SF Mono',monospace;font-size:11px;">${escapeHtml(r.propTurnover)}</td>
       <td style="font-size:14px;">${escapeHtml(r.vsGoal.split(' ')[0])}</td>
     </tr>`;
   }).join('');
@@ -3687,7 +3687,7 @@ function renderKPI(mc) {
 
 // ── SLA GUIDE ─────────────────────────────────────────────────────────────
 function renderSlaGuide(mc) {
-  const rows = SLA_REF.map(r=>`<tr><td style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);">${r.num}</td><td style="font-weight:600;font-size:12px;">${r.status}</td><td><span class="badge ${r.maxTime.includes('Hour')?'b-red':r.maxTime.includes('Day')?'b-amber':'b-blue'}">${r.maxTime}</span></td></tr>`).join('');
+  const rows = SLA_REF.map(r=>`<tr><td style="font-family:ui-monospace,'Segoe UI Mono','SF Mono',monospace;font-size:11px;color:var(--muted);">${r.num}</td><td style="font-weight:500;font-size:12px;">${r.status}</td><td><span class="badge ${r.maxTime.includes('Hour')?'b-red':r.maxTime.includes('Day')?'b-amber':'b-blue'}">${r.maxTime}</span></td></tr>`).join('');
   mc.innerHTML = `
     <div class="page-title">Status Efficiency Reference</div>
     <div class="page-sub">Maximum time allowed in each status · Standard Reactive Call</div>
@@ -3761,7 +3761,7 @@ function renderEscalations(mc, agg) {
       const sum = group.reduce((s,j)=>s+j.amount,0);
       const cards = group.sort((a,b)=>b.amount-a.amount).map(escCard).join('');
       return `<div class="esc-group">
-        <div class="esc-group-title">${emoji} ${label} <span class="badge b-gray">${group.length}</span> <span style="font-family:'DM Mono',monospace;color:var(--muted);font-weight:500;">${fmt$0(sum)}</span></div>
+        <div class="esc-group-title">${emoji} ${label} <span class="badge b-gray">${group.length}</span> <span style="font-family:ui-monospace,'Segoe UI Mono','SF Mono',monospace;color:var(--muted);font-weight:500;">${fmt$0(sum)}</span></div>
         ${cards}
       </div>`;
     }).join('');
@@ -3778,7 +3778,7 @@ function renderEscalations(mc, agg) {
         return pa-pb || b.amount-a.amount;
       }).map(escCard).join('');
       return `<div class="esc-group">
-        <div class="esc-group-title">👤 ${escapeHtml(name)} <span class="badge b-gray">${group.length}</span> <span style="font-family:'DM Mono',monospace;color:var(--muted);font-weight:500;">${fmt$0(sum)}</span>${high?` <span class="pri-pill pri-high">${high} HIGH</span>`:''}</div>
+        <div class="esc-group-title">👤 ${escapeHtml(name)} <span class="badge b-gray">${group.length}</span> <span style="font-family:ui-monospace,'Segoe UI Mono','SF Mono',monospace;color:var(--muted);font-weight:500;">${fmt$0(sum)}</span>${high?` <span class="pri-pill pri-high">${high} HIGH</span>`:''}</div>
         ${cards}
       </div>`;
     }).join('');
@@ -3816,7 +3816,7 @@ function escCard(j) {
         ${ageP}
         ${updPill}
         ${reviewerBadge}
-        ${j.amount>0?`<span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);font-weight:600;">${fmt$0(j.amount)}</span>`:''}
+        ${j.amount>0?`<span style="font-family:ui-monospace,'Segoe UI Mono','SF Mono',monospace;font-size:11px;color:var(--muted);font-weight:500;">${fmt$0(j.amount)}</span>`:''}
       </div>
       <div class="esc-card-meta">
         ${escapeHtml(j.coordinator||'—')}<br>
@@ -4712,7 +4712,7 @@ function saveDashboard() {
         'if(slot) slot.innerHTML=' + JSON.stringify(loadedFileHtml) + ';' +
       '} initDateLabels();');
 
-    const banner = '<div style="background:#fff3cd;border-bottom:1px solid #f0d87a;padding:6px 20px;font:12px/1.4 \'DM Sans\',sans-serif;color:#665a1a;text-align:center;">\ud83d\udcf8 Snapshot view \u2014 data baked in ' + new Date().toLocaleString() + '. To work with a new upload, open the original dashboard tool.</div>';
+    const banner = '<div style="background:#fff3cd;border-bottom:1px solid #f0d87a;padding:6px 20px;font:12px/1.4 -apple-system,BlinkMacSystemFont,\'Segoe UI\',\'Helvetica Neue\',Arial,sans-serif;color:#665a1a;text-align:center;">\ud83d\udcf8 Snapshot view \u2014 data baked in ' + new Date().toLocaleString() + '. To work with a new upload, open the original dashboard tool.</div>';
     // Inject the standard snapshot flag so live-only features (data-store
     // fetches like the over-30 trend) can detect they're running in a saved copy.
     const snapFlag = '<scr'+'ipt>window.BROADWAY_SNAPSHOT=true;</scr'+'ipt>';
@@ -5100,9 +5100,9 @@ function _o30Pick(entries, curStr, targetDays, minD, maxD){
 }
 
 function _o30Arrow(n){
-  if(n>0) return `<span class="c-red" style="font-weight:700;">\u25b2 +${n}</span>`;
-  if(n<0) return `<span class="c-green" style="font-weight:700;">\u25bc ${n}</span>`;
-  return `<span class="c-amber" style="font-weight:700;">\u2014 0</span>`;
+  if(n>0) return `<span class="c-red" style="font-weight:500;">\u25b2 +${n}</span>`;
+  if(n<0) return `<span class="c-green" style="font-weight:500;">\u25bc ${n}</span>`;
+  return `<span class="c-amber" style="font-weight:500;">\u2014 0</span>`;
 }
 // Plain-text signed delta for sparkline tooltips: "\u25b2 +3" / "\u25bc \u22122" / "\u2014 0".
 function _bnDeltaStr(d){ return d>0?('\u25b2 +'+d):(d<0?('\u25bc \u2212'+(-d)):'\u2014 0'); }
@@ -5204,12 +5204,12 @@ function o30SparkBlock(entries, cur){
   const color = (getComputedStyle(document.documentElement).getPropertyValue('--color-success-text').trim()) || '#1a5f3e';
   return `<div style="display:flex;align-items:center;gap:16px;padding:12px 14px;border-bottom:1px solid var(--border);">
     <div style="min-width:130px;">
-      <div style="font-size:11px;font-weight:700;color:var(--text);">Over-30 trajectory</div>
+      <div style="font-size:11px;font-weight:500;color:var(--text);">Over-30 trajectory</div>
       <div style="font-size:10px;color:var(--muted);">last ${vals.length} audits</div>
     </div>
     <div style="flex:1;max-width:340px;">${o30Sparkline(vals,320,40,color,series.map(function(s,i){ const dc=_o30DivCounts(s.ids); const dA=i>0?(s.amt-series[i-1].amt):null; return [s.dateStr, s.count+' over-30', (s.amt?fmt$0(s.amt)+' exposure':'')+(dA?' ('+(dA>0?'+':'−')+fmt$0(Math.abs(dA))+')':''), 'Svc '+dc.Service+' · WiFi '+dc.WiFi+' · RF '+dc.Photometrics, s.appr?s.appr+' approaching (20–30d)':'', s.tr?('▲ '+s.tr.crossed.length+' crossed · ▼ '+s.tr.cleared.length+' cleared'):(i>0?_bnDeltaStr(s.count-series[i-1].count)+' net vs prior':'')]; }))}</div>
-    <div style="text-align:right;font-family:'DM Mono',monospace;min-width:54px;">
-      <div style="font-size:16px;font-weight:700;">${last}</div>
+    <div style="text-align:right;font-family:ui-monospace,'Segoe UI Mono','SF Mono',monospace;min-width:54px;">
+      <div style="font-size:16px;font-weight:500;">${last}</div>
       <div style="font-size:10px;" class="${dir}">${dirTxt}</div>
     </div>
   </div>`;
@@ -5234,16 +5234,16 @@ function o30MultiSparkBlock(entries, cur){
   }
   const counts=rows.map(function(r){ return _o30DivCounts(r.ids); });
   const SERIES=[{key:'overall',lbl:'Overall',color:'#1a5f3e'},{key:'Service',lbl:'Service',color:'#2f6df6'},{key:'WiFi',lbl:'WiFi',color:'#8e44ad'},{key:'Photometrics',lbl:'Photometrics',color:'#d68910'}];
-  const head='<div style="padding:11px 14px 4px;font-size:11px;font-weight:700;color:var(--text);">Over-30 trajectory <span style="font-weight:400;color:var(--muted);">\u00b7 last '+rows.length+' audits \u00b7 WiFi and Photometrics are carve-outs from the target, tracked so nothing slips</span></div>';
+  const head='<div style="padding:11px 14px 4px;font-size:11px;font-weight:500;color:var(--text);">Over-30 trajectory <span style="font-weight:400;color:var(--muted);">\u00b7 last '+rows.length+' audits \u00b7 WiFi and Photometrics are carve-outs from the target, tracked so nothing slips</span></div>';
   const body=SERIES.map(function(s){
     const vals=counts.map(function(c){ return c[s.key]; });
     const first=vals[0], last=vals[vals.length-1];
     const dir=last>first?'c-red':last<first?'c-green':'c-amber';
     const dirTxt=last>first?('\u25b2 +'+(last-first)):last<first?('\u25bc \u2212'+(first-last)):'\u2014 0';
     return '<div style="display:flex;align-items:center;gap:14px;padding:7px 14px;border-bottom:1px solid var(--border);">'
-      +'<div style="min-width:104px;display:flex;align-items:center;gap:7px;"><span style="width:9px;height:9px;border-radius:2px;background:'+s.color+';display:inline-block;flex:0 0 auto;"></span><span style="font-size:11.5px;font-weight:600;color:var(--text);">'+s.lbl+'</span></div>'
+      +'<div style="min-width:104px;display:flex;align-items:center;gap:7px;"><span style="width:9px;height:9px;border-radius:2px;background:'+s.color+';display:inline-block;flex:0 0 auto;"></span><span style="font-size:11.5px;font-weight:500;color:var(--text);">'+s.lbl+'</span></div>'
       +'<div style="flex:1;max-width:300px;">'+o30Sparkline(vals,300,30,s.color,vals.map(function(v,i){ const tot=counts[i].overall; return [rows[i].dateStr, v+' '+s.lbl, tot?Math.round(v/tot*100)+'% of over-30':'', i>0?_bnDeltaStr(v-vals[i-1])+' vs prior':'']; }))+'</div>'
-      +'<div style="text-align:right;font-family:\'DM Mono\',monospace;min-width:70px;"><span style="font-size:15px;font-weight:700;">'+last+'</span> <span style="font-size:10px;" class="'+dir+'">'+dirTxt+'</span></div>'
+      +'<div style="text-align:right;font-family:ui-monospace,\'Segoe UI Mono\',\'SF Mono\',monospace;min-width:70px;"><span style="font-size:15px;font-weight:500;">'+last+'</span> <span style="font-size:10px;" class="'+dir+'">'+dirTxt+'</span></div>'
       +'</div>';
   }).join('');
   return head+body;
@@ -5263,7 +5263,7 @@ function o30StatusSection(over30){
   const rows=Object.keys(by).map(function(s){ return {s:s, n:by[s].n, amt:by[s].amt}; }).sort(function(a,b){ return b.n-a.n||b.amt-a.amt; });
   const body=rows.map(function(r){
     const pct=pileN?Math.round(r.n/pileN*100):0;
-    return `<tr><td style="font-weight:600;">${escapeHtml(r.s)}</td><td><strong>${r.n}</strong></td><td><div style="display:flex;align-items:center;gap:7px;"><div style="flex:1;max-width:120px;height:7px;border-radius:4px;background:var(--border);overflow:hidden;"><div style="width:${pct}%;height:100%;background:#2f6df6;"></div></div><span style="font-size:10px;color:var(--muted);">${pct}%</span></div></td><td class="amt">${r.amt>0?fmt$0(r.amt):"-"}</td></tr>`;
+    return `<tr><td style="font-weight:500;">${escapeHtml(r.s)}</td><td><strong>${r.n}</strong></td><td><div style="display:flex;align-items:center;gap:7px;"><div style="flex:1;max-width:120px;height:7px;border-radius:4px;background:var(--border);overflow:hidden;"><div style="width:${pct}%;height:100%;background:#2f6df6;"></div></div><span style="font-size:10px;color:var(--muted);">${pct}%</span></div></td><td class="amt">${r.amt>0?fmt$0(r.amt):"-"}</td></tr>`;
   }).join("");
   const inner = rows.length ? `<table class="data-table"><thead><tr><th>Status</th><th>Jobs</th><th>Share of pile</th><th>Over-30 $</th></tr></thead><tbody>${body}</tbody></table>` : `<div class="bn-note">No over-30 jobs on the current set.</div>`;
   return `<div class="card"><div class="card-header"><h3>Where they are stuck</h3><span class="card-meta">over-30 jobs by status &middot; the chokepoints</span></div><div class="card-body" style="padding:0;">${inner}</div></div>`;
@@ -5282,7 +5282,7 @@ function _o30ActionRows(list){
   return list.map(function(j){
     const sd=_o30StaleDays(j);
     const dtxt=(sd==null)?`<span class="c-red">never</span>`:(sd>=14?`<span class="c-red">${sd}d</span>`:`<span class="c-amber">${sd}d</span>`);
-    return `<tr><td style="font-weight:600;">${escapeHtml(j.jobId)}</td><td>${escapeHtml(j.coordinator||"-")}</td><td><span class="age-pill ${ageCls(j.aged)}">${j.aged}d</span></td><td>${dtxt}</td><td>${escapeHtml(j.status||"-")}</td></tr>`;
+    return `<tr><td style="font-weight:500;">${escapeHtml(j.jobId)}</td><td>${escapeHtml(j.coordinator||"-")}</td><td><span class="age-pill ${ageCls(j.aged)}">${j.aged}d</span></td><td>${dtxt}</td><td>${escapeHtml(j.status||"-")}</td></tr>`;
   }).join("");
 }
 
@@ -5320,7 +5320,7 @@ function o30ChronicHtml(entries, over30, curDateStr){
   if(!streaks.length) return `<div class="bn-note">No job has stayed over-30 across three or more consecutive audits. Good churn.</div>`;
   const amt=streaks.reduce(function(s,x){ return s+x.j.amount; },0);
   const top=streaks.slice(0,15);
-  const rows=top.map(function(x){ return `<tr><td style="font-weight:600;">${escapeHtml(x.j.jobId)}</td><td>${escapeHtml(x.j.coordinator||"-")}</td><td><span class="age-pill ${ageCls(x.j.aged)}">${x.j.aged}d</span></td><td><strong class="${x.streak>=5?"c-red":"c-amber"}">${x.streak}</strong></td><td class="amt">${x.j.amount>0?fmt$0(x.j.amount):"-"}</td></tr>`; }).join("");
+  const rows=top.map(function(x){ return `<tr><td style="font-weight:500;">${escapeHtml(x.j.jobId)}</td><td>${escapeHtml(x.j.coordinator||"-")}</td><td><span class="age-pill ${ageCls(x.j.aged)}">${x.j.aged}d</span></td><td><strong class="${x.streak>=5?"c-red":"c-amber"}">${x.streak}</strong></td><td class="amt">${x.j.amount>0?fmt$0(x.j.amount):"-"}</td></tr>`; }).join("");
   return `<div style="padding:8px 14px 0;font-size:11px;color:var(--muted);">${streaks.length} job${streaks.length===1?"":"s"} over-30 for 3+ straight audits &middot; ${fmt$0(amt)} exposure</div><table class="data-table"><thead><tr><th>Job #</th><th>Coordinator</th><th>Age</th><th>Audits over-30</th><th>Approved $</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
@@ -5333,8 +5333,8 @@ function o30CoordMoveHtml(entries, curDateStr){
   const names={}; Object.keys(cur).forEach(function(n){names[n]=1;}); Object.keys(prior).forEach(function(n){names[n]=1;});
   const rows=Object.keys(names).map(function(n){ const c=cur[n]||0; const p=(prior[n]&&prior[n].o30)||0; return {n:n, cur:c, prior:p, d:c-p}; }).filter(function(r){ return r.cur>0||r.prior>0; }).sort(function(a,b){ return Math.abs(b.d)-Math.abs(a.d)||b.cur-a.cur; });
   const rh=rows.map(function(r){
-    const arrow = r.d>0?`<span class="c-red" style="font-weight:700;">&#9650; +${r.d}</span>`:r.d<0?`<span class="c-green" style="font-weight:700;">&#9660; ${r.d}</span>`:`<span class="c-amber">&mdash; 0</span>`;
-    return `<tr><td style="font-weight:600;">${escapeHtml(r.n)}</td><td>${r.prior}</td><td><strong>${r.cur}</strong></td><td>${arrow}</td></tr>`;
+    const arrow = r.d>0?`<span class="c-red" style="font-weight:500;">&#9650; +${r.d}</span>`:r.d<0?`<span class="c-green" style="font-weight:500;">&#9660; ${r.d}</span>`:`<span class="c-amber">&mdash; 0</span>`;
+    return `<tr><td style="font-weight:500;">${escapeHtml(r.n)}</td><td>${r.prior}</td><td><strong>${r.cur}</strong></td><td>${arrow}</td></tr>`;
   }).join("");
   return `<div style="padding:8px 14px 0;font-size:11px;color:var(--muted);">vs ${wow.dateStr} &middot; all divisions</div><table class="data-table"><thead><tr><th>Coordinator</th><th>Prior</th><th>Now</th><th>Change</th></tr></thead><tbody>${rh}</tbody></table>`;
 }
@@ -5355,7 +5355,7 @@ function o30ExposureSection(over30){
     +`</div>`;
   const body=rows.map(function(r){
     const share=amt?Math.round(r.amt/amt*100):0;
-    return `<tr><td style="font-weight:600;">${escapeHtml(r.c)}</td><td><strong>${r.n}</strong></td><td class="amt">${r.amt>0?fmt$0(r.amt):"-"}</td><td><div style="display:flex;align-items:center;gap:7px;"><div style="flex:1;max-width:120px;height:7px;border-radius:4px;background:var(--border);overflow:hidden;"><div style="width:${share}%;height:100%;background:#1a5f3e;"></div></div><span style="font-size:10px;color:var(--muted);">${share}%</span></div></td><td><span class="age-pill ${ageCls(r.oldest)}">${r.oldest}d</span></td></tr>`;
+    return `<tr><td style="font-weight:500;">${escapeHtml(r.c)}</td><td><strong>${r.n}</strong></td><td class="amt">${r.amt>0?fmt$0(r.amt):"-"}</td><td><div style="display:flex;align-items:center;gap:7px;"><div style="flex:1;max-width:120px;height:7px;border-radius:4px;background:var(--border);overflow:hidden;"><div style="width:${share}%;height:100%;background:#1a5f3e;"></div></div><span style="font-size:10px;color:var(--muted);">${share}%</span></div></td><td><span class="age-pill ${ageCls(r.oldest)}">${r.oldest}d</span></td></tr>`;
   }).join("");
   const tbl=rows.length?`<table class="data-table"><thead><tr><th>Coordinator</th><th>Jobs</th><th>Over-30 $</th><th>Share of $</th><th>Oldest</th></tr></thead><tbody>${body}</tbody></table>`:`<div class="bn-note">No over-30 jobs on the current set.</div>`;
   return `<div class="card"><div class="card-header"><h3>Over-30 exposure</h3><span class="card-meta">how big the pile is and who is holding the dollars</span></div><div class="card-body" style="padding:0;"><div style="padding:14px 16px 4px;">${tiles}</div>${tbl}</div></div>`;
@@ -5376,7 +5376,7 @@ function o30PastDueSection(over30){
   const top=list.slice(0,12);
   const fmtD=function(d){ return d.toLocaleDateString("en-US",{month:"short",day:"numeric",year:"2-digit"}); };
   const rows=top.map(function(x){
-    return `<tr><td style="font-weight:600;">${escapeHtml(x.j.jobId)}</td><td>${escapeHtml(x.j.coordinator||"-")}</td><td><span class="age-pill ${ageCls(x.j.aged)}">${x.j.aged}d</span></td><td>${fmtD(x.d)}</td><td><strong class="${x.daysPast>=30?"c-red":"c-amber"}">${x.daysPast}d</strong></td><td class="amt">${x.j.amount>0?fmt$0(x.j.amount):"-"}</td></tr>`;
+    return `<tr><td style="font-weight:500;">${escapeHtml(x.j.jobId)}</td><td>${escapeHtml(x.j.coordinator||"-")}</td><td><span class="age-pill ${ageCls(x.j.aged)}">${x.j.aged}d</span></td><td>${fmtD(x.d)}</td><td><strong class="${x.daysPast>=30?"c-red":"c-amber"}">${x.daysPast}d</strong></td><td class="amt">${x.j.amount>0?fmt$0(x.j.amount):"-"}</td></tr>`;
   }).join("");
   const inner=list.length?`<table class="data-table"><thead><tr><th>Job #</th><th>Coordinator</th><th>Age</th><th>Expected</th><th>Past due</th><th>Approved $</th></tr></thead><tbody>${rows}</tbody></table>`:`<div class="bn-note">No over-30 job has a committed completion date in the past &mdash; ETAs are still ahead or none is set.</div>`;
   return `<div class="card"><div class="card-header"><h3>Past expected completion</h3><span class="card-meta">${list.length} over-30 past a committed ETA &middot; ${fmt$0(amt)} &middot; dates already missed</span></div><div class="card-body" style="padding:0;">${inner}</div></div>`;
@@ -5397,8 +5397,8 @@ function o30ClearanceHtml(entries, over30, curDateStr, TYPE){
   curSet.forEach(function(id){ if(!priorSet.has(id)) crossed++; });
   const net=curIds.length-priorIds.length;
   const rate=priorIds.length?Math.round(closed/priorIds.length*100):0;
-  const verdict=net<0?`<span class="c-green" style="font-weight:700;">Working it down</span>`:net>0?`<span class="c-red" style="font-weight:700;">Falling behind</span>`:`<span class="c-amber" style="font-weight:700;">Treading water</span>`;
-  const netTxt=net>0?`<span class="c-red" style="font-weight:700;">&#9650; +${net}</span>`:net<0?`<span class="c-green" style="font-weight:700;">&#9660; ${net}</span>`:`<span class="c-amber" style="font-weight:700;">&mdash; 0</span>`;
+  const verdict=net<0?`<span class="c-green" style="font-weight:500;">Working it down</span>`:net>0?`<span class="c-red" style="font-weight:500;">Falling behind</span>`:`<span class="c-amber" style="font-weight:500;">Treading water</span>`;
+  const netTxt=net>0?`<span class="c-red" style="font-weight:500;">&#9650; +${net}</span>`:net<0?`<span class="c-green" style="font-weight:500;">&#9660; ${net}</span>`:`<span class="c-amber" style="font-weight:500;">&mdash; 0</span>`;
   const scope=TYPE?TYPE:"all divisions";
   const tiles=`<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;">`
     +`<div class="et"><div class="et-n c-green">${closed}</div><div class="et-l">Cleared</div></div>`
@@ -5551,13 +5551,13 @@ function renderSnapshotCompare(mc){
   // Division movement (retroactive from stored IDs).
   const dcA=_o30DivCounts(A.o30.ids), dcB=_o30DivCounts(B.o30.ids);
   const divRows=[['overall','Overall'],['Service','Service'],['WiFi','WiFi'],['Photometrics','Photometrics']]
-    .map(([k,lbl])=>{ const a=dcA[k]||0,b=dcB[k]||0; return `<tr><td style="font-weight:600;">${lbl}</td><td>${a}</td><td><strong>${b}</strong></td><td>${_o30Arrow(b-a)}</td></tr>`; }).join('');
+    .map(([k,lbl])=>{ const a=dcA[k]||0,b=dcB[k]||0; return `<tr><td style="font-weight:500;">${lbl}</td><td>${a}</td><td><strong>${b}</strong></td><td>${_o30Arrow(b-a)}</td></tr>`; }).join('');
 
   // Coordinator movement (from stored byCoord aggregates).
   const ab=A.byCoord||{}, bb=B.byCoord||{};
   const names={}; Object.keys(ab).forEach(n=>names[n]=1); Object.keys(bb).forEach(n=>names[n]=1);
   const crows=Object.keys(names).map(n=>{ const a=(ab[n]&&ab[n].o30)||0,b=(bb[n]&&bb[n].o30)||0; return {n,a,b,d:b-a}; }).filter(r=>r.a||r.b).sort((x,y)=>Math.abs(y.d)-Math.abs(x.d)||y.b-x.b);
-  const coordRows=crows.length?crows.map(r=>`<tr><td style="font-weight:600;">${escapeHtml(r.n)}</td><td>${r.a}</td><td><strong>${r.b}</strong></td><td>${_o30Arrow(r.d)}</td></tr>`).join(''):`<tr><td colspan="4" style="color:var(--muted);font-size:12px;padding:12px 14px;">No per-coordinator data on these snapshots.</td></tr>`;
+  const coordRows=crows.length?crows.map(r=>`<tr><td style="font-weight:500;">${escapeHtml(r.n)}</td><td>${r.a}</td><td><strong>${r.b}</strong></td><td>${_o30Arrow(r.d)}</td></tr>`).join(''):`<tr><td colspan="4" style="color:var(--muted);font-size:12px;padding:12px 14px;">No per-coordinator data on these snapshots.</td></tr>`;
 
   // Job lists. Enrich with live coordinator/age where the ID is still in the
   // current workbook; cleared/historical-only IDs show "—" (snapshots store IDs,
@@ -5566,7 +5566,7 @@ function renderSnapshotCompare(mc){
   const jobRows=ids=>{
     if(!ids.length) return `<tr><td colspan="4" style="color:var(--muted);font-size:12px;padding:12px 14px;">None.</td></tr>`;
     const cap=50;
-    const rows=ids.map((id,idx)=>{ const j=jmap[id], div=o30Division({jobId:id}); const co=j?escapeHtml(j.coordinator||'—'):'<span style="color:var(--muted)">—</span>'; const ag=j?`<span class="age-pill ${ageCls(j.aged)}">${j.aged}d</span>`:'<span style="color:var(--muted)">—</span>'; return `<tr${idx>=cap?' class="bn-row-hidden"':''}><td style="font-weight:600;">${escapeHtml(id)}</td><td>${co}</td><td>${ag}</td><td>${div}</td></tr>`; }).join('');
+    const rows=ids.map((id,idx)=>{ const j=jmap[id], div=o30Division({jobId:id}); const co=j?escapeHtml(j.coordinator||'—'):'<span style="color:var(--muted)">—</span>'; const ag=j?`<span class="age-pill ${ageCls(j.aged)}">${j.aged}d</span>`:'<span style="color:var(--muted)">—</span>'; return `<tr${idx>=cap?' class="bn-row-hidden"':''}><td style="font-weight:500;">${escapeHtml(id)}</td><td>${co}</td><td>${ag}</td><td>${div}</td></tr>`; }).join('');
     const more=ids.length>cap?`<tr class="bn-more-row"><td colspan="4" onclick="bnExpandRows(this)">+${ids.length-cap} more — click to show all</td></tr>`:'';
     return rows+more;
   };
@@ -5575,9 +5575,9 @@ function renderSnapshotCompare(mc){
   mc.innerHTML = title
     + `<div class="page-sub">From <strong>${escapeHtml(aSel)}</strong>${A.live?' (live)':''} to <strong>${escapeHtml(bSel)}</strong>${B.live?' (live)':''} · ${Math.abs(spanDays)}-day window</div>`
     + `<div class="card" style="margin-bottom:14px;"><div class="card-body" style="padding:12px 16px;display:flex;flex-wrap:wrap;gap:18px;align-items:flex-end;">
-        <label style="font-size:11px;font-weight:700;color:var(--text);">Baseline<br><select onchange="setSnapCmp('a',this.value)" style="margin-top:4px;font-family:'DM Mono',monospace;font-size:12px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text);">${optList(aSel)}</select></label>
+        <label style="font-size:11px;font-weight:500;color:var(--text);">Baseline<br><select onchange="setSnapCmp('a',this.value)" style="margin-top:4px;font-family:ui-monospace,'Segoe UI Mono','SF Mono',monospace;font-size:12px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text);">${optList(aSel)}</select></label>
         <span style="font-size:18px;color:var(--muted);padding-bottom:6px;">→</span>
-        <label style="font-size:11px;font-weight:700;color:var(--text);">Compare to<br><select onchange="setSnapCmp('b',this.value)" style="margin-top:4px;font-family:'DM Mono',monospace;font-size:12px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text);">${optList(bSel)}</select></label>
+        <label style="font-size:11px;font-weight:500;color:var(--text);">Compare to<br><select onchange="setSnapCmp('b',this.value)" style="margin-top:4px;font-family:ui-monospace,'Segoe UI Mono','SF Mono',monospace;font-size:12px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text);">${optList(bSel)}</select></label>
         ${reversed?`<span style="font-size:11px;color:var(--amber);padding-bottom:6px;">⚠ baseline is later than compare — showing reverse movement</span>`:''}
       </div></div>`
     + `<div class="stat-grid sg-4" style="margin-bottom:16px;">
@@ -5623,7 +5623,7 @@ function renderChurnHistory(mc){
       + (t.cleared.length?'<div><strong class="c-green">▼ Cleared out ('+t.cleared.length+'):</strong> '+t.cleared.map(chip).join(' ')+'</div>':'')
       + (!t.crossed.length&&!t.cleared.length?'<span style="color:var(--muted);font-size:12px;">No crossings or clearances — the pile held steady.</span>':'')
       + '</td></tr>';
-    return '<tr class="ch-row" style="cursor:pointer" onclick="bnToggleChurn(this,'+idx+')"><td style="font-weight:600;">'+escapeHtml(e.dateStr)+'</td>'
+    return '<tr class="ch-row" style="cursor:pointer" onclick="bnToggleChurn(this,'+idx+')"><td style="font-weight:500;">'+escapeHtml(e.dateStr)+'</td>'
       + '<td style="color:var(--muted);">'+escapeHtml(t.vsDate)+'</td>'
       + '<td><strong class="c-red">'+t.crossed.length+'</strong></td>'
       + '<td><strong class="c-green">'+t.cleared.length+'</strong></td>'
@@ -5666,7 +5666,7 @@ function filterActivityRows(){
 function _alogActPill(a){
   const m={ack:['#065f46','#ecfdf5'],unack:['#475569','#f1f5f9'],snooze:['#92400e','#fffbeb'],unsnooze:['#475569','#f1f5f9'],'snapshot-save':['#1e40af','#eff6ff'],note:['#475569','#f1f5f9'],'vendor-override':['#7c2d12','#fff7ed'],'config-change':['#5b21b6','#f5f3ff'],'review-ack':['#065f46','#ecfdf5']};
   const c=m[a]||['#475569','#f1f5f9'];
-  return `<span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;color:${c[0]};background:${c[1]};white-space:nowrap;">${escapeHtml(a||'—')}</span>`;
+  return `<span style="font-size:10px;font-weight:500;padding:2px 8px;border-radius:10px;color:${c[0]};background:${c[1]};white-space:nowrap;">${escapeHtml(a||'—')}</span>`;
 }
 
 // Reporting rollup: per-user activity counts over the loaded window, so leadership can
@@ -5678,10 +5678,10 @@ function _alogRollup(entries){
   const by={};
   entries.forEach(e=>{ const w=e.who||'unknown'; const b=by[w]||(by[w]={total:0,note:0,ack:0,snooze:0,other:0}); b.total++; if(e.action==='note'||e.action==='na-done')b.note++; else if(e.action==='ack')b.ack++; else if(e.action==='snooze'||e.action==='unsnooze')b.snooze++; else b.other++; });
   const rows=Object.keys(by).map(w=>Object.assign({w:w},by[w])).sort((a,b)=>b.total-a.total);
-  const cell=n=>n?`<td style="text-align:center;font-weight:600;">${n}</td>`:'<td style="text-align:center;color:var(--muted);">—</td>';
+  const cell=n=>n?`<td style="text-align:center;font-weight:500;">${n}</td>`:'<td style="text-align:center;color:var(--muted);">—</td>';
   return `<div class="card" style="margin-bottom:12px;"><div class="card-header"><h3>Activity by user</h3><span class="card-meta">${rows.length} user${rows.length===1?'':'s'} · this window</span></div>`
     + `<div class="card-body" style="padding:0;overflow-x:auto;"><table class="data-table"><thead><tr><th>Who</th><th style="text-align:center;">Notes / next-actions</th><th style="text-align:center;">Acks</th><th style="text-align:center;">Snoozes</th><th style="text-align:center;">Other</th><th style="text-align:center;">Total</th></tr></thead><tbody>`
-    + rows.map(r=>`<tr><td style="font-weight:600;">${escapeHtml(r.w)}</td>${cell(r.note)}${cell(r.ack)}${cell(r.snooze)}${cell(r.other)}<td style="text-align:center;font-weight:700;">${r.total}</td></tr>`).join('')
+    + rows.map(r=>`<tr><td style="font-weight:500;">${escapeHtml(r.w)}</td>${cell(r.note)}${cell(r.ack)}${cell(r.snooze)}${cell(r.other)}<td style="text-align:center;font-weight:500;">${r.total}</td></tr>`).join('')
     + `</tbody></table></div></div>`;
 }
 function renderActivityLog(mc){
@@ -5703,13 +5703,13 @@ function renderActivityLog(mc){
     const tgt = e.target||'';
     const tgtCell = tgt
       ? (jmap[tgt]
-          ? `<button data-jobid="${escapeHtml(tgt)}" onclick="openJobModal(this.dataset.jobid)" style="background:none;border:none;cursor:pointer;color:#1a5f3e;text-decoration:underline;font-family:'DM Mono',monospace;font-size:11px;padding:0;">${escapeHtml(tgt)}</button>`
-          : `<span style="font-family:'DM Mono',monospace;font-size:11px;">${escapeHtml(tgt)}</span>`)
+          ? `<button data-jobid="${escapeHtml(tgt)}" onclick="openJobModal(this.dataset.jobid)" style="background:none;border:none;cursor:pointer;color:#1a5f3e;text-decoration:underline;font-family:ui-monospace,'Segoe UI Mono','SF Mono',monospace;font-size:11px;padding:0;">${escapeHtml(tgt)}</button>`
+          : `<span style="font-family:ui-monospace,'Segoe UI Mono','SF Mono',monospace;font-size:11px;">${escapeHtml(tgt)}</span>`)
       : '<span style="color:var(--muted)">—</span>';
     const search = ((e.who||'')+' '+(e.action||'')+' '+tgt+' '+(e.detail||'')).toLowerCase();
     return `<tr data-action="${escapeHtml(e.action||'')}" data-search="${escapeHtml(search)}">
       <td style="white-space:nowrap;font-size:11px;color:var(--muted);">${fmtTs(e.ts)}</td>
-      <td style="font-weight:600;">${escapeHtml(e.who||'unknown')}</td>
+      <td style="font-weight:500;">${escapeHtml(e.who||'unknown')}</td>
       <td>${_alogActPill(e.action||'')}</td>
       <td>${tgtCell}</td>
       <td style="font-size:11px;color:var(--muted);">${escapeHtml(e.detail||'')}</td>
@@ -5750,14 +5750,14 @@ function renderVpBrief(mc, agg){
   const esc = [...escalations].sort((a,b)=>b.amount-a.amount).slice(0,8);
 
   const coordTbl = coordRows.length?`<table class="data-table"><thead><tr><th>Coordinator</th><th>Jobs</th><th>Over-30</th><th>Over-30 $</th><th>Oldest</th><th>SLA</th></tr></thead><tbody>${coordRows.map(r=>`<tr>
-      <td style="font-weight:600;">${escapeHtml(r.name)}</td><td>${r.n}</td>
+      <td style="font-weight:500;">${escapeHtml(r.name)}</td><td>${r.n}</td>
       <td><strong class="${r.o30>10?'c-red':r.o30>5?'c-amber':'c-green'}">${r.o30}</strong></td>
       <td class="amt">${r.amt>0?fmt$0(r.amt):'-'}</td>
       <td>${r.oldest?`<span class="age-pill ${ageCls(r.oldest)}">${r.oldest}d</span>`:'-'}</td>
       <td>${r.sla}%</td></tr>`).join('')}</tbody></table>`:'<div style="padding:12px 14px;color:var(--muted);font-size:12px;">No coordinators currently hold over-30 jobs.</div>';
 
   const escTbl = esc.length?`<table class="data-table"><thead><tr><th>Job #</th><th>Coordinator</th><th>Priority</th><th>Age</th><th>$</th></tr></thead><tbody>${esc.map(j=>`<tr>
-      <td style="font-weight:600;">${escapeHtml(j.jobId)}</td><td>${escapeHtml(j.coordinator||'-')}</td>
+      <td style="font-weight:500;">${escapeHtml(j.jobId)}</td><td>${escapeHtml(j.coordinator||'-')}</td>
       <td>${escapeHtml(normPriority(j.escalationPriority)||'-')}</td>
       <td><span class="age-pill ${ageCls(j.aged)}">${j.aged}d</span></td>
       <td class="amt">${j.amount>0?fmt$0(j.amount):'-'}</td></tr>`).join('')}</tbody></table>`:'<div style="padding:12px 14px;color:var(--muted);font-size:12px;">No work orders flagged for management assistance.</div>';
@@ -5803,7 +5803,7 @@ function base64ToFile(b64, filename){
     if(sub){
       const meta = result.metadata || {};
       const when = meta.generatedAt ? new Date(meta.generatedAt).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}) : "recently";
-      sub.innerHTML = `<span style="color:#16a34a;font-weight:600;">● Synced from data store</span> · generated ${when}`;
+      sub.innerHTML = `<span style="color:#16a34a;font-weight:500;">● Synced from data store</span> · generated ${when}`;
     }
     handleFile(file);
   }catch(err){
@@ -5855,24 +5855,24 @@ updateEditBadge();
 
 <style id="eq-styles">
 .eq-table td{vertical-align:middle}
-.eq-score{font-family:'DM Mono',monospace;font-weight:700;font-size:12px;color:var(--color-success,#1a5f3e);background:var(--card2,#f6faf7);border:1px solid var(--border,#e2e8f0);border-radius:6px;padding:2px 7px;display:inline-block;min-width:30px;text-align:center}
-.eq-amt{font-family:'DM Mono',monospace;font-size:11px;font-weight:600;color:var(--muted)}
-.eq-chip{display:inline-block;font-size:10px;font-weight:600;line-height:1.5;padding:1px 7px;border-radius:10px;margin:1px 3px 1px 0;border:1px solid transparent;white-space:nowrap}
+.eq-score{font-family:ui-monospace,'Segoe UI Mono','SF Mono',monospace;font-weight:500;font-size:12px;color:var(--color-success,#1a5f3e);background:var(--card2,#f6faf7);border:1px solid var(--border,#e2e8f0);border-radius:6px;padding:2px 7px;display:inline-block;min-width:30px;text-align:center}
+.eq-amt{font-family:ui-monospace,'Segoe UI Mono','SF Mono',monospace;font-size:11px;font-weight:500;color:var(--muted)}
+.eq-chip{display:inline-block;font-size:10px;font-weight:500;line-height:1.5;padding:1px 7px;border-radius:10px;margin:1px 3px 1px 0;border:1px solid transparent;white-space:nowrap}
 .eq-proj{background:transparent;color:var(--muted);border:1px dashed var(--border)!important}
 .eq-r-never-updated,.eq-r-mgmt-assist,.eq-r-past-eta{background:#fef2f2;color:#991b1b;border-color:#fecaca}
 .eq-r-stale-7d,.eq-r-chronic,.eq-r-high-priority{background:#fffbeb;color:#92400e;border-color:#fde68a}
 .eq-r-no-next-step{background:#eff6ff;color:#1e40af;border-color:#bfdbfe}
 .eq-actions{white-space:nowrap;text-align:right}
-.eq-btn{font:600 11px 'DM Sans',sans-serif;padding:4px 9px;border-radius:6px;border:1px solid var(--border,#e2e8f0);background:var(--card,#fff);color:var(--text,#1f2a24);cursor:pointer;margin:0 2px}
+.eq-btn{font:500 11px -apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;padding:4px 9px;border-radius:6px;border:1px solid var(--border,#e2e8f0);background:var(--card,#fff);color:var(--text,#1f2a24);cursor:pointer;margin:0 2px}
 .eq-btn:hover{border-color:#94a3b8}
 .eq-ack{background:var(--color-success,#1a5f3e);color:var(--color-on-accent,#fff);border-color:var(--color-success,#1a5f3e)}
-.eq-state-pill{font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;margin-right:6px;display:inline-block}
+.eq-state-pill{font-size:10px;font-weight:500;padding:2px 8px;border-radius:10px;margin-right:6px;display:inline-block}
 .eq-acked{background:#ecfdf5;color:#065f46}
 .eq-snoozed{background:#fffbeb;color:#92400e}
 .eq-note{font-size:10px;color:var(--muted);font-style:italic}
 @media (max-width:760px){.snap-cmp-grid{grid-template-columns:1fr !important}}
-.bn-fresh-line{font:500 10.5px 'DM Mono',monospace;opacity:.72;margin:3px 0 0;color:inherit;}
-.bn-sync-chip{position:fixed;left:14px;bottom:14px;z-index:9998;font:600 11.5px 'DM Sans',sans-serif;padding:7px 12px;border-radius:8px;box-shadow:0 4px 14px rgba(0,0,0,.16);display:flex;align-items:center;gap:8px;}
+.bn-fresh-line{font:500 10.5px ui-monospace,'Segoe UI Mono','SF Mono',monospace;opacity:.72;margin:3px 0 0;color:inherit;}
+.bn-sync-chip{position:fixed;left:14px;bottom:14px;z-index:9998;font:500 11.5px -apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;padding:7px 12px;border-radius:8px;box-shadow:0 4px 14px rgba(0,0,0,.16);display:flex;align-items:center;gap:8px;}
 .bn-sync-chip.saving{background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe;}
 .bn-sync-chip.saved{background:#ecfdf5;color:#065f46;border:1px solid #a7f3d0;}
 .bn-sync-chip.error,.bn-sync-chip.offline{background:#fef2f2;color:#991b1b;border:1px solid #fecaca;}
@@ -5888,28 +5888,28 @@ updateEditBadge();
 .bn-empty{text-align:center;padding:40px 20px;color:var(--muted);}
 .na-act{font-size:11px;line-height:1.4;}
 .na-act + .na-act{margin-top:3px;padding-top:3px;border-top:1px dashed var(--border);}
-.na-badge{display:inline-block;min-width:16px;text-align:center;font:700 10px 'DM Mono',monospace;color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:9px;padding:0 5px;margin:0 4px;vertical-align:middle;}
+.na-badge{display:inline-block;min-width:16px;text-align:center;font:500 10px ui-monospace,'Segoe UI Mono','SF Mono',monospace;color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:9px;padding:0 5px;margin:0 4px;vertical-align:middle;}
 .em-spark{display:flex;align-items:center;gap:14px;padding:10px 0;margin:2px 0 6px;border-bottom:1px solid var(--border);}
 .em-spark-l{min-width:118px;}
-.em-spark-t{font-size:11px;font-weight:700;color:var(--text);}
+.em-spark-t{font-size:11px;font-weight:500;color:var(--text);}
 .em-spark-s{font-size:10px;color:var(--muted);}
 .em-spark-c{flex:1;max-width:300px;}
-.em-spark-r{text-align:right;font-family:'DM Mono',monospace;min-width:60px;font-size:10px;}
-.em-spark-n{font-size:15px;font-weight:700;}
+.em-spark-r{text-align:right;font-family:ui-monospace,'Segoe UI Mono','SF Mono',monospace;min-width:60px;font-size:10px;}
+.em-spark-n{font-size:15px;font-weight:500;}
 .jm-flagged{background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:10px 12px;margin:8px 0;}
-.jm-flagged-h{font-size:11px;font-weight:700;color:#92400e;margin-bottom:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.jm-flagged-h{font-size:11px;font-weight:500;color:#92400e;margin-bottom:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
 .jm-flagged-chips{margin-bottom:6px;}
 .jm-flagged-acts{margin:0;padding-left:18px;font-size:11.5px;color:var(--text);line-height:1.5;}
 .jm-flagged-foot{font-size:10px;color:var(--muted);margin-top:6px;}
 tr.bn-row-hidden{display:none;}
-.bn-more-row td{color:var(--color-success-text,#1a5f3e);cursor:pointer;font-weight:600;font-size:11px;padding:8px 14px;}
+.bn-more-row td{color:var(--color-success-text,#1a5f3e);cursor:pointer;font-weight:500;font-size:11px;padding:8px 14px;}
 .bn-more-row td:hover{text-decoration:underline;background:var(--color-success-bg,#f0fdf4);}
 .ch-row:hover{background:var(--color-surface-alt,#f8fafc);}
-.ch-chip{display:inline-block;font-family:'DM Mono',monospace;font-size:10px;background:var(--color-surface,#fff);border:1px solid var(--border);border-radius:5px;padding:1px 6px;margin:2px 3px 2px 0;}
+.ch-chip{display:inline-block;font-family:ui-monospace,'Segoe UI Mono','SF Mono',monospace;font-size:10px;background:var(--color-surface,#fff);border:1px solid var(--border);border-radius:5px;padding:1px 6px;margin:2px 3px 2px 0;}
 .bn-spark-dot{transition:fill-opacity .1s ease;}
 .bn-spark-dot:hover{fill:var(--dot,#1a5f3e);fill-opacity:.22;}
-.bn-spark-tip{position:fixed;z-index:9999;pointer-events:none;background:var(--color-surface,#fff);color:var(--color-text,#1e293b);border:1px solid var(--color-border,#e2e8f0);border-left:3px solid var(--color-primary,#1a5f3e);font:600 11px 'DM Mono',monospace;padding:6px 10px;border-radius:7px;box-shadow:var(--shadow-md,0 4px 14px rgba(0,0,0,.1),0 2px 4px rgba(0,0,0,.08));white-space:nowrap;line-height:1.45;}
-.bn-spark-tip .bst-h{font-weight:700;color:var(--color-text,#1e293b);}
+.bn-spark-tip{position:fixed;z-index:9999;pointer-events:none;background:var(--color-surface,#fff);color:var(--color-text,#1e293b);border:1px solid var(--color-border,#e2e8f0);border-left:3px solid var(--color-primary,#1a5f3e);font:500 11px ui-monospace,'Segoe UI Mono','SF Mono',monospace;padding:6px 10px;border-radius:7px;box-shadow:var(--shadow-md,0 4px 14px rgba(0,0,0,.1),0 2px 4px rgba(0,0,0,.08));white-space:nowrap;line-height:1.45;}
+.bn-spark-tip .bst-h{font-weight:500;color:var(--color-text,#1e293b);}
 .bn-spark-tip .bst-l{font-weight:500;color:var(--color-text-muted,#64748b);font-size:10px;}
 </style>
 
