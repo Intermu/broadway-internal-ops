@@ -200,7 +200,8 @@
       "Bash(echo \"--- first bytes \\(hex\\) ---\")",
       "Bash(head -c 16 'C:/Users/mnajarro/AppData/Local/Temp/TBG_HVAC_PM_B&F_Pricing Analysis Review_07.09.26 \\(1\\).xls')",
       "WebFetch(domain:apify.com)",
-      "WebFetch(domain:stackoverflow.com)"
+      "WebFetch(domain:stackoverflow.com)",
+      "Bash(\"C:/Program Files/Adobe/Adobe Creative Cloud Experience/libs/node.exe\" --check \"C:/Users/mnajarro/AppData/Local/Temp/claude/C--Users-mnajarro-OneDrive---Broadway-National-Documents-GitHub-broadway-internal-ops/b9a0d5dc-c59f-4d55-b3a6-5560675876ea/scratchpad/drop-check.js\")"
     ]
   }
 }
