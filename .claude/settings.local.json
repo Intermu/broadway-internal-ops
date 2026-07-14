@@ -208,7 +208,15 @@
       "Bash(\"/c/Program Files/Adobe/Adobe Creative Cloud Experience/libs/node.exe\" transform.js \"/c/Users/mnajarro/OneDrive - Broadway National/Documents/GitHub/broadway-internal-ops/Broadway_Unified_Ops_Dashboard.html\" \"./out.html\")",
       "Bash(\"C:/Program Files/Adobe/Adobe Creative Cloud Experience/libs/node.exe\" \"C:/Users/mnajarro/AppData/Local/Temp/claude/C--Users-mnajarro-OneDrive---Broadway-National-Documents-GitHub-broadway-internal-ops/b9a0d5dc-c59f-4d55-b3a6-5560675876ea/scratchpad/dash_analyze.js\")",
       "Bash(\"C:/Program Files/Adobe/Adobe Creative Cloud Experience/libs/node.exe\" \"C:/Users/mnajarro/AppData/Local/Temp/claude/C--Users-mnajarro-OneDrive---Broadway-National-Documents-GitHub-broadway-internal-ops/b9a0d5dc-c59f-4d55-b3a6-5560675876ea/scratchpad/dash_revert_uppercase.js\")",
-      "Bash(\"C:/Program Files/Adobe/Adobe Creative Cloud Experience/libs/node.exe\" \"C:/Users/mnajarro/AppData/Local/Temp/claude/C--Users-mnajarro-OneDrive---Broadway-National-Documents-GitHub-broadway-internal-ops/b9a0d5dc-c59f-4d55-b3a6-5560675876ea/scratchpad/dash_finalcheck.js\")"
+      "Bash(\"C:/Program Files/Adobe/Adobe Creative Cloud Experience/libs/node.exe\" \"C:/Users/mnajarro/AppData/Local/Temp/claude/C--Users-mnajarro-OneDrive---Broadway-National-Documents-GitHub-broadway-internal-ops/b9a0d5dc-c59f-4d55-b3a6-5560675876ea/scratchpad/dash_finalcheck.js\")",
+      "Bash(grep -rn \"data-store\" *.txt)",
+      "Bash(grep -rni \"\\\\.auth/login\\\\|/\\\\.auth\\\\|msal\\\\|x-ms-client-principal\\\\|post_login\" *.txt)",
+      "Bash(grep -rni \"broadway_employee\\\\|acquireToken\\\\|getToken\\\\|entra\" *.txt)",
+      "Bash(\"C:/Program Files/Adobe/Adobe Creative Cloud Experience/libs/node.exe\" \"C:/Users/mnajarro/AppData/Local/Temp/claude/C--Users-mnajarro-OneDrive---Broadway-National-Documents-GitHub-broadway-internal-ops/b9a0d5dc-c59f-4d55-b3a6-5560675876ea/scratchpad/wf_extract.js\")",
+      "Bash(cp api/wo-ingest/index.js \"C:/Users/mnajarro/AppData/Local/Temp/claude/C--Users-mnajarro-OneDrive---Broadway-National-Documents-GitHub-broadway-internal-ops/b9a0d5dc-c59f-4d55-b3a6-5560675876ea/scratchpad/woingest-check.js\")",
+      "Bash(\"C:/Program Files/Adobe/Adobe Creative Cloud Experience/libs/node.exe\" --check \"C:/Users/mnajarro/AppData/Local/Temp/claude/C--Users-mnajarro-OneDrive---Broadway-National-Documents-GitHub-broadway-internal-ops/b9a0d5dc-c59f-4d55-b3a6-5560675876ea/scratchpad/woingest-check.js\")",
+      "mcp__dba19eab-2fcd-4e32-bf6b-19df2231249e__search_work_orders",
+      "Bash(\"/c/Program Files/Adobe/Adobe Creative Cloud Experience/libs/node.exe\" --check \"C:/Users/mnajarro/AppData/Local/Temp/claude/C--Users-mnajarro-OneDrive---Broadway-National-Documents-GitHub-broadway-internal-ops/b9a0d5dc-c59f-4d55-b3a6-5560675876ea/scratchpad/wotojob_draft.js\")"
     ]
   }
 }

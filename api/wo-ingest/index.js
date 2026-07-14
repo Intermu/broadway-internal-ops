@@ -180,7 +180,7 @@ module.exports = async function (context, req) {
       const target = params.target ? String(params.target).slice(0, 64) : "";
       if (!target) { context.res = json(400, { error: "missing 'target'" }); return; }
       context.log("wo-ingest GET lookup", client, target);   // reads leave a telemetry trail (POSTs land in the activity log; GETs otherwise wouldn't)
-      const out = { ok: true, job: null, eq: null };
+      const out = { ok: true, job: null, eq: null, plan: null };
       // Own-property lookups only (a JSON map still surfaces __proto__/constructor), with
       // a digits-equality fallback: the userscript sends the digits-only tracking #, but
       // dashboard Job IDs can carry prefixes ("WIFI 44832920") — one linear pass, small maps.
@@ -197,14 +197,31 @@ module.exports = async function (context, req) {
       if (rec) {
         out.job = {
           note: String(rec.note || "").slice(0, 20000),
+          // AI bottleneck summary + the working/done action pill live in the SAME job-notes
+          // record — surfaced (additive, 2026-07-14) so a ported job modal (the Umbrava-side
+          // job view) can render the dashboard's Bottleneck line + action pill, not just the
+          // raw case file. Same key gate, no new slot, no financial data.
+          summary: rec.summary ? String(rec.summary).slice(0, 4000) : null,
+          summaryAt: rec.summaryAt || null,
+          action: rec.action || "none",
           naHistory: Array.isArray(rec.naHistory) ? rec.naHistory.slice(0, 5) : [],
           updatedAt: rec.updatedAt || null,
           updatedBy: rec.updatedBy || null,
         };
       }
-      const eq = await readJson(container, `clients/${client}/exception-queue`);
+      // exception-queue ack/snooze state + the job-side pushed Next-Actions plan (job-plans)
+      // in parallel. The client mirrors the dashboard rule: the plan is a FALLBACK, rendered
+      // only when the case file itself carries no authored Next Actions.
+      const [eq, jp] = await Promise.all([
+        readJson(container, `clients/${client}/exception-queue`),
+        readJson(container, `clients/${client}/job-plans`),
+      ]);
       const st = lookup(eq && eq.items, target);
       if (st) out.eq = { state: st.state || null, until: st.until || null, by: st.by || null };
+      const pl = lookup(jp && jp.plans, target);
+      if (pl && Array.isArray(pl.items) && pl.items.length) {
+        out.plan = { items: pl.items.slice(0, 25), src: pl.src || "note", ts: pl.ts || null, by: pl.by || null };
+      }
       context.res = json(200, out);
       return;
     }
