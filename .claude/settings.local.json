@@ -233,7 +233,15 @@
       "Bash(awk -F: '$1>2660 && $1<3870')",
       "Bash(gh repo *)",
       "Bash(grep -iE \"\\\\.user\\\\.js$|^scripts/\")",
-      "Bash('C:/Program Files/Adobe/Adobe Creative Cloud Experience/libs/node.exe' C:/Users/mnajarro/AppData/Local/Temp/claude/C--Users-mnajarro-OneDrive---Broadway-National-Documents-GitHub-broadway-internal-ops/b9a0d5dc-c59f-4d55-b3a6-5560675876ea/scratchpad/pdf_peek.js 'C:/Users/mnajarro/AppData/Local/Temp/Prospect Set Up Form - Curtis Restaurant Equipment, INC \\(1\\).pdf')"
+      "Bash('C:/Program Files/Adobe/Adobe Creative Cloud Experience/libs/node.exe' C:/Users/mnajarro/AppData/Local/Temp/claude/C--Users-mnajarro-OneDrive---Broadway-National-Documents-GitHub-broadway-internal-ops/b9a0d5dc-c59f-4d55-b3a6-5560675876ea/scratchpad/pdf_peek.js 'C:/Users/mnajarro/AppData/Local/Temp/Prospect Set Up Form - Curtis Restaurant Equipment, INC \\(1\\).pdf')",
+      "Bash(grep -a -n -E \"jobId\\\\s*[:=]|\\\\.jobId\\\\b|normId|digitsOnly|replace\\\\\\(/\\\\\\\\\\\\\\\\D\" Broadway_Unified_Ops_Dashboard.html)",
+      "Bash(git rev-list *)",
+      "Bash(echo \"ahead/behind origin: $\\(git rev-list --left-right --count origin/main...HEAD 2>/dev/null || echo '?'\\)\")",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push *)",
+      "Bash(\"C:/Program Files/Adobe/Adobe Creative Cloud Experience/libs/node.exe\" \"C:/Users/mnajarro/AppData/Local/Temp/claude/C--Users-mnajarro-OneDrive---Broadway-National-Documents-GitHub-broadway-internal-ops/b9a0d5dc-c59f-4d55-b3a6-5560675876ea/scratchpad/wo_ingest_test.js\")",
+      "Bash(awk -F: '$1>2660 && $1<3900')"
     ]
   }
 }
