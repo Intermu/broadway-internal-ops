@@ -16,18 +16,28 @@ const { BlobServiceClient } = require("@azure/storage-blob");
 // Reached ANONYMOUSLY at the SWA route layer and gated by the SAME shared function key as
 // wo-ingest/scrape-contacts (x-bwn-key vs WO_INGEST_KEY). Fails CLOSED at every layer:
 //   503 — WO_INGEST_KEY unset, or the Graph app registration isn't configured yet
-//         (BID_TENANT_ID / BID_CLIENT_ID / BID_CLIENT_SECRET / BID_FROM_ALLOWED app
-//         settings absent → the endpoint stays dark until IT hands those over);
-//   403 — wrong key, or `from` not in the BID_FROM_ALLOWED list.
+//         (client id/secret absent — from BID_CLIENT_ID/BID_CLIENT_SECRET or, for the
+//         reuse-the-existing-app path, the SWA's AAD_CLIENT_ID/AAD_CLIENT_SECRET — or no
+//         tenant, or NEITHER BID_FROM_ALLOWED nor BID_FROM_DOMAIN set → endpoint stays dark);
+//   403 — wrong key, or `from` not permitted by the allowlist/allowed-domain.
 //
 // Abuse limits (this endpoint can EMAIL EXTERNAL PARTIES, so it is deliberately narrow):
-//   • `from` must be on the server-side allowlist (BID_FROM_ALLOWED, comma-separated) —
-//     a leaked key cannot send as arbitrary mailboxes. IT additionally scopes the app
-//     registration with an ApplicationAccessPolicy to the same people.
+//   • `from` must match the server-side allowlist — either an exact address in
+//     BID_FROM_ALLOWED (comma-separated) OR its domain in BID_FROM_DOMAIN (comma-separated,
+//     e.g. "broadwaynational.com" = any mailbox on the domain may send). A leaked key still
+//     cannot send as an ARBITRARY external mailbox. IT scopes the app registration to match
+//     with an ApplicationAccessPolicy (a dynamic security group of the same domain users).
 //   • recipients only in BCC (competitive privacy), capped at MAX_BCC; To/Reply-To = from.
-//   • subject/html size caps; html must not carry remote form targets (it's our template).
-//   • a rolling audit log in blob storage + a per-day recipient ceiling (DAILY_RECIPIENTS)
-//     across all senders — a runaway loop or key abuse throttles at 429.
+//   • subject/html size caps. `html` is CALLER-SUPPLIED (the userscript builds it from a
+//     fixed template and escapes all content, but a leaked key could POST anything), so it
+//     is NOT trusted: active markup (<script>/<form>/<iframe>/inline on*= handlers/
+//     javascript: URIs/formaction) is rejected. This is defense-in-depth, not a full
+//     sanitizer — plain links/images still render (can't block those without breaking the
+//     template), so the key gate + from-domain limit + audit log remain the real controls.
+//   • a rolling audit log in blob storage + a per-day recipient ceiling (DAILY_RECIPIENTS).
+//     The ceiling is RESERVED in the same ETag-guarded write that records the send, BEFORE
+//     the send — so concurrent requests can't all read a stale pre-send count and blow past
+//     it (a real risk: Functions run requests concurrently and scale out across instances).
 
 const CONTAINER_NAME = "broadway-data";
 const AUDIT_BLOB = "bid-sends/log";
@@ -115,6 +125,28 @@ async function getGraphToken(tenant, clientId, secret) {
   return tokenCache.token;
 }
 
+// Best-effort: mark a reserved audit entry voided so a FAILED send doesn't consume the
+// day's budget. Fail-safe by design — if this can't land (contention/error), the entry
+// stays and only TIGHTENS the cap; it never throws into the caller's response path.
+async function voidReservation(blob, id) {
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    try {
+      const dl = await blob.download();
+      const parsed = JSON.parse(await streamToString(dl.readableStreamBody));
+      const entries = parsed && Array.isArray(parsed.entries) ? parsed.entries : [];
+      let changed = false;
+      for (const en of entries) { if (en && en.id === id && !en.voided) { en.voided = true; changed = true; } }
+      if (!changed) return;
+      const out = JSON.stringify({ v: 1, entries });
+      await blob.upload(out, Buffer.byteLength(out), { blobHTTPHeaders: { blobContentType: "application/json" }, conditions: { ifMatch: dl.etag } });
+      return;
+    } catch (err) {
+      if (err.statusCode === 412 || err.statusCode === 409) continue;   // raced — re-read + retry
+      return;   // give up quietly; over-count is the safe direction
+    }
+  }
+}
+
 module.exports = async function (context, req) {
   try {
     if (req.method === "OPTIONS") { context.res = { status: 204, headers: CORS }; return; }
@@ -126,19 +158,33 @@ module.exports = async function (context, req) {
     if (!key || key !== expected) { context.res = json(403, { error: "unauthorized" }); return; }
 
     // ── Graph config gate — the endpoint is deploy-dark until IT provides these ──
-    const tenant = process.env.BID_TENANT_ID, clientId = process.env.BID_CLIENT_ID,
-          secret = process.env.BID_CLIENT_SECRET, allowedRaw = process.env.BID_FROM_ALLOWED;
-    if (!tenant || !clientId || !secret || !allowedRaw) {
+    // Graph app credentials. Falls back to the SWA's EXISTING Entra sign-in app
+    // (AAD_CLIENT_ID / AAD_CLIENT_SECRET, already in app settings) so you can REUSE that
+    // registration — just have an admin add the Application `Mail.Send` permission + grant
+    // admin consent to it — instead of creating a new app. A dedicated app is cleaner
+    // (least privilege / independent secret), but reuse works with no extra secrets: set
+    // only BID_TENANT_ID (+ BID_FROM_DOMAIN). BID_* always wins if you DO make a new app.
+    const tenant = process.env.BID_TENANT_ID || process.env.AAD_TENANT_ID;
+    const clientId = process.env.BID_CLIENT_ID || process.env.AAD_CLIENT_ID;
+    const secret = process.env.BID_CLIENT_SECRET || process.env.AAD_CLIENT_SECRET;
+    const allowedRaw = process.env.BID_FROM_ALLOWED || "";     // exact addresses (comma-sep)
+    const domainRaw = process.env.BID_FROM_DOMAIN || "";       // whole domains (comma-sep), e.g. "broadwaynational.com"
+    if (!tenant || !clientId || !secret || (!allowedRaw && !domainRaw)) {
       context.res = json(503, { error: "send-bid not configured (awaiting Graph app registration)" });
       return;
     }
     const allowedFrom = allowedRaw.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
+    const allowedDomains = domainRaw.split(",").map((s) => s.trim().toLowerCase().replace(/^@/, "")).filter(Boolean);
 
     // ── Validate the request ────────────────────────────────────────────────────
     const body = req.body || {};
     const from = String(body.from || "").trim().toLowerCase();
     if (!EMAIL_RE.test(from)) { context.res = json(400, { error: "invalid 'from'" }); return; }
-    if (allowedFrom.indexOf(from) === -1) { context.res = json(403, { error: "'from' not on the send allowlist" }); return; }
+    // EMAIL_RE guarantees exactly one "@", so the domain is everything after the last one.
+    const fromDomain = from.slice(from.lastIndexOf("@") + 1);
+    if (allowedFrom.indexOf(from) === -1 && allowedDomains.indexOf(fromDomain) === -1) {
+      context.res = json(403, { error: "'from' not on the send allowlist" }); return;
+    }
     const bccIn = Array.isArray(body.bcc) ? body.bcc : [];
     const seen = Object.create(null);
     const bcc = [];
@@ -153,28 +199,62 @@ module.exports = async function (context, req) {
     const html = String(body.html || "");
     if (!html.trim()) { context.res = json(400, { error: "missing 'html'" }); return; }
     if (html.length > MAX_HTML) { context.res = json(400, { error: "html too large" }); return; }
+    // `html` is untrusted (see header note). Our template contains only tables / div / span /
+    // a[mailto|https] / img[https] / hr / br and ESCAPED text, so this never trips a real send;
+    // it blocks a leaked-key caller from weaponizing an authenticated-from-a-real-mailbox send.
+    if (/<\s*(?:script|form|iframe|object|embed|meta|base|link|style)\b/i.test(html) ||
+        /\son[a-z]+\s*=/i.test(html) ||
+        /(?:href|src|action|formaction)\s*=\s*["']?\s*javascript:/i.test(html) ||
+        /\bformaction\s*=/i.test(html)) {
+      context.res = json(400, { error: "html contains disallowed markup" }); return;
+    }
     const tracking = body.tracking ? String(body.tracking).slice(0, 64) : null;
 
-    // ── Daily recipient ceiling (read-only pass over today's audit entries) ──────
+    // ── Reserve the recipient budget BEFORE sending (atomic ETag transaction) ────
+    // read → check ceiling → append this send → conditional upload, all in ONE loop, so
+    // the value that gates the send is written in the same transaction that records it.
+    // Concurrent requests (same instance or scaled-out) serialize on the blob ETag: a
+    // loser gets 412, re-reads the now-higher count, and re-checks — so the cap holds.
+    // Only AFTER a reservation lands do we send; a failed send voids its reservation.
     const container = await getContainerClient();
     const blob = container.getBlockBlobClient(AUDIT_BLOB);
-    let auditEntries = [], auditEtag = null, auditExists = false;
-    try {
-      const dl = await blob.download();
-      const parsed = JSON.parse(await streamToString(dl.readableStreamBody));
-      auditEntries = parsed && Array.isArray(parsed.entries) ? parsed.entries : [];
-      auditEtag = dl.etag; auditExists = true;
-    } catch (err) { if (err.statusCode !== 404) throw err; }
+    const entryId = Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 10);
     const today = new Date().toISOString().slice(0, 10);
-    let sentToday = 0;
-    for (const en of auditEntries) { if (en && typeof en.ts === "string" && en.ts.slice(0, 10) === today) sentToday += Number(en.bcc) || 0; }
-    if (sentToday + bcc.length > DAILY_RECIPIENTS) {
-      context.res = json(429, { error: "daily send ceiling reached (" + DAILY_RECIPIENTS + " recipients/day)" });
+    let reserved = false;
+    for (let attempt = 0; attempt < MAX_RETRIES && !reserved; attempt++) {
+      let cur = [], etag = null, exists = false;
+      try {
+        const dl = await blob.download();
+        const parsed = JSON.parse(await streamToString(dl.readableStreamBody));
+        cur = parsed && Array.isArray(parsed.entries) ? parsed.entries : [];
+        etag = dl.etag; exists = true;
+      } catch (err) { if (err.statusCode !== 404) throw err; }
+      let sentToday = 0;
+      for (const en of cur) { if (en && !en.voided && typeof en.ts === "string" && en.ts.slice(0, 10) === today) sentToday += Number(en.bcc) || 0; }
+      if (sentToday + bcc.length > DAILY_RECIPIENTS) {
+        context.res = json(429, { error: "daily send ceiling reached (" + DAILY_RECIPIENTS + " recipients/day)" });
+        return;
+      }
+      const entry = { id: entryId, ts: new Date().toISOString(), from, bcc: bcc.length, subject: subject.slice(0, 120), tracking };
+      let next = cur.concat([entry]);
+      if (next.length > MAX_AUDIT_ENTRIES) next = next.slice(-MAX_AUDIT_ENTRIES);
+      const outBody = JSON.stringify({ v: 1, entries: next });
+      const conditions = exists ? { ifMatch: etag } : { ifNoneMatch: "*" };
+      try {
+        await blob.upload(outBody, Buffer.byteLength(outBody), { blobHTTPHeaders: { blobContentType: "application/json" }, conditions });
+        reserved = true;
+      } catch (err) {
+        if (err.statusCode === 412 || err.statusCode === 409) continue;   // lost the race — re-read + re-check
+        throw err;
+      }
+    }
+    if (!reserved) {
+      // Never send without a landed reservation — that is what keeps the ceiling honest.
+      context.res = json(503, { error: "send log contended; please retry" });
       return;
     }
 
     // ── Send via Graph (app-only): from the coordinator's own mailbox ────────────
-    const token = await getGraphToken(tenant, clientId, secret);
     const message = {
       message: {
         subject,
@@ -187,44 +267,26 @@ module.exports = async function (context, req) {
       },
       saveToSentItems: true,
     };
-    const payload = JSON.stringify(message);
-    const r = await httpsJson(GRAPH_HOST, `/v1.0/users/${encodeURIComponent(from)}/sendMail`, "POST",
-      { "Authorization": "Bearer " + token, "Content-Type": "application/json", "Content-Length": Buffer.byteLength(payload) },
-      payload, 30000);
+    let r;
+    try {
+      const token = await getGraphToken(tenant, clientId, secret);
+      const payload = JSON.stringify(message);
+      r = await httpsJson(GRAPH_HOST, `/v1.0/users/${encodeURIComponent(from)}/sendMail`, "POST",
+        { "Authorization": "Bearer " + token, "Content-Type": "application/json", "Content-Length": Buffer.byteLength(payload) },
+        payload, 30000);
+    } catch (err) {
+      await voidReservation(blob, entryId);   // release the reserved budget — the send didn't happen
+      context.log.error("send-bid send error", err && err.message);
+      context.res = json(502, { error: "Graph send failed — " + String((err && err.message) || "request error").slice(0, 200) });
+      return;
+    }
     if (r.status !== 202) {
+      await voidReservation(blob, entryId);
       const detail = r.body && r.body.error ? (r.body.error.code + ": " + r.body.error.message) : ("HTTP " + r.status);
       context.log.error("send-bid Graph send failed", detail);
       // 502, not the raw Graph status — Graph's 401/403 must not be confused with OUR key gate.
       context.res = json(502, { error: "Graph send failed — " + String(detail).slice(0, 300) });
       return;
-    }
-
-    // ── Audit append (ETag-safe; same optimistic pattern as wo-ingest) ────────────
-    const entry = { ts: new Date().toISOString(), from, bcc: bcc.length, subject: subject.slice(0, 120), tracking };
-    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-      let cur = auditEntries, etag = auditEtag, exists = auditExists;
-      if (attempt > 0) {
-        cur = []; etag = null; exists = false;
-        try {
-          const dl = await blob.download();
-          const parsed = JSON.parse(await streamToString(dl.readableStreamBody));
-          cur = parsed && Array.isArray(parsed.entries) ? parsed.entries : [];
-          etag = dl.etag; exists = true;
-        } catch (err) { if (err.statusCode !== 404) throw err; }
-      }
-      let next = cur.concat([entry]);
-      if (next.length > MAX_AUDIT_ENTRIES) next = next.slice(-MAX_AUDIT_ENTRIES);
-      const out = JSON.stringify({ v: 1, entries: next });
-      const conditions = exists ? { ifMatch: etag } : { ifNoneMatch: "*" };
-      try {
-        await blob.upload(out, Buffer.byteLength(out), { blobHTTPHeaders: { blobContentType: "application/json" }, conditions });
-        break;
-      } catch (err) {
-        if (err.statusCode === 412 || err.statusCode === 409) continue;
-        // The mail already went out — an audit-write failure must NOT report a send failure.
-        context.log.error("send-bid audit write failed", err.message);
-        break;
-      }
     }
 
     context.res = json(200, { ok: true, sent: bcc.length });
