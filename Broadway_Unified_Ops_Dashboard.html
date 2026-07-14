@@ -1386,7 +1386,7 @@ function stuckReason(j){
   return {stage, activity, inStatus};
 }
 function openJobModal(id, fromEntity){
-  const j=JOBS.find(x=>x.jobId===id); if(!j) return;
+  const j=JOBS.find(x=>x.jobId===resolveJobId(id)); if(!j) return;
   // Remember the entity drilldown we came from (if any) so the job modal can
   // offer "← Back" to it. Cleared when a job is opened from anywhere else.
   window._jmReturn = (fromEntity && window._emName!=null) ? {kind:window._emKind, idx:window._emIdx, name:window._emName} : null;
@@ -2266,7 +2266,7 @@ function buildHoldupPrompt(j){
 }
 async function generateHoldupSummary(id){
   id = id || window._jnCurrentId; if(!id) return;
-  const j=JOBS.find(x=>x.jobId===id); if(!j) return;
+  const j=JOBS.find(x=>x.jobId===resolveJobId(id)); if(!j) return;
   const btn=document.getElementById('holdupBtn');
   if(btn && window._jnCurrentId===id){ btn.disabled=true; btn.textContent='Summarizing…'; }
   try{
@@ -4329,6 +4329,58 @@ function getCol(row, ...aliases) {
   return '';
 }
 
+// ---- Unified job identifiers (2026-07-14) ----
+// A job is found by ANY of Source Job #, Tracking #, WO #, or Source PO #. Tracking #
+// (col W) is the canonical key: it's the clean per-WO id the userscripts read off the
+// page, and it's embedded in the parenthesized Source Job # ("RF 01766156 (891297)").
+function bnDigits(s){ return String(s==null?'':s).replace(/\D+/g,''); }
+function bnIds(r){
+  const sourceJob = String(getCol(r,'Job ID','Source Job #')||'').trim();
+  const tracking = bnDigits(getCol(r,'Tracking Number','Tracking #'));
+  const wo = bnDigits(getCol(r,'WO #','WO#','Work Order #'));
+  const po = String(getCol(r,'Source PO #','Source PO')||'').trim();
+  const parenTrack = (sourceJob.match(/\((\d+)\)\s*$/)||[])[1] || '';
+  const jobId = tracking || parenTrack || wo || sourceJob;   // canonical
+  return { sourceJob, tracking: tracking || parenTrack, wo, po, jobId };
+}
+// Alias index: every identifier (raw + digits) -> canonical jobId. Rebuilt each upload.
+let ALIAS = {}, SRCJOB2TRACK = {};
+function buildAlias(jobs){
+  ALIAS = {}; SRCJOB2TRACK = {};
+  (jobs||[]).forEach(j => {
+    const canon = j.jobId;
+    [j.jobId, j.sourceJob, j.tracking, j.wo, j.po].forEach(k => {
+      if (k==null || k==='') return;
+      const s = String(k); if (!ALIAS[s]) ALIAS[s] = canon;
+      const d = bnDigits(s); if (d && !ALIAS[d]) ALIAS[d] = canon;
+    });
+    if (j.sourceJob && j.tracking && j.sourceJob !== j.tracking) SRCJOB2TRACK[j.sourceJob] = j.tracking;
+  });
+}
+function resolveJobId(id){
+  id = String(id==null?'':id).trim(); if (!id) return id;
+  if (ALIAS[id]) return ALIAS[id];
+  const d = bnDigits(id); if (ALIAS[d]) return ALIAS[d];
+  return id;
+}
+// One-time re-key of authored data from old Source Job # keys to Tracking #, driven by the
+// actual Source Job # -> Tracking # pairs in THIS upload (not a regex guess). Idempotent:
+// once the keys are tracking #s, SRCJOB2TRACK has no entry for them and nothing moves.
+function migrateAuthoredKeys(){
+  function needs(map){ return map && typeof map==='object' && Object.keys(map).some(k => SRCJOB2TRACK[k]); }
+  const hadOld = needs(JOB_NOTES);
+  function rekey(map){ if(!map||typeof map!=='object') return; Object.keys(map).forEach(k => { const tr = SRCJOB2TRACK[k]; if (tr && tr!==k && !map[tr]) { map[tr] = map[k]; delete map[k]; } }); }
+  rekey(JOB_NOTES);
+  if (JOB_PLANS) rekey(JOB_PLANS);
+  if (typeof STATUS_HIST !== 'undefined') rekey(STATUS_HIST);
+  if (typeof EQ_STATE !== 'undefined' && EQ_STATE && EQ_STATE.items) rekey(EQ_STATE.items);
+  // Persist job-notes (the authoritative record) via the ETag-safe shared save, which
+  // re-keys the SERVER copy inside the same mutate. Only when old keys were actually present.
+  if (hadOld && !window.BROADWAY_SNAPSHOT) {
+    saveJobNotesShared(function(m){ Object.keys(m).forEach(k => { const tr = SRCJOB2TRACK[k]; if (tr && tr!==k && !m[tr]) { m[tr] = m[k]; delete m[k]; } }); });
+  }
+}
+
 // Excel date serial → JS Date. Accepts Date objects, serial numbers, or strings.
 function parseExcelDate(v) {
   if (!v && v !== 0) return null;
@@ -4493,6 +4545,7 @@ function handleFile(file) {
       const raw = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], {defval:'',raw:false});
       CURRENT_FILE = file.name;
       JOBS = raw.map(r=>{
+        const ids = bnIds(r);
         // Approved Amount: prefer an explicit Approved/Amount column, else use Client DNE.
         // Placeholder/default figures are treated as "not a real approval" and excluded from
         // approved-dollar totals (matches the original dashboard logic).
@@ -4511,7 +4564,13 @@ function handleFile(file) {
         else if (dsuRaw) daysSinceUpdate = parseInt(dsuRaw);
         else daysSinceUpdate = null;
         return {
-          jobId: String(getCol(r,'Job ID','Source Job #')||'').trim(),
+          jobId: ids.jobId,
+          sourceJob: ids.sourceJob,
+          tracking: ids.tracking,
+          wo: ids.wo,
+          po: ids.po,
+          client: String(getCol(r,'Client')||'').trim(),
+          totalVendorNte: round2(parseFloat(String(getCol(r,'Total Vendor NTE')||0).replace(/[$,]/g,''))||0),
           coordinator: String(getCol(r,'Assigned To')||'').trim(),
           status: String(getCol(r,'Status Category','Status')||'').trim(),
           amount: round2(amt),
@@ -4541,6 +4600,8 @@ function handleFile(file) {
           expectedCompletion: parseExcelDate(getCol(r,'Expected Completion Date','Expected Completion'))
         };
       }).filter(j=>j.jobId);
+      buildAlias(JOBS);
+      migrateAuthoredKeys();
       window._wbHealth = buildWbHealth(raw, sheetName, file.name, JOBS.length);
       // Apply any mgmt-notes edits persisted in this session
       applyEditsToJobs();
