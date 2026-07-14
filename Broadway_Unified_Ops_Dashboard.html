@@ -1454,6 +1454,10 @@ function openJobModal(id, fromEntity){
         ${row('FM', escapeHtml(j.fm||'-'))}
         ${row('Trades', escapeHtml(j.trades||'-'))}
         ${row('Vendors', vendorListHtml(j.vendors))}
+        ${row('City / State', escapeHtml([j.city,j.state].filter(Boolean).join(', ')||'-'))}
+        ${row('Client', escapeHtml(j.client||'-'))}
+        ${row('Vendor NTE', j.totalVendorNte>0?fmt$0(j.totalVendorNte):'-')}
+        ${row('WO # / PO #', escapeHtml([(j.wo?'W-'+j.wo:''), j.po].filter(Boolean).join('  ·  ')||'-'))}
       </div>
       ${o30LineHtml(j.jobId)}
       <div class="jm-section-label">Drilldown Note</div>
@@ -2039,6 +2043,37 @@ async function loadJobNotes(){
     }
   }
   if(JOBS.length) render(currentView); // paint row markers once notes are known
+}
+// Live WO facts pushed by the userscript Job View (clients/<client>/live-jobs). Overlaid
+// onto the daily workbook, newest-wins: a live entry applies only when it's newer than
+// that job's last workbook activity, so a stale push never overrides a fresher upload.
+let LIVE_JOBS = {};
+async function loadLiveJobs(){
+  if(window.BROADWAY_SNAPSHOT) return;
+  try {
+    const res = await bnClientGet('live-jobs');
+    LIVE_JOBS = (res && res.exists && res.data && res.data.jobs && typeof res.data.jobs==='object') ? res.data.jobs : {};
+  } catch(e){ LIVE_JOBS = {}; }
+  applyLiveJobs();
+  if(JOBS.length) render(currentView);
+}
+function applyLiveJobs(){
+  if(!LIVE_JOBS || !JOBS || !JOBS.length) return;
+  const DATEF = { lastUpdated:1, woDate:1, firstTripDate:1, nextOnsiteDate:1, expectedCompletion:1 };
+  const NUMF = { amount:1, aged:1, statusHrs:1, daysSinceUpdate:1 };
+  JOBS.forEach(function(j){
+    const lj = LIVE_JOBS[j.jobId]; if(!lj || !lj.facts) return;
+    const liveT = Date.parse(lj.ts||'')||0;
+    const baseT = j.lastUpdated ? +new Date(j.lastUpdated) : 0;
+    if(liveT <= baseT) return;   // workbook is at least as fresh for this job
+    Object.keys(lj.facts).forEach(function(k){
+      const v = lj.facts[k]; if(v===''||v==null) return;
+      if(DATEF[k]){ const d = parseExcelDate(v); if(d) j[k]=d; }
+      else if(NUMF[k]){ const n=+v; if(!isNaN(n)) j[k]=n; }
+      else j[k]=v;
+    });
+    j._live = lj.ts;
+  });
 }
 // Load the Drilldown Note history (local first, then merge the shared slot by union of note text).
 async function loadStatusHist(){
@@ -4602,6 +4637,7 @@ function handleFile(file) {
       }).filter(j=>j.jobId);
       buildAlias(JOBS);
       migrateAuthoredKeys();
+      loadLiveJobs();   // overlay any live userscript-pushed facts over the fresh workbook
       window._wbHealth = buildWbHealth(raw, sheetName, file.name, JOBS.length);
       // Apply any mgmt-notes edits persisted in this session
       applyEditsToJobs();
