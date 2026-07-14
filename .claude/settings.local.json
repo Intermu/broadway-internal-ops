@@ -241,7 +241,11 @@
       "Bash(git commit *)",
       "Bash(git push *)",
       "Bash(\"C:/Program Files/Adobe/Adobe Creative Cloud Experience/libs/node.exe\" \"C:/Users/mnajarro/AppData/Local/Temp/claude/C--Users-mnajarro-OneDrive---Broadway-National-Documents-GitHub-broadway-internal-ops/b9a0d5dc-c59f-4d55-b3a6-5560675876ea/scratchpad/wo_ingest_test.js\")",
-      "Bash(awk -F: '$1>2660 && $1<3900')"
+      "Bash(awk -F: '$1>2660 && $1<3900')",
+      "Bash('/c/Program Files/Adobe/Adobe Creative Cloud Experience/libs/node.exe' --check C:/Users/mnajarro/AppData/Local/Temp/claude/C--Users-mnajarro-OneDrive---Broadway-National-Documents-GitHub-broadway-internal-ops/b9a0d5dc-c59f-4d55-b3a6-5560675876ea/scratchpad/core_check.js)",
+      "Bash('/c/Program Files/Adobe/Adobe Creative Cloud Experience/libs/node.exe' C:/Users/mnajarro/AppData/Local/Temp/claude/C--Users-mnajarro-OneDrive---Broadway-National-Documents-GitHub-broadway-internal-ops/b9a0d5dc-c59f-4d55-b3a6-5560675876ea/scratchpad/notetype_test.js)",
+      "Bash('/c/Program Files/Adobe/Adobe Creative Cloud Experience/libs/node.exe' C:/Users/mnajarro/AppData/Local/Temp/claude/C--Users-mnajarro-OneDrive---Broadway-National-Documents-GitHub-broadway-internal-ops/b9a0d5dc-c59f-4d55-b3a6-5560675876ea/scratchpad/jvpills_test.js)",
+      "Bash(awk '/function dueStatus/{f=1} f{print NR\": \"$0} f&&/return \\\\{/{c++} f&&/\\\\};/{if\\(c>0\\){exit}}' 'C:/Users/mnajarro/OneDrive - Broadway National/Tampermonkey Scripts/BWN Suite - Core \\(Broadway National\\).txt')"
     ]
   }
 }
