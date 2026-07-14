@@ -4,7 +4,7 @@ const CONTAINER_NAME = "broadway-data";
 
 // SLOTS are types of data. Same set for every client.
 // Adding a slot = ship code. Adding a client = edit VALID_CLIENTS below.
-const VALID_SLOTS = ["revenue", "wo-snapshot-today", "wo-snapshot-previous", "workbook", "over30-history", "job-notes", "config", "checkin", "om-bonus", "wo-audit", "exception-queue", "o30-lines", "job-plans"];
+const VALID_SLOTS = ["revenue", "wo-snapshot-today", "wo-snapshot-previous", "workbook", "over30-history", "job-notes", "config", "checkin", "om-bonus", "wo-audit", "exception-queue", "o30-lines", "job-plans", "live-jobs"];
 // "o30-lines": per-client Over-30 audit lines + board trend, WRITTEN by the userscript
 // connector via /api/wo-ingest (key-gated); the dashboard READS it here (AAD gate):
 //   { v:1, items:{ "<tracking>": { line, ts, by, prev:[{line,ts,by}×≤4] } },

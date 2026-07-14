@@ -228,6 +228,78 @@ module.exports = async function (context, req) {
 
     const actor = body.actor ? String(body.actor).slice(0, 128) : "unknown";
 
+    // ── Editable WO Audit note (userscript modal write-back) → job-notes ──────────
+    // POST { actor, noteWrite:{ target, note, action? } } upserts the coordinator case
+    // file into the SAME job-notes blob the dashboard maintains, keyed by tracking #.
+    // Preserves the dashboard-authored summary/summaryAt/naHistory; only note/action/
+    // updatedAt/updatedBy change. ETag-safe. The dashboard stays the authoritative editor.
+    if (req.method === "POST" && body.noteWrite && typeof body.noteWrite === "object") {
+      const nw = body.noteWrite;
+      const target = String(nw.target || "").replace(/\D+/g, "").slice(0, 64);   // canonical = tracking digits
+      if (!target) { context.res = json(400, { error: "noteWrite.target must be a tracking number" }); return; }
+      const note = String(nw.note == null ? "" : nw.note).slice(0, 20000);
+      const action = ["none", "working", "done"].indexOf(String(nw.action || "")) !== -1 ? String(nw.action) : null;
+      const stampN = new Date().toISOString();
+      const container = await getContainerClient();
+      const blobN = container.getBlockBlobClient(`clients/${client}/job-notes`);
+      for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+        let cur = null, etag = null, exists = false;
+        try { const dl = await blobN.download(); cur = JSON.parse(await streamToString(dl.readableStreamBody)); etag = dl.etag; exists = true; }
+        catch (err) { if (err.statusCode !== 404) throw err; }
+        const data = cur && typeof cur === "object" ? cur : {};
+        data.v = 1; data.notes = data.notes && typeof data.notes === "object" ? data.notes : {};
+        const rec = (Object.prototype.hasOwnProperty.call(data.notes, target) && data.notes[target] && typeof data.notes[target] === "object") ? data.notes[target] : {};
+        rec.note = note;
+        if (action) rec.action = action;
+        rec.updatedAt = stampN; rec.updatedBy = actor;   // summary/summaryAt/naHistory preserved
+        data.notes[target] = rec;
+        const nk = Object.keys(data.notes);
+        if (nk.length > 2000) { nk.sort((a, b) => String(data.notes[a].updatedAt || "").localeCompare(String(data.notes[b].updatedAt || ""))); while (nk.length > 2000) delete data.notes[nk.shift()]; }
+        const outBody = JSON.stringify(data);
+        const conditions = exists ? { ifMatch: etag } : { ifNoneMatch: "*" };
+        try { await blobN.upload(outBody, Buffer.byteLength(outBody), { blobHTTPHeaders: { blobContentType: "application/json" }, conditions }); context.res = json(200, { ok: true, target, updatedAt: stampN }); return; }
+        catch (err) { if (err.statusCode === 412 || err.statusCode === 409) continue; throw err; }
+      }
+      context.res = json(503, { error: "job-notes write contended; please retry" });
+      return;
+    }
+
+    // ── Live WO facts (userscript push on Job View open + WO actions) → live-jobs ──
+    // POST { actor, jobFacts:{ target, ...fields } } upserts the live GraphQL snapshot of
+    // a WO, keyed by tracking #, so the dashboard can merge fresh data over the daily
+    // workbook (newest-wins). Only an allowlist of bounded fields is stored. ETag-safe.
+    if (req.method === "POST" && body.jobFacts && typeof body.jobFacts === "object") {
+      const jf = body.jobFacts;
+      const target = String(jf.target || "").replace(/\D+/g, "").slice(0, 64);
+      if (!target) { context.res = json(400, { error: "jobFacts.target must be a tracking number" }); return; }
+      const STR = ["status", "coordinator", "location", "priority", "fm", "trades", "vendors", "woNumber", "sourcePo", "sourceJob", "client"];
+      const DATE = ["lastUpdated", "woDate", "firstTripDate", "nextOnsiteDate", "expectedCompletion"];
+      const NUM = ["amount", "aged", "statusHrs", "daysSinceUpdate"];
+      const facts = {};
+      STR.forEach((k) => { if (jf[k] != null) facts[k] = String(jf[k]).slice(0, 300); });
+      DATE.forEach((k) => { if (jf[k] != null) facts[k] = String(jf[k]).slice(0, 40); });
+      NUM.forEach((k) => { if (jf[k] != null && !isNaN(+jf[k])) facts[k] = +jf[k]; });
+      const stampF = new Date().toISOString();
+      const container = await getContainerClient();
+      const blobF = container.getBlockBlobClient(`clients/${client}/live-jobs`);
+      for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+        let cur = null, etag = null, exists = false;
+        try { const dl = await blobF.download(); cur = JSON.parse(await streamToString(dl.readableStreamBody)); etag = dl.etag; exists = true; }
+        catch (err) { if (err.statusCode !== 404) throw err; }
+        const data = cur && typeof cur === "object" ? cur : {};
+        data.v = 1; data.jobs = data.jobs && typeof data.jobs === "object" ? data.jobs : {};
+        data.jobs[target] = { facts, ts: stampF, by: actor };
+        const jk = Object.keys(data.jobs);
+        if (jk.length > 2000) { jk.sort((a, b) => String(data.jobs[a].ts || "").localeCompare(String(data.jobs[b].ts || ""))); while (jk.length > 2000) delete data.jobs[jk.shift()]; }
+        const outBody = JSON.stringify(data);
+        const conditions = exists ? { ifMatch: etag } : { ifNoneMatch: "*" };
+        try { await blobF.upload(outBody, Buffer.byteLength(outBody), { blobHTTPHeaders: { blobContentType: "application/json" }, conditions }); context.res = json(200, { ok: true, target, ts: stampF }); return; }
+        catch (err) { if (err.statusCode === 412 || err.statusCode === 409) continue; throw err; }
+      }
+      context.res = json(503, { error: "live-jobs write contended; please retry" });
+      return;
+    }
+
     // ── Over-30 sync: audit lines + board trend → clients/<client>/o30-lines ────
     // POST { actor, o30lines:[{target,line}] } upserts each job's LATEST line (the
     // prior one shifts into prev[], max 4) - the panel's "last Over-30 note + date".
