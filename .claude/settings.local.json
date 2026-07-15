@@ -302,7 +302,14 @@
       "Bash('/c/Program Files/Adobe/Adobe Creative Cloud Experience/libs/node.exe' C:/Users/mnajarro/AppData/Local/Temp/claude/C--Users-mnajarro-OneDrive---Broadway-National-Documents-GitHub-broadway-internal-ops/b9a0d5dc-c59f-4d55-b3a6-5560675876ea/scratchpad/stage3_fixes_test.js)",
       "Bash('/c/Program Files/Adobe/Adobe Creative Cloud Experience/libs/node.exe' C:/Users/mnajarro/AppData/Local/Temp/claude/C--Users-mnajarro-OneDrive---Broadway-National-Documents-GitHub-broadway-internal-ops/b9a0d5dc-c59f-4d55-b3a6-5560675876ea/scratchpad/idem_semantics_test.js)",
       "Bash('/c/Program Files/Adobe/Adobe Creative Cloud Experience/libs/node.exe' C:/Users/mnajarro/AppData/Local/Temp/claude/C--Users-mnajarro-OneDrive---Broadway-National-Documents-GitHub-broadway-internal-ops/b9a0d5dc-c59f-4d55-b3a6-5560675876ea/scratchpad/draft_guard_test.js)",
-      "Bash('/c/Program Files/Adobe/Adobe Creative Cloud Experience/libs/node.exe' C:/Users/mnajarro/AppData/Local/Temp/claude/C--Users-mnajarro-OneDrive---Broadway-National-Documents-GitHub-broadway-internal-ops/b9a0d5dc-c59f-4d55-b3a6-5560675876ea/scratchpad/idem_norm_test.js)"
+      "Bash('/c/Program Files/Adobe/Adobe Creative Cloud Experience/libs/node.exe' C:/Users/mnajarro/AppData/Local/Temp/claude/C--Users-mnajarro-OneDrive---Broadway-National-Documents-GitHub-broadway-internal-ops/b9a0d5dc-c59f-4d55-b3a6-5560675876ea/scratchpad/idem_norm_test.js)",
+      "PowerShell(& \"C:\\\\Users\\\\mnajarro\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-mnajarro-OneDrive---Broadway-National-Documents-GitHub-broadway-internal-ops\\\\b9a0d5dc-c59f-4d55-b3a6-5560675876ea\\\\scratchpad\\\\extract_headers.ps1\")",
+      "Bash(awk '{print \"behind origin:\",$1,\" ahead of origin:\",$2}')",
+      "PowerShell(& \"C:\\\\Users\\\\mnajarro\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-mnajarro-OneDrive---Broadway-National-Documents-GitHub-broadway-internal-ops\\\\b9a0d5dc-c59f-4d55-b3a6-5560675876ea\\\\scratchpad\\\\find_row.ps1\")",
+      "Bash(gh run *)",
+      "Bash('/c/Program Files/Adobe/Adobe Creative Cloud Experience/libs/node.exe' C:/Users/mnajarro/AppData/Local/Temp/claude/C--Users-mnajarro-OneDrive---Broadway-National-Documents-GitHub-broadway-internal-ops/b9a0d5dc-c59f-4d55-b3a6-5560675876ea/scratchpad/sim_rowbuild.js)",
+      "mcp__claude-in-chrome__select_browser",
+      "mcp__claude-in-chrome__browser_batch"
     ]
   }
 }
