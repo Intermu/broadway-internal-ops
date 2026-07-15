@@ -1172,24 +1172,15 @@ const fmt$ = n => '$'+Number(n).toLocaleString('en-US',{minimumFractionDigits:2,
 const fmt$0 = n => '$'+Number(n).toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0});
 const pct = (n,d) => d>0 ? (n/d*100).toFixed(1)+'%' : '0%';
 const ageCls = d => d>=90?'age-high':d>=30?'age-warn':'age-ok';
-// Prefer Project Type field from sheet; fall back to Job ID prefix inference.
+// Division label for a job. Delegates to the single config-driven resolver (divisionOf, defined
+// with the division pill) so the pill, nav counts, detail views, and trend ALL agree and honor a
+// manual per-job override. Maps the division key to the legacy label the views/counts compare
+// against ('WIFI'/'Retrofit'/'Q/R'/'Service'); a custom client division falls through to its label.
+const JT_LABEL = { service:'Service', wifi:'WIFI', rf:'Retrofit', qr:'Q/R' };
 const jobType = j => {
-  if (typeof j === 'string') j = { jobId: j, projectType: '' };
-  const pt = (j.projectType||'').toUpperCase().trim();
-  if (pt) {
-    if (/WIFI|WI.?FI/.test(pt)) return 'WIFI';
-    if (/^RF$|RETRO/.test(pt)) return 'Retrofit';
-    if (/^Q\/?R$/.test(pt)) return 'Q/R';
-    if (/SERVICE/.test(pt)) return 'Service';
-    return pt; // Let anything else through as-is
-  }
-  // Source Job # keeps the "RF"/"WIFI" prefix; jobId is now the digit Tracking # (Phase 1
-  // rekey), so infer from sourceJob first and only fall back to jobId for legacy rows.
-  const u = (j.sourceJob||j.jobId||'').toUpperCase();
-  if(/WIFI|WI-FI/.test(u)) return 'WIFI';
-  if(/^RF\s|^RF\d/.test(u)) return 'Retrofit';
-  if(/^Q\/?R\b/.test(u)) return 'Q/R';
-  return 'Service';
+  if (typeof j === 'string') j = { jobId: j };
+  const k = divisionOf(j);
+  return JT_LABEL[k] || divisionMeta(k).label || 'Service';
 };
 // Stale buckets based on Last Updated / Days Since Update
 const staleBucket = j => {
@@ -1292,8 +1283,8 @@ function toggleDivPills(){
 try{
   if(localStorage.getItem('bn_divpills')==='hide'){
     document.documentElement.classList.add('hide-divpills');
-    const _setD=()=>{ const b=document.getElementById('divpill-btn'); if(b) b.textContent='🏷 Show divisions'; };
-    if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',_setD); else _setD();
+    // The header button is parsed before this script, so set its label synchronously (no flash).
+    const b=document.getElementById('divpill-btn'); if(b) b.textContent='🏷 Show divisions';
   }
 }catch(_){}
 function toast(msg) {
@@ -1336,7 +1327,7 @@ function jobTable(jobs, mode='', showCoord=true) {
   const chipHtml = Object.entries(FILTER_LABELS)
     .filter(([k]) => f[k])
     .map(([k,label]) =>
-      `<span class="filter-chip">${label}: <strong>${escapeHtml(f[k])}</strong>` +
+      `<span class="filter-chip">${label}: <strong>${escapeHtml(k==='division'?divisionMeta(f[k]).label:f[k])}</strong>` +
       ` <button class="filter-chip-x" data-filter-key="${k}" data-mode="${mode}" aria-label="Remove ${label} filter">✕</button></span>`
     ).join('');
   const activeCount = Object.entries(FILTER_LABELS).filter(([k]) => f[k]).length;
@@ -1808,7 +1799,7 @@ function divisionMeta(key){ return divisionsCfg().find(function(d){ return d.key
 function divisionAuto(j){
   const cfg=divisionsCfg();
   const pt=(j.projectType||'').toUpperCase().trim();
-  if(pt){ const byPt=cfg.find(function(d){ return d.key.toUpperCase()===pt || String(d.label).toUpperCase()===pt || (d.match||[]).some(function(m){ return pt.indexOf(String(m).toUpperCase())===0; }); }); if(byPt) return byPt.key; }
+  if(pt){ const byPt=cfg.find(function(d){ if((!d.match||!d.match.length)&&!d.default) return false; /* manual-only: never auto-assign, even by Project Type */ return d.key.toUpperCase()===pt || String(d.label).toUpperCase()===pt || (d.match||[]).some(function(m){ return pt.indexOf(String(m).toUpperCase())===0; }); }); if(byPt) return byPt.key; }
   const u=(j.sourceJob||j.jobId||'').toUpperCase().replace(/^\s+/,'');
   for(let i=0;i<cfg.length;i++){ const d=cfg[i]; if(d.default) continue; if((d.match||[]).some(function(m){ return m && u.indexOf(String(m).toUpperCase())===0; })) return d.key; }
   const def=cfg.find(function(d){ return d.default; })||cfg[0]; return def?def.key:'';
@@ -1820,7 +1811,9 @@ function divisionOf(j){
 }
 // Display pill (used in the table + modal header). Colored by the division; a dot marks a manual override.
 function divisionPill(j){
-  const key=divisionOf(j), m=divisionMeta(key), ov=!!(JOB_DIVISION[j.jobId]);
+  const key=divisionOf(j), m=divisionMeta(key);
+  const rec=JOB_DIVISION[j.jobId];   // only flag a manual override whose key is still a valid division (matches divisionOf's guard)
+  const ov=!!(rec && rec.key && divisionsCfg().some(function(d){ return d.key===rec.key; }));
   return '<span class="div-pill" data-div="'+escapeHtml(key)+'" style="--dv:'+escapeHtml(m.color||'#94a3b8')+';"'+(ov?' data-ov="1" title="Division set manually"':'')+'>'+escapeHtml(m.label||key)+(ov?' •':'')+'</span>';
 }
 // Editor (modal): a select to override the division; "Auto" reverts to the classifier.
@@ -1828,7 +1821,9 @@ function divisionSelect(j){
   const cur=(JOB_DIVISION[j.jobId]&&JOB_DIVISION[j.jobId].key)||'';
   let opts='<option value="">Auto ('+escapeHtml(divisionMeta(divisionAuto(j)).label)+')</option>';
   divisionsCfg().forEach(function(d){ opts+='<option value="'+escapeHtml(d.key)+'"'+(cur===d.key?' selected':'')+'>'+escapeHtml(d.label)+'</option>'; });
-  return '<select class="div-sel" onchange="setJobDivision(\''+escapeHtml(String(j.jobId).replace(/'/g,''))+'\', this.value)">'+opts+'</select>';
+  // Reference the modal's current job id (resolved to canonical in setJobDivision) rather than
+  // inlining j.jobId into the handler string - avoids quote/backslash breakage for odd ids.
+  return '<select class="div-sel" onchange="setJobDivision(window._jnCurrentId, this.value)">'+opts+'</select>';
 }
 // Render a Vendor(s) string with supplier tagging. Splits only on safe delimiters (; | newline) so names containing commas stay intact.
 // Split a vendor string into individual names: splits on ; | newline and commas, then glues
@@ -2555,7 +2550,7 @@ function _parseHash(){
   return out;
 }
 // Filter-bar keys carried in the hash (prefixed f_) so a filtered list is shareable.
-var _HASH_FILTER_KEYS=['search','risk','priority','priority2','trade','sub','status','coord'];
+var _HASH_FILTER_KEYS=['search','risk','priority','priority2','trade','sub','status','coord','division'];
 function _filtersEqual(a,b){
   a=a||{}; b=b||{};
   return _HASH_FILTER_KEYS.every(function(k){ return (a[k]||'')===(b[k]||''); });
@@ -3012,6 +3007,7 @@ function clearFilters() {
   window._persistFilters = {risk:'', priority:'', priority2:'', trade:'', sub:'', status:'', coord:'', division:'', search:''};
   restoreFilters();
   _syncHash(true);
+  render(currentView);   // rebuild so the filter controls + chip row reflect the cleared state (not just row visibility)
   toast('Filters cleared');
 }
 
@@ -3485,7 +3481,10 @@ function renderO30Compare(){
 
 // Over-30 division classifier (scoped to this view): WiFi = Job ID has an iteration of "WiFi";
 // Photometrics = "RF" prefix followed by a PO number (e.g. RF 01766156); everything else = Service.
-function o30Division(j){ return BN.division(j.sourceJob || j.jobId); } // classify by Source Job # (keeps RF/WIFI prefix); jobId is the digit Tracking # post-rekey
+// Trend/over-30 bucket. Same source of truth as the pill + nav (divisionOf) so overrides and
+// classification match; the trend tracks 3 lines (WiFi / RF=Photometrics / everything-else=Service).
+const O30_BUCKET = { wifi:'WiFi', rf:'Photometrics' };
+function o30Division(j){ return O30_BUCKET[divisionOf(j)] || 'Service'; }
 // Over-30 type filter (All / WiFi / Photometrics / Service). State lives on window so the
 // chip selection survives a re-render; the setter just re-runs the Over-30 view.
 function setO30Type(t){ window._o30Type = t||''; render('over30-review'); _syncHash(); }
