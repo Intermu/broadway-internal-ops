@@ -260,7 +260,14 @@
       "Bash('/c/Program Files/Adobe/Adobe Creative Cloud Experience/libs/node.exe' --check C:/Users/mnajarro/AppData/Local/Temp/claude/C--Users-mnajarro-OneDrive---Broadway-National-Documents-GitHub-broadway-internal-ops/b9a0d5dc-c59f-4d55-b3a6-5560675876ea/scratchpad/dash_main2.js)",
       "Bash('/c/Program Files/Adobe/Adobe Creative Cloud Experience/libs/node.exe' C:/Users/mnajarro/AppData/Local/Temp/claude/C--Users-mnajarro-OneDrive---Broadway-National-Documents-GitHub-broadway-internal-ops/b9a0d5dc-c59f-4d55-b3a6-5560675876ea/scratchpad/division_pill_test.js)",
       "Bash('/c/Program Files/Adobe/Adobe Creative Cloud Experience/libs/node.exe' C:/Users/mnajarro/AppData/Local/Temp/claude/C--Users-mnajarro-OneDrive---Broadway-National-Documents-GitHub-broadway-internal-ops/b9a0d5dc-c59f-4d55-b3a6-5560675876ea/scratchpad/division_unified_test.js)",
-      "mcp__claude-in-chrome__find"
+      "mcp__claude-in-chrome__find",
+      "Bash(echo \"=== module pattern + toggles ===\")",
+      "Bash(grep -a -n -E 'BWN_MODULES\\\\.|safeModule\\\\\\('\\\\''|GM_registerMenuCommand|BWN\\\\.setNativeValue|function setNativeValue|function toast|function readWoNumber|onWO\\\\\\(|currentWOId' 'C:/Users/mnajarro/OneDrive - Broadway National/Tampermonkey Scripts/BWN Suite - AI \\(Broadway National\\).txt')",
+      "Bash(echo \"=== BWN_MODULES definition ===\")",
+      "Bash(grep -a -n -E 'BWN_MODULES\\\\s*=|const BWN_MODULES|var BWN_MODULES' 'C:/Users/mnajarro/OneDrive - Broadway National/Tampermonkey Scripts/BWN Suite - AI \\(Broadway National\\).txt')",
+      "Bash(echo \"=== setNativeValue exposure on BWN ===\")",
+      "Bash(grep -a -n -E setNativeValue 'C:/Users/mnajarro/OneDrive - Broadway National/Tampermonkey Scripts/BWN Suite - AI \\(Broadway National\\).txt')",
+      "Bash('/c/Program Files/Adobe/Adobe Creative Cloud Experience/libs/node.exe' C:/Users/mnajarro/AppData/Local/Temp/claude/C--Users-mnajarro-OneDrive---Broadway-National-Documents-GitHub-broadway-internal-ops/b9a0d5dc-c59f-4d55-b3a6-5560675876ea/scratchpad/sr_stage1_test.js)"
     ]
   }
 }
