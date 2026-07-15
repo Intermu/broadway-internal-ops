@@ -512,6 +512,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Ar
 .pri2-p3{background:var(--color-info-bg);color:var(--color-info-text);border-color:var(--color-info-border);}
 .pri2-p4,.pri2-blue{background:var(--color-surface-sunken);color:var(--color-text-soft);border-color:#dde3ed;}
 .pri2-other{background:var(--color-success-bg);color:var(--color-brand-ink);border-color:#bcebd0;}
+/* DIVISION PILL (config-driven; color via --dv inline var) */
+.div-pill{display:inline-block;font-size:9px;font-weight:500;padding:1px 7px;border-radius:99px;letter-spacing:.2px;white-space:nowrap;border:1px solid var(--dv,#94a3b8);color:var(--dv,#94a3b8);background:transparent;line-height:1.5;}
+.div-pill[data-ov="1"]{background:var(--dv,#94a3b8);color:#fff;}
+html.hide-divpills .div-pill{display:none;}
+.div-sel{font-size:11px;padding:2px 6px;border:1px solid var(--border);border-radius:6px;background:var(--color-surface);color:var(--text);max-width:200px;}
 /* TRADE / VENDOR CHIPS */
 .tv-cell{font-size:10px;color:var(--color-text-soft);line-height:1.4;max-width:200px;}
 .tv-chip{display:inline-block;padding:1px 6px;border-radius:3px;background:#eef2f7;color:#334155;font-size:10px;margin:1px 2px 1px 0;font-family:ui-monospace,'Segoe UI Mono','SF Mono',monospace;white-space:nowrap;}
@@ -844,6 +849,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible{
   <button class="gear-btn" id="pin-view-btn" onclick="togglePinView()" title="Open the Dashboard to this view by default">☆ Pin view</button>
   <button class="gear-btn" id="density-btn" onclick="toggleDensity()" title="Toggle table row density">⊟ Compact</button>
   <button class="gear-btn" id="theme-btn" onclick="toggleTheme()" title="Toggle dark mode">🌙 Dark</button>
+  <button class="gear-btn" id="divpill-btn" onclick="toggleDivPills()" title="Show or hide division pills on jobs">🏷 Hide divisions</button>
   <button class="gear-btn" id="export-view-btn" onclick="exportView('xlsx')" title="Download the current view as Excel">⎘ Excel</button>
   <button class="gear-btn" id="export-csv-btn" onclick="exportView('csv')" title="Download the current view as CSV">⎘ CSV</button>
   <a class="cross-btn" href="./agent.html" title="Open the Agent">Agent ↗</a>
@@ -1073,7 +1079,18 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible{
       exclusionValue: "Exclusion",
       carveOuts: { wifiPrefixes: ["WI", "WiFi", "Wi-Fi"], rfPrefixes: ["RF"], qrPrefixes: ["Q", "R"] }
     },
-    priorityVocab: ["P1", "P2", "P3", "P4", "Red", "Yellow", "Blue"]
+    priorityVocab: ["P1", "P2", "P3", "P4", "Red", "Yellow", "Blue"],
+    // Division taxonomy (per-client; mergeConfig replaces the whole array so a client can have
+    // one division or five). Each: key, label, color, and `match` = prefixes tested
+    // case-insensitively at the START of the Source Job #. `default:true` is the catch-all
+    // bucket. A division with an EMPTY `match` (and not default) is MANUAL-ONLY: never
+    // auto-assigned, only set by hand via the pill override.
+    divisions: [
+      { key: "service", label: "Service", color: "#2f6df6", default: true, match: [] },
+      { key: "wifi", label: "WiFi", color: "#8e44ad", match: ["WIFI", "WI-FI", "WI FI"] },
+      { key: "rf", label: "RF / Retrofit", color: "#d68910", match: ["RF"] },
+      { key: "qr", label: "Q/R", color: "#16a085", match: ["Q/R", "QR"] }
+    ]
   };
 
   // Deep-overlay `over` onto `base`: nested plain objects merge recursively;
@@ -1166,9 +1183,12 @@ const jobType = j => {
     if (/SERVICE/.test(pt)) return 'Service';
     return pt; // Let anything else through as-is
   }
-  const u = (j.jobId||'').toUpperCase();
+  // Source Job # keeps the "RF"/"WIFI" prefix; jobId is now the digit Tracking # (Phase 1
+  // rekey), so infer from sourceJob first and only fall back to jobId for legacy rows.
+  const u = (j.sourceJob||j.jobId||'').toUpperCase();
   if(/WIFI|WI-FI/.test(u)) return 'WIFI';
   if(/^RF\s|^RF\d/.test(u)) return 'Retrofit';
+  if(/^Q\/?R\b/.test(u)) return 'Q/R';
   return 'Service';
 };
 // Stale buckets based on Last Updated / Days Since Update
@@ -1262,6 +1282,20 @@ try{
     if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',_setT); else _setT();
   }
 }catch(_){}
+// Division pills: shown by default; this hides them globally (persisted). Mirrors toggleDensity.
+function toggleDivPills(){
+  const hidden = document.documentElement.classList.toggle('hide-divpills');
+  const btn = document.getElementById('divpill-btn');
+  if(btn) btn.textContent = hidden ? '🏷 Show divisions' : '🏷 Hide divisions';
+  try{ localStorage.setItem('bn_divpills', hidden?'hide':'show'); }catch(_){}
+}
+try{
+  if(localStorage.getItem('bn_divpills')==='hide'){
+    document.documentElement.classList.add('hide-divpills');
+    const _setD=()=>{ const b=document.getElementById('divpill-btn'); if(b) b.textContent='🏷 Show divisions'; };
+    if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',_setD); else _setD();
+  }
+}catch(_){}
 function toast(msg) {
   const t=document.getElementById('toast');
   t.textContent=msg; t.classList.add('show');
@@ -1298,7 +1332,7 @@ function jobTable(jobs, mode='', showCoord=true) {
   // Persistent filters indicator
   // Build active filter chip row (UX improvement: individual clear per filter)
   const f = window._persistFilters || {};
-  const FILTER_LABELS = {search:'Search',risk:'Risk',priority2:'Priority',trade:'Trade',coord:'Coordinator'};
+  const FILTER_LABELS = {search:'Search',risk:'Risk',priority2:'Priority',trade:'Trade',coord:'Coordinator',division:'Division'};
   const chipHtml = Object.entries(FILTER_LABELS)
     .filter(([k]) => f[k])
     .map(([k,label]) =>
@@ -1319,6 +1353,10 @@ function jobTable(jobs, mode='', showCoord=true) {
     ${priorityFilter}
     ${tradeFilter}
     ${coordFilter}
+    <select data-tbl-id="tbl-${mode}" data-filter-type="division">
+      <option value="">All Divisions</option>
+      ${divisionsCfg().map(d=>`<option value="${escapeHtml(d.key)}"${f.division===d.key?' selected':''}>${escapeHtml(d.label)}</option>`).join('')}
+    </select>
   </div>${chipRow}`;
   const rows = jobs.map(j=>{
     const pri = normPriority(j.escalationPriority);
@@ -1329,9 +1367,9 @@ function jobTable(jobs, mode='', showCoord=true) {
     // Lowercase trade list for data-attribute substring filtering
     const tradeData = (j.trades||'').toLowerCase();
     const vendorData = (j.vendors||'').toLowerCase();
-    const searchBlob = (j.jobId+' '+j.fm+' '+j.notes+' '+j.location+' '+(j.lastReviewedBy||'')+' '+(j.trades||'')+' '+(j.vendors||'')).toLowerCase();
-    return `<tr class="job-row" data-jobid="${escapeHtml(j.jobId)}" onclick="openJobModal(this.dataset.jobid)" data-risk="${escapeHtml(j.risk||'')}" data-coord="${escapeHtml(j.coordinator||'')}" data-status="${escapeHtml(j.status||'')}" data-priority2="${escapeHtml(priBucket)}" data-trade="${escapeHtml(tradeData)}" data-vendor="${escapeHtml(vendorData)}" data-search="${escapeHtml(searchBlob)}">
-      <td><span class="jid">${escapeHtml(j.jobId)}</span>${flagCell?'<div style="margin-top:3px;">'+flagCell+'</div>':''}${jobNoteMarker(j.jobId)}</td>
+    const searchBlob = (j.jobId+' '+(j.sourceJob||'')+' '+(j.tracking||'')+' '+(j.wo||'')+' '+(j.po||'')+' '+j.fm+' '+j.notes+' '+j.location+' '+(j.lastReviewedBy||'')+' '+(j.trades||'')+' '+(j.vendors||'')).toLowerCase();
+    return `<tr class="job-row" data-jobid="${escapeHtml(j.jobId)}" onclick="openJobModal(this.dataset.jobid)" data-risk="${escapeHtml(j.risk||'')}" data-coord="${escapeHtml(j.coordinator||'')}" data-status="${escapeHtml(j.status||'')}" data-priority2="${escapeHtml(priBucket)}" data-trade="${escapeHtml(tradeData)}" data-vendor="${escapeHtml(vendorData)}" data-division="${escapeHtml(divisionOf(j))}" data-search="${escapeHtml(searchBlob)}">
+      <td><span class="jid">${escapeHtml(j.jobId)}</span> ${divisionPill(j)}${flagCell?'<div style="margin-top:3px;">'+flagCell+'</div>':''}${jobNoteMarker(j.jobId)}</td>
       ${showCoord ? `<td style="font-size:11px;">${escapeHtml(j.coordinator)}</td>` : ''}
       <td>${statusBadge(j.status)}</td>
       <td><span class="age-pill ${ageCls(j.aged)}">${j.aged}d</span></td>
@@ -1424,6 +1462,7 @@ function openJobModal(id, fromEntity){
       </div>
       <span class="age-pill ${ageCls(j.aged)}">${j.aged}d</span>
       ${riskBadge(j.risk)}
+      ${divisionPill(j)}
       <button class="jm-x" onclick="closeJobModal()" aria-label="Close">×</button>
     </div>
     <div class="job-modal-body">
@@ -1450,6 +1489,7 @@ function openJobModal(id, fromEntity){
         ${row('Age', j.aged+' days since created')}
         ${row('Latest update', fmtDate(j.lastUpdated)?(fmtDate(j.lastUpdated)+(j.daysSinceUpdate!=null?' · '+j.daysSinceUpdate+'d ago':'')):(j.daysSinceUpdate==null?'Never':j.daysSinceUpdate+' days ago'))}
         ${row('Priority', priorityPill(j.priority)||'-')}
+        ${row('Division', divisionSelect(j))}
         ${row('Approved', j.amount>0?fmt$0(j.amount):'-')}
         ${row('FM', escapeHtml(j.fm||'-'))}
         ${row('Trades', escapeHtml(j.trades||'-'))}
@@ -1729,6 +1769,67 @@ function emToggleKind(){
   setVendorKind(name, cur==='supplier'?'vendor':'supplier');
 }
 function vendorKind(name){ const n=String(name||''); if(!n.trim()) return ''; const ov=VENDOR_KIND[vkKey(n)]; if(ov&&ov.kind) return ov.kind; for(const re of VENDOR_OVERRIDES){ if(re.test(n)) return 'vendor'; } for(const re of SUPPLIER_PATTERNS){ if(re.test(n)) return 'supplier'; } return 'vendor'; }
+
+// ---- Division pill: per-client config + manual per-job override (mirrors VENDOR_KIND) --------
+// Overrides keyed by canonical jobId; team-wide (slot 'job-divisions') + localStorage cache.
+// An override always beats the auto-classifier. Divisions come from window._clientConfig.
+let JOB_DIVISION = {};
+const JOB_DIVISION_LS = 'bn_job_divisions';
+function _jdLoadLocal(){ try{ return JSON.parse(localStorage.getItem(JOB_DIVISION_LS)||'{}')||{}; }catch(_){ return {}; } }
+function _jdSaveLocal(){ try{ localStorage.setItem(JOB_DIVISION_LS, JSON.stringify(JOB_DIVISION)); }catch(_){} }
+async function loadJobDivisions(){
+  JOB_DIVISION = _jdLoadLocal();
+  if(!window.BROADWAY_SNAPSHOT){
+    const res = await bnClientGet('job-divisions');
+    if(res && res.exists && res.data && res.data.divs && typeof res.data.divs==='object'){
+      const blob = res.data.divs;
+      Object.keys(blob).forEach(function(k){ const a=JOB_DIVISION[k], b=blob[k]; if(!a || (b.updatedAt||'') >= (a.updatedAt||'')) JOB_DIVISION[k]=b; });
+      _jdSaveLocal();
+    }
+  }
+  if(JOBS.length) render(currentView);   // repaint pills once overrides are known
+}
+async function setJobDivision(jobId, key){
+  const id = resolveJobId(jobId); if(!id) return;
+  if(key) JOB_DIVISION[id] = { key:key, updatedAt:new Date().toISOString() };
+  else delete JOB_DIVISION[id];   // empty -> revert to auto-classify
+  _jdSaveLocal();
+  let synced=false;
+  if(!window.BROADWAY_SNAPSHOT){
+    const res=await bnClientPost('job-divisions', {divs:JOB_DIVISION, savedAt:new Date().toISOString()}, {count:String(Object.keys(JOB_DIVISION).length)});
+    synced=!!(res&&res.ok);
+  }
+  toast(key ? ('Division set to '+divisionMeta(key).label+(synced?' - synced to team':' on this browser')) : ('Division reset to auto'+(synced?' - synced to team':'')));
+  render(currentView);
+}
+function divisionsCfg(){ const c=(window._clientConfig&&window._clientConfig.divisions); return (Array.isArray(c)&&c.length)?c:BN.DEFAULT_CLIENT_CONFIG.divisions; }
+function divisionMeta(key){ return divisionsCfg().find(function(d){ return d.key===key; }) || {key:key,label:key||'-',color:'#94a3b8'}; }
+// Auto-classification only (no override): Project Type field -> config prefix match on Source Job # -> default.
+function divisionAuto(j){
+  const cfg=divisionsCfg();
+  const pt=(j.projectType||'').toUpperCase().trim();
+  if(pt){ const byPt=cfg.find(function(d){ return d.key.toUpperCase()===pt || String(d.label).toUpperCase()===pt || (d.match||[]).some(function(m){ return pt.indexOf(String(m).toUpperCase())===0; }); }); if(byPt) return byPt.key; }
+  const u=(j.sourceJob||j.jobId||'').toUpperCase().replace(/^\s+/,'');
+  for(let i=0;i<cfg.length;i++){ const d=cfg[i]; if(d.default) continue; if((d.match||[]).some(function(m){ return m && u.indexOf(String(m).toUpperCase())===0; })) return d.key; }
+  const def=cfg.find(function(d){ return d.default; })||cfg[0]; return def?def.key:'';
+}
+function divisionOf(j){
+  const ov=JOB_DIVISION[j.jobId];
+  if(ov && ov.key && divisionsCfg().some(function(d){ return d.key===ov.key; })) return ov.key;
+  return divisionAuto(j);
+}
+// Display pill (used in the table + modal header). Colored by the division; a dot marks a manual override.
+function divisionPill(j){
+  const key=divisionOf(j), m=divisionMeta(key), ov=!!(JOB_DIVISION[j.jobId]);
+  return '<span class="div-pill" data-div="'+escapeHtml(key)+'" style="--dv:'+escapeHtml(m.color||'#94a3b8')+';"'+(ov?' data-ov="1" title="Division set manually"':'')+'>'+escapeHtml(m.label||key)+(ov?' •':'')+'</span>';
+}
+// Editor (modal): a select to override the division; "Auto" reverts to the classifier.
+function divisionSelect(j){
+  const cur=(JOB_DIVISION[j.jobId]&&JOB_DIVISION[j.jobId].key)||'';
+  let opts='<option value="">Auto ('+escapeHtml(divisionMeta(divisionAuto(j)).label)+')</option>';
+  divisionsCfg().forEach(function(d){ opts+='<option value="'+escapeHtml(d.key)+'"'+(cur===d.key?' selected':'')+'>'+escapeHtml(d.label)+'</option>'; });
+  return '<select class="div-sel" onchange="setJobDivision(\''+escapeHtml(String(j.jobId).replace(/'/g,''))+'\', this.value)">'+opts+'</select>';
+}
 // Render a Vendor(s) string with supplier tagging. Splits only on safe delimiters (; | newline) so names containing commas stay intact.
 // Split a vendor string into individual names: splits on ; | newline and commas, then glues
 // corporate suffixes (Inc, LLC, Co, Corp, ...) back so "WISCONSIN LIGHTING LAB, INC." stays intact.
@@ -2060,7 +2161,9 @@ async function loadLiveJobs(){
 function applyLiveJobs(){
   if(!LIVE_JOBS || !JOBS || !JOBS.length) return;
   const DATEF = { lastUpdated:1, woDate:1, firstTripDate:1, nextOnsiteDate:1, expectedCompletion:1 };
-  const NUMF = { amount:1, aged:1, statusHrs:1, daysSinceUpdate:1 };
+  const NUMF = { amount:1, aged:1, statusHrs:1, daysSinceUpdate:1, vendorNte:1 };
+  // live-jobs fact keys that differ from the job-object keys the modal/table read
+  const ALIASF = { sourcePo:'po', vendorNte:'totalVendorNte', woNumber:'wo' };
   JOBS.forEach(function(j){
     const lj = LIVE_JOBS[j.jobId]; if(!lj || !lj.facts) return;
     const liveT = Date.parse(lj.ts||'')||0;
@@ -2068,9 +2171,10 @@ function applyLiveJobs(){
     if(liveT <= baseT) return;   // workbook is at least as fresh for this job
     Object.keys(lj.facts).forEach(function(k){
       const v = lj.facts[k]; if(v===''||v==null) return;
-      if(DATEF[k]){ const d = parseExcelDate(v); if(d) j[k]=d; }
-      else if(NUMF[k]){ const n=+v; if(!isNaN(n)) j[k]=n; }
-      else j[k]=v;
+      const key = ALIASF[k] || k;
+      if(DATEF[k]){ const d = parseExcelDate(v); if(d) j[key]=d; }
+      else if(NUMF[k]){ const n=+v; if(!isNaN(n)) j[key]=n; }
+      else j[key]=v;
     });
     j._live = lj.ts;
   });
@@ -2378,7 +2482,7 @@ function compute() {
 let currentView = 'overview';
 
 // Persistent filter state across views
-window._persistFilters = window._persistFilters || {risk:'', priority:'', priority2:'', trade:'', sub:'', status:'', coord:'', search:''};
+window._persistFilters = window._persistFilters || {risk:'', priority:'', priority2:'', trade:'', sub:'', status:'', coord:'', division:'', search:''};
 
 function nav(view, btn) {
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
@@ -2457,7 +2561,7 @@ function _filtersEqual(a,b){
   return _HASH_FILTER_KEYS.every(function(k){ return (a[k]||'')===(b[k]||''); });
 }
 function _setFiltersFromHash(filters){
-  const base={risk:'', priority:'', priority2:'', trade:'', sub:'', status:'', coord:'', search:''};
+  const base={risk:'', priority:'', priority2:'', trade:'', sub:'', status:'', coord:'', division:'', search:''};
   if(filters) _HASH_FILTER_KEYS.forEach(function(k){ if(filters[k]!=null) base[k]=filters[k]; });
   window._persistFilters = base;
 }
@@ -2573,18 +2677,28 @@ function _gsNoteText(id){ const n=JOB_NOTES[id]; if(!n) return ''; let s=n.note|
 // Relevance score for a job vs the query (0 = no match). Higher tier = stronger field.
 // Age adds a small bonus (<27) that never crosses a tier, so an exact id always wins.
 function _gsJobScore(j, nq, toks){
-  const idn=String(j.jobId||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+  // Match ANY of the job's identifiers - Tracking # (canonical jobId), Source Job #, WO #,
+  // Source PO # - so a job is findable by whichever number the user has in hand. Compare both
+  // alnum and digits-only forms so e.g. "W-364250" matches the WO stored as digits "364250".
+  const ids=[j.jobId, j.sourceJob, j.tracking, j.wo, j.po];
+  const idpool=ids.map(function(x){ return String(x||'').toLowerCase().replace(/[^a-z0-9]/g,''); }).filter(Boolean);
+  const idpoolD=ids.map(function(x){ return String(x||'').replace(/\D+/g,''); }).filter(Boolean);
+  const idn=idpool[0]||'';
+  const nqd=(nq||'').replace(/\D+/g,'');
   let s=0;
   if(nq){
-    if(idn===nq) s=1000;
-    else if(idn.indexOf(nq)===0) s=800;
-    else if(idn.indexOf(nq)!==-1) s=600;
-    else if(idn.length>=6 && nq.indexOf(idn)!==-1) s=550;   // reverse match only for a real id core
+    const tier=function(pool,q){ if(!q) return 0;
+      if(pool.some(function(id){ return id===q; })) return 1000;
+      if(pool.some(function(id){ return id.indexOf(q)===0; })) return 800;
+      if(pool.some(function(id){ return id.indexOf(q)!==-1; })) return 600;
+      if(pool.some(function(id){ return id.length>=6 && q.indexOf(id)!==-1; })) return 550;   // reverse match only for a real id core
+      return 0; };
+    s=Math.max(tier(idpool,nq), nqd.length>=3?tier(idpoolD,nqd):0);
   }
   if(!s){
     const note=_gsNoteText(j.jobId);
     const risk=(j.risk&&j.risk!=='OK')?j.risk:'';            // bare "OK" excluded - collides everywhere
-    const blob=((j.jobId||'')+' '+(j.coordinator||'')+' '+(j.fm||'')+' '+(j.status||'')+' '+(j.location||'')+' '+(j.city||'')+' '+(j.state||'')+' '+note+' '+(j.vendors||'')+' '+(j.trades||'')+' '+risk).toLowerCase();
+    const blob=((j.jobId||'')+' '+(j.sourceJob||'')+' '+(j.tracking||'')+' '+(j.wo||'')+' '+(j.po||'')+' '+(j.coordinator||'')+' '+(j.fm||'')+' '+(j.status||'')+' '+(j.location||'')+' '+(j.city||'')+' '+(j.state||'')+' '+note+' '+(j.vendors||'')+' '+(j.trades||'')+' '+risk).toLowerCase();
     if(!toks.every(t=>blob.indexOf(t)!==-1)) return 0;
     const all=v=>{ const x=String(v||'').toLowerCase(); return toks.every(t=>x.indexOf(t)!==-1); };
     if(all(j.coordinator)||all(j.fm)) s=400;
@@ -2888,13 +3002,14 @@ function applyFilters(id) {
     if(show && tradeNeedle && !((r.dataset.trade||'').includes(tradeNeedle))) show = false;
     if(show && f.status && r.dataset.status !== f.status) show = false;
     if(show && f.coord && r.dataset.coord !== f.coord) show = false;
+    if(show && f.division && r.dataset.division !== f.division) show = false;
     if(show && search && !((r.dataset.search||'').includes(search) || (r.textContent||'').toLowerCase().includes(search))) show = false;
     r.style.display = show ? '' : 'none';
   });
 }
 
 function clearFilters() {
-  window._persistFilters = {risk:'', priority:'', priority2:'', trade:'', sub:'', status:'', coord:'', search:''};
+  window._persistFilters = {risk:'', priority:'', priority2:'', trade:'', sub:'', status:'', coord:'', division:'', search:''};
   restoreFilters();
   _syncHash(true);
   toast('Filters cleared');
@@ -3370,7 +3485,7 @@ function renderO30Compare(){
 
 // Over-30 division classifier (scoped to this view): WiFi = Job ID has an iteration of "WiFi";
 // Photometrics = "RF" prefix followed by a PO number (e.g. RF 01766156); everything else = Service.
-function o30Division(j){ return BN.division(j.jobId); } // delegates to bn-core (window.BN)
+function o30Division(j){ return BN.division(j.sourceJob || j.jobId); } // classify by Source Job # (keeps RF/WIFI prefix); jobId is the digit Tracking # post-rekey
 // Over-30 type filter (All / WiFi / Photometrics / Service). State lives on window so the
 // chip selection survives a re-render; the setter just re-runs the Over-30 view.
 function setO30Type(t){ window._o30Type = t||''; render('over30-review'); _syncHash(); }
@@ -3386,7 +3501,7 @@ function renderOver30(mc, agg) {
 
   // Type filter chips. Counts are over ALL over-30 jobs so they stay stable across filtering.
   const o30All = JOBS.filter(j=>j.aged>30);
-  const TYPES = [['','All'],['WiFi','WiFi'],['Photometrics','Photometrics'],['Service','Service']];
+  const TYPES = [['','All'],['WiFi','WiFi'],['Photometrics','RF / Retrofit'],['Service','Service']];
   const typeBar = '<div class="o30-typebar">'+TYPES.map(function(t){ var val=t[0],lbl=t[1]; var cnt=val?o30All.filter(function(j){return o30Division(j)===val;}).length:o30All.length; var active=TYPE===val; return '<button class="o30-chip'+(active?' active':'')+'" onclick="setO30Type(\''+val+'\')">'+lbl+' <span class="o30-chip-n">'+cnt+'</span></button>'; }).join('')+'</div>';
 
   // Per-coordinator breakdown (worst-first by over-30 count), respecting the active type filter.
@@ -4379,11 +4494,12 @@ function bnIds(r){
   return { sourceJob, tracking: tracking || parenTrack, wo, po, jobId };
 }
 // Alias index: every identifier (raw + digits) -> canonical jobId. Rebuilt each upload.
-let ALIAS = {}, SRCJOB2TRACK = {};
+let ALIAS = {}, SRCJOB2TRACK = {}, JOBS_BY_ID = {};
 function buildAlias(jobs){
-  ALIAS = {}; SRCJOB2TRACK = {};
+  ALIAS = {}; SRCJOB2TRACK = {}; JOBS_BY_ID = {};
   (jobs||[]).forEach(j => {
     const canon = j.jobId;
+    JOBS_BY_ID[canon] = j;   // canonical lookup so id-only lists (trend snapshots) can recover a job's sourceJob/division
     [j.jobId, j.sourceJob, j.tracking, j.wo, j.po].forEach(k => {
       if (k==null || k==='') return;
       const s = String(k); if (!ALIAS[s]) ALIAS[s] = canon;
@@ -4398,6 +4514,9 @@ function resolveJobId(id){
   const d = bnDigits(id); if (ALIAS[d]) return ALIAS[d];
   return id;
 }
+// Resolve a job object from any identifier (raw/digits/alias). Used where only an id string
+// is on hand (e.g. trend snapshots that stored jobId only) so classification can read sourceJob.
+function jobById(id){ return JOBS_BY_ID[resolveJobId(id)] || null; }
 // One-time re-key of authored data from old Source Job # keys to Tracking #, driven by the
 // actual Source Job # -> Tracking # pairs in THIS upload (not a regex guess). Idempotent:
 // once the keys are tracking #s, SRCJOB2TRACK has no entry for them and nothing moves.
@@ -5312,11 +5431,12 @@ function o30SparkBlock(entries, cur){
   </div>`;
 }
 
-// Division counts for an over-30 snapshot, derived from the stored job IDs (works
-// retroactively on old snapshots since division is a function of the Job ID).
+// Division counts for an over-30 snapshot. Snapshots store jobId (digit Tracking #) only, so
+// resolve each id back to its job to read sourceJob (which carries the RF/WIFI prefix); fall
+// back to classifying the bare id for jobs no longer loaded (legacy/closed).
 function _o30DivCounts(ids){
   let s=0,w=0,p=0;
-  (ids||[]).forEach(function(id){ const d=o30Division({jobId:id}); if(d==='WiFi')w++; else if(d==='Photometrics')p++; else s++; });
+  (ids||[]).forEach(function(id){ const d=o30Division(jobById(id) || {jobId:id}); if(d==='WiFi')w++; else if(d==='Photometrics')p++; else s++; });
   return {overall:(ids||[]).length, Service:s, WiFi:w, Photometrics:p};
 }
 // Four trajectory sparklines: Overall + the three divisions. WiFi and Photometrics are
@@ -5330,8 +5450,8 @@ function o30MultiSparkBlock(entries, cur){
     return '<div style="padding:10px 14px;font-size:12px;color:var(--muted);border-bottom:1px solid var(--border);"><strong style="color:var(--text);">Trajectory:</strong> need at least two audits to chart \u2014 builds as weekly audits load.</div>';
   }
   const counts=rows.map(function(r){ return _o30DivCounts(r.ids); });
-  const SERIES=[{key:'overall',lbl:'Overall',color:'#1a5f3e'},{key:'Service',lbl:'Service',color:'#2f6df6'},{key:'WiFi',lbl:'WiFi',color:'#8e44ad'},{key:'Photometrics',lbl:'Photometrics',color:'#d68910'}];
-  const head='<div style="padding:11px 14px 4px;font-size:11px;font-weight:500;color:var(--text);">Over-30 trajectory <span style="font-weight:400;color:var(--muted);">\u00b7 last '+rows.length+' audits \u00b7 WiFi and Photometrics are carve-outs from the target, tracked so nothing slips</span></div>';
+  const SERIES=[{key:'overall',lbl:'Overall',color:'#1a5f3e'},{key:'Service',lbl:'Service',color:'#2f6df6'},{key:'WiFi',lbl:'WiFi',color:'#8e44ad'},{key:'Photometrics',lbl:'RF / Retrofit',color:'#d68910'}];
+  const head='<div style="padding:11px 14px 4px;font-size:11px;font-weight:500;color:var(--text);">Over-30 trajectory <span style="font-weight:400;color:var(--muted);">\u00b7 last '+rows.length+' audits \u00b7 WiFi and RF are carve-outs from the target, tracked so nothing slips</span></div>';
   const body=SERIES.map(function(s){
     const vals=counts.map(function(c){ return c[s.key]; });
     const first=vals[0], last=vals[vals.length-1];
@@ -5647,7 +5767,7 @@ function renderSnapshotCompare(mc){
 
   // Division movement (retroactive from stored IDs).
   const dcA=_o30DivCounts(A.o30.ids), dcB=_o30DivCounts(B.o30.ids);
-  const divRows=[['overall','Overall'],['Service','Service'],['WiFi','WiFi'],['Photometrics','Photometrics']]
+  const divRows=[['overall','Overall'],['Service','Service'],['WiFi','WiFi'],['Photometrics','RF / Retrofit']]
     .map(([k,lbl])=>{ const a=dcA[k]||0,b=dcB[k]||0; return `<tr><td style="font-weight:500;">${lbl}</td><td>${a}</td><td><strong>${b}</strong></td><td>${_o30Arrow(b-a)}</td></tr>`; }).join('');
 
   // Coordinator movement (from stored byCoord aggregates).
@@ -5916,6 +6036,7 @@ autoLoadClosed();
 loadJobNotes();
 loadStatusHist();
 loadVendorKinds();
+loadJobDivisions();
 loadClientConfig();
 loadDataFreshness();   // header freshness line + connectivity probe
 

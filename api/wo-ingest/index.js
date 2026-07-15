@@ -272,9 +272,9 @@ module.exports = async function (context, req) {
       const jf = body.jobFacts;
       const target = String(jf.target || "").replace(/\D+/g, "").slice(0, 64);
       if (!target) { context.res = json(400, { error: "jobFacts.target must be a tracking number" }); return; }
-      const STR = ["status", "coordinator", "location", "priority", "fm", "trades", "vendors", "woNumber", "sourcePo", "sourceJob", "client"];
+      const STR = ["status", "coordinator", "location", "priority", "fm", "trades", "vendors", "woNumber", "sourcePo", "sourceJob", "client", "city", "state"];
       const DATE = ["lastUpdated", "woDate", "firstTripDate", "nextOnsiteDate", "expectedCompletion"];
-      const NUM = ["amount", "aged", "statusHrs", "daysSinceUpdate"];
+      const NUM = ["amount", "aged", "statusHrs", "daysSinceUpdate", "vendorNte"];
       const facts = {};
       STR.forEach((k) => { if (jf[k] != null) facts[k] = String(jf[k]).slice(0, 300); });
       DATE.forEach((k) => { if (jf[k] != null) facts[k] = String(jf[k]).slice(0, 40); });
