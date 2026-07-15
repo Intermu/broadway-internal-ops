@@ -32,6 +32,14 @@
     "allowedRoles": ["anonymous"]
   },
   {
+    "route": "/api/track-open",
+    "allowedRoles": ["anonymous"]
+  },
+  {
+    "route": "/api/bid-status",
+    "allowedRoles": ["anonymous"]
+  },
+  {
     "route": "/api/*",
     "allowedRoles": ["broadway_employee"]
   },

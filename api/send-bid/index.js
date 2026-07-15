@@ -1,4 +1,5 @@
 const https = require("https");
+const crypto = require("crypto");
 const { BlobServiceClient } = require("@azure/storage-blob");
 
 // Graph send for the BWN Bid-Out userscript (Phase B - one-click styled RFP email).
@@ -41,12 +42,17 @@ const { BlobServiceClient } = require("@azure/storage-blob");
 
 const CONTAINER_NAME = "broadway-data";
 const AUDIT_BLOB = "bid-sends/log";
+const OPENS_PREFIX = "bid-opens/";                 // per-send opens record: bid-opens/<sendId>
+const TRACK_INDEX_PREFIX = "bid-opens/by-tracking/"; // tracking# -> [sendIds] for bid-status lookup
 const MAX_AUDIT_ENTRIES = 1000;
+const MAX_TRACK_IDS = 100;                         // cap sendIds retained per tracking # index
 const MAX_RETRIES = 5;
 const MAX_BCC = 60;                 // matches the userscript's cap
 const MAX_SUBJECT = 300;
 const MAX_HTML = 300000;            // ~300KB - the template is ~15KB filled
 const DAILY_RECIPIENTS = 500;       // ceiling across all senders per UTC day
+const PER_SEND_TIMEOUT = 25000;     // per-vendor Graph send ceiling; CONCURRENCY*ceil(MAX_BCC/C) must stay < functionTimeout
+const CONCURRENCY = 4;              // parallel per-vendor Graph sends (Graph tolerates this per mailbox; keeps the batch well inside functionTimeout)
 const GRAPH_HOST = "graph.microsoft.com";
 const LOGIN_HOST = "login.microsoftonline.com";
 
@@ -70,7 +76,7 @@ function getContainerClient() {
     const container = service.getContainerClient(CONTAINER_NAME);
     await container.createIfNotExists();
     return container;
-  })();
+  })().catch((err) => { containerClientPromise = null; throw err; });   // never cache a rejection - a cold-start blip would brick the process
   return containerClientPromise;
 }
 
@@ -147,6 +153,91 @@ async function voidReservation(blob, id) {
   }
 }
 
+// Mark a landed reservation DONE and set its recipient count to the number ACTUALLY sent.
+// The done flag is what makes idempotency safe: a retry carrying the same idem key sees the
+// completed entry and returns the prior result instead of re-sending. Setting the count to
+// the actual successes also means a partial per-vendor batch consumes only its successes
+// against the daily ceiling. Best-effort; on contention it leaves the (higher) reserved
+// count + not-done, which only tightens the cap and, at worst, makes a fast retry wait.
+async function markSent(blob, id, actualCount) {
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    try {
+      const dl = await blob.download();
+      const parsed = JSON.parse(await streamToString(dl.readableStreamBody));
+      const entries = parsed && Array.isArray(parsed.entries) ? parsed.entries : [];
+      let changed = false;
+      for (const en of entries) {
+        if (en && en.id === id) {
+          if (en.bcc !== actualCount) { en.bcc = actualCount; changed = true; }
+          if (!en.done) { en.done = true; changed = true; }
+        }
+      }
+      if (!changed) return;
+      const out = JSON.stringify({ v: 1, entries });
+      await blob.upload(out, Buffer.byteLength(out), { blobHTTPHeaders: { blobContentType: "application/json" }, conditions: { ifMatch: dl.etag } });
+      return;
+    } catch (err) {
+      // Retry on ANY error (not just 412) - the done flag drives idempotency, so persisting
+      // it matters; a transient blob error shouldn't silently leave the send un-flagged.
+      if (attempt < MAX_RETRIES - 1) continue;
+      return;
+    }
+  }
+}
+
+// Append a 1x1 tracking pixel to a vendor's copy of the email (per-vendor mode only). The
+// URL carries only opaque server-generated ids - never the vendor email - so no personal
+// data rides the query string. Inserted just before the final </table> when present, else
+// appended; either way mail clients render it.
+function injectPixel(html, url) {
+  const img = '<img src="' + url + '" width="1" height="1" alt="" style="border:0;width:1px;height:1px;">';
+  const i = html.lastIndexOf("</table>");
+  return i === -1 ? (html + img) : (html.slice(0, i + 8) + img + html.slice(i + 8));
+}
+
+// Write the per-send opens record (bid-opens/<sendId>). Best-effort: a failure here does
+// not fail the send, it only means those opens won't be trackable. sendId is unique so we
+// never clobber (ifNoneMatch).
+async function writeOpens(container, rec) {
+  try {
+    const out = JSON.stringify(rec);
+    await container.getBlockBlobClient(OPENS_PREFIX + rec.sendId).upload(out, Buffer.byteLength(out), {
+      blobHTTPHeaders: { blobContentType: "application/json" },
+      conditions: { ifNoneMatch: "*" },
+    });
+  } catch (err) { /* best-effort */ }
+}
+
+// Add this sendId to the tracking# -> [sendIds] index so bid-status can resolve opens by WO
+// tracking number. Best-effort, ETag-guarded, bounded length.
+async function appendTrackingIndex(container, tracking, sendId) {
+  const safe = String(tracking || "").replace(/[^A-Za-z0-9_-]/g, "");
+  if (!safe) return;
+  const blob = container.getBlockBlobClient(TRACK_INDEX_PREFIX + safe);
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    let cur = [], etag = null, exists = false;
+    try {
+      const dl = await blob.download();
+      const parsed = JSON.parse(await streamToString(dl.readableStreamBody));
+      cur = parsed && Array.isArray(parsed.sendIds) ? parsed.sendIds : [];
+      etag = dl.etag; exists = true;
+    } catch (err) { if (err.statusCode !== 404) return; }
+    let next = cur.concat([sendId]);
+    if (next.length > MAX_TRACK_IDS) next = next.slice(-MAX_TRACK_IDS);
+    const out = JSON.stringify({ v: 1, sendIds: next });
+    try {
+      await blob.upload(out, Buffer.byteLength(out), {
+        blobHTTPHeaders: { blobContentType: "application/json" },
+        conditions: exists ? { ifMatch: etag } : { ifNoneMatch: "*" },
+      });
+      return;
+    } catch (err) {
+      if (err.statusCode === 412 || err.statusCode === 409) continue;
+      return;
+    }
+  }
+}
+
 module.exports = async function (context, req) {
   try {
     if (req.method === "OPTIONS") { context.res = { status: 204, headers: CORS }; return; }
@@ -175,6 +266,14 @@ module.exports = async function (context, req) {
     }
     const allowedFrom = allowedRaw.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
     const allowedDomains = domainRaw.split(",").map((s) => s.trim().toLowerCase().replace(/^@/, "")).filter(Boolean);
+    // Per-vendor tracked send mode is DARK until IT sets TRACK_BASE_URL (the public SWA
+    // origin, e.g. https://ops.broadwaynational.com). Unset => the existing single-BCC send
+    // path runs exactly as before, so this whole feature is opt-in at deploy time.
+    const TRACK_BASE = (process.env.TRACK_BASE_URL || "").trim().replace(/\/+$/, "");
+    // Only enable per-vendor tracking for an https base - an http pixel is mixed-content and
+    // gets blocked by most mail clients, so a misconfigured http value falls back to the safe
+    // single-BCC send rather than emitting a dead/blocked pixel.
+    const perVendor = /^https:\/\//i.test(TRACK_BASE);
 
     // ── Validate the request ────────────────────────────────────────────────────
     const body = req.body || {};
@@ -209,6 +308,10 @@ module.exports = async function (context, req) {
       context.res = json(400, { error: "html contains disallowed markup" }); return;
     }
     const tracking = body.tracking ? String(body.tracking).slice(0, 64) : null;
+    // Idempotency key: the client sends a STABLE key per prepared bid and re-sends the SAME
+    // key on any retry. It is what stops a client timeout (the sequential per-vendor loop can
+    // outlast the client's socket) from turning a retry into DUPLICATE external bid emails.
+    const idem = body.idem ? String(body.idem).replace(/[^A-Za-z0-9_-]/g, "").slice(0, 80) : null;
 
     // ── Reserve the recipient budget BEFORE sending (atomic ETag transaction) ────
     // read → check ceiling → append this send → conditional upload, all in ONE loop, so
@@ -229,14 +332,42 @@ module.exports = async function (context, req) {
         cur = parsed && Array.isArray(parsed.entries) ? parsed.entries : [];
         etag = dl.etag; exists = true;
       } catch (err) { if (err.statusCode !== 404) throw err; }
+      // ── Idempotency short-circuit (before reserving/sending) ──────────────────
+      // ANY existing non-voided entry for this key stops a resend - this is what makes
+      // "never double-send" airtight even when the client retries after a timeout. We do
+      // NOT time-expire it: a completed send whose done-flag write failed must never later
+      // look "stale" and get re-sent. The client key is a pure content hash (no nonce), so an
+      // identical re-bid keeps returning here until the entry is date-pruned (~a day) - that
+      // window IS the dedup guarantee. Tradeoff (accepted, safe-direction): a reservation that
+      // is hard-killed AFTER landing but BEFORE voidReservation runs (e.g. instance recycle in
+      // the tiny pre-send window) stays non-voided/non-done and will 409 an identical bid for
+      // the rest of the UTC day; recovery is to edit the bid (new hash) or wait for the prune.
+      // We do not auto-recover it because a killed-MID-batch send is indistinguishable from a
+      // killed-PRE-send one, and resending the former would duplicate.
+      if (idem) {
+        let dup = null;
+        for (const en of cur) { if (en && !en.voided && en.idem === idem) dup = en; }
+        if (dup) {
+          if (dup.done) {   // completed - return the prior outcome, DO NOT re-send
+            context.res = json(200, { ok: true, duplicate: true, sent: Number(dup.bcc) || 0, sendId: dup.id, tracked: !!dup.tracked });
+          } else {          // reserved + (in flight OR done-flag write failed) - never re-send under this key
+            context.res = json(409, { error: "a send with this key is already in progress", inProgress: true });
+          }
+          return;
+        }
+      }
       let sentToday = 0;
       for (const en of cur) { if (en && !en.voided && typeof en.ts === "string" && en.ts.slice(0, 10) === today) sentToday += Number(en.bcc) || 0; }
       if (sentToday + bcc.length > DAILY_RECIPIENTS) {
         context.res = json(429, { error: "daily send ceiling reached (" + DAILY_RECIPIENTS + " recipients/day)" });
         return;
       }
-      const entry = { id: entryId, ts: new Date().toISOString(), from, bcc: bcc.length, subject: subject.slice(0, 120), tracking };
-      let next = cur.concat([entry]);
+      const entry = { id: entryId, ts: new Date().toISOString(), from, bcc: bcc.length, subject: subject.slice(0, 120), tracking, idem: idem, done: false, tracked: perVendor };
+      // Retention by DATE, then a count backstop. Pruning by date first guarantees TODAY's
+      // entries are never evicted, so sentToday can't under-count and let the ceiling be
+      // bypassed (a pure count cap could drop today's sends behind a wall of old/voided ones).
+      const cutoff = new Date(Date.now() - 36 * 3600 * 1000).toISOString().slice(0, 10);   // keep ~today + yesterday (UTC)
+      let next = cur.concat([entry]).filter((e) => e && typeof e.ts === "string" && e.ts.slice(0, 10) >= cutoff);
       if (next.length > MAX_AUDIT_ENTRIES) next = next.slice(-MAX_AUDIT_ENTRIES);
       const outBody = JSON.stringify({ v: 1, entries: next });
       const conditions = exists ? { ifMatch: etag } : { ifNoneMatch: "*" };
@@ -254,42 +385,124 @@ module.exports = async function (context, req) {
       return;
     }
 
-    // ── Send via Graph (app-only): from the coordinator's own mailbox ────────────
-    const message = {
-      message: {
-        subject,
-        body: { contentType: "HTML", content: html },
-        // To = the sender themselves: vendors are BCC-only (they must not see each other),
-        // and every mail client renders a To - the coordinator's own address is honest.
-        toRecipients: [{ emailAddress: { address: from } }],
-        bccRecipients: bcc.map((a) => ({ emailAddress: { address: a } })),
-        replyTo: [{ emailAddress: { address: from } }],
-      },
-      saveToSentItems: true,
-    };
-    let r;
+    // Guard the whole send section: the known Graph-failure paths void their own reservation
+    // and return, so this catch only fires on an UNEXPECTED throw (before/around sending, when
+    // little or nothing was sent) - void so a counted reservation isn't left behind for a
+    // request that errored out. (markSent/writeOpens/appendTrackingIndex swallow their own
+    // errors, so a post-send throw here is not a concern.)
     try {
-      const token = await getGraphToken(tenant, clientId, secret);
-      const payload = JSON.stringify(message);
-      r = await httpsJson(GRAPH_HOST, `/v1.0/users/${encodeURIComponent(from)}/sendMail`, "POST",
-        { "Authorization": "Bearer " + token, "Content-Type": "application/json", "Content-Length": Buffer.byteLength(payload) },
-        payload, 30000);
+    // ── Send via Graph (app-only): from the coordinator's own mailbox ────────────
+    // Token first - both send modes need it. A token failure voids the reservation.
+    let token;
+    try {
+      token = await getGraphToken(tenant, clientId, secret);
     } catch (err) {
-      await voidReservation(blob, entryId);   // release the reserved budget - the send didn't happen
-      context.log.error("send-bid send error", err && err.message);
-      context.res = json(502, { error: "Graph send failed - " + String((err && err.message) || "request error").slice(0, 200) });
-      return;
-    }
-    if (r.status !== 202) {
       await voidReservation(blob, entryId);
-      const detail = r.body && r.body.error ? (r.body.error.code + ": " + r.body.error.message) : ("HTTP " + r.status);
-      context.log.error("send-bid Graph send failed", detail);
-      // 502, not the raw Graph status - Graph's 401/403 must not be confused with OUR key gate.
-      context.res = json(502, { error: "Graph send failed - " + String(detail).slice(0, 300) });
+      context.log.error("send-bid token error", err && err.message);
+      context.res = json(502, { error: "Graph auth failed - " + String((err && err.message) || "request error").slice(0, 200) });
       return;
     }
 
-    context.res = json(200, { ok: true, sent: bcc.length });
+    if (!perVendor) {
+      // ── DEFAULT single-BCC send (unchanged) - vendors BCC-only, To = sender ──────
+      const message = {
+        message: {
+          subject,
+          body: { contentType: "HTML", content: html },
+          toRecipients: [{ emailAddress: { address: from } }],
+          bccRecipients: bcc.map((a) => ({ emailAddress: { address: a } })),
+          replyTo: [{ emailAddress: { address: from } }],
+        },
+        saveToSentItems: true,
+      };
+      let r;
+      try {
+        const payload = JSON.stringify(message);
+        r = await httpsJson(GRAPH_HOST, `/v1.0/users/${encodeURIComponent(from)}/sendMail`, "POST",
+          { "Authorization": "Bearer " + token, "Content-Type": "application/json", "Content-Length": Buffer.byteLength(payload) },
+          payload, 30000);
+      } catch (err) {
+        await voidReservation(blob, entryId);   // release the reserved budget - the send didn't happen
+        context.log.error("send-bid send error", err && err.message);
+        context.res = json(502, { error: "Graph send failed - " + String((err && err.message) || "request error").slice(0, 200) });
+        return;
+      }
+      if (r.status !== 202) {
+        await voidReservation(blob, entryId);
+        const detail = r.body && r.body.error ? (r.body.error.code + ": " + r.body.error.message) : ("HTTP " + r.status);
+        context.log.error("send-bid Graph send failed", detail);
+        // 502, not the raw Graph status - Graph's 401/403 must not be confused with OUR key gate.
+        context.res = json(502, { error: "Graph send failed - " + String(detail).slice(0, 300) });
+        return;
+      }
+      await markSent(blob, entryId, bcc.length);   // set done BEFORE responding so an idem retry sees it
+      context.res = json(200, { ok: true, sent: bcc.length });
+      return;
+    }
+
+    // ── PER-VENDOR tracked send (TRACK_BASE_URL set) ─────────────────────────────
+    // Each vendor gets their OWN message (To: them, no shared BCC - so no vendor sees any
+    // other, and each copy carries a unique open-tracking pixel). Sends run with bounded
+    // CONCURRENCY (Graph-throttle-safe) so even a full MAX_BCC batch finishes well inside
+    // functionTimeout; a per-send failure is logged and skipped, not fatal.
+    const sendId = entryId;   // tie the opens record to the audit entry
+    const vendors = bcc.map((email) => ({ token: crypto.randomBytes(9).toString("hex"), email: email, sendOk: false }));
+    async function sendOne(v) {
+      // Everything (incl. pixel injection + payload build) sits INSIDE the try so a throw
+      // here can never reject the worker and detach the pool from its accounting.
+      try {
+        const pixelUrl = TRACK_BASE + "/api/track-open?s=" + sendId + "&v=" + v.token;
+        const message = {
+          message: {
+            subject,
+            body: { contentType: "HTML", content: injectPixel(html, pixelUrl) },
+            toRecipients: [{ emailAddress: { address: v.email } }],
+            replyTo: [{ emailAddress: { address: from } }],
+          },
+          saveToSentItems: true,
+        };
+        const payload = JSON.stringify(message);
+        const rr = await httpsJson(GRAPH_HOST, `/v1.0/users/${encodeURIComponent(from)}/sendMail`, "POST",
+          { "Authorization": "Bearer " + token, "Content-Type": "application/json", "Content-Length": Buffer.byteLength(payload) },
+          payload, PER_SEND_TIMEOUT);
+        if (rr.status === 202) { v.sendOk = true; }
+        else {
+          const detail = rr.body && rr.body.error ? (rr.body.error.code + ": " + rr.body.error.message) : ("HTTP " + rr.status);
+          context.log.error("send-bid per-vendor send failed", detail);
+        }
+      } catch (err) {
+        context.log.error("send-bid per-vendor send error", err && err.message);
+      }
+    }
+    // Bounded worker pool: CONCURRENCY workers pull from a shared cursor until the list is
+    // drained. Each vendor is independent, so order doesn't matter and there is no shared
+    // mutable state beyond the cursor + each vendor's own sendOk.
+    let cursor = 0;
+    async function worker() { while (cursor < vendors.length) { const idx = cursor++; await sendOne(vendors[idx]); } }
+    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, vendors.length) }, worker));
+    const sentCount = vendors.filter((v) => v.sendOk).length;
+    if (sentCount === 0) {
+      await voidReservation(blob, entryId);
+      context.res = json(502, { error: "Graph send failed - no messages were sent" });
+      return;
+    }
+    await markSent(blob, entryId, sentCount);   // set done + trim ceiling to actual successes
+    // Opens record covers every vendor (sendOk flags which were actually reached); only the
+    // reached ones can ever fire a pixel. Best-effort - tracking never blocks the response.
+    const rec = {
+      v: 1, sendId, ts: new Date().toISOString(), from, subject: subject.slice(0, 120), tracking,
+      vendors: vendors.map((v) => ({
+        token: v.token, email: v.email, opened: false, openCount: 0,
+        firstOpenTs: null, lastOpenTs: null, sendOk: v.sendOk,
+      })),
+    };
+    await writeOpens(container, rec);
+    if (tracking) await appendTrackingIndex(container, tracking, sendId);
+    context.res = json(200, { ok: true, sent: sentCount, failed: vendors.length - sentCount, sendId, tracked: true });
+    } catch (sendErr) {
+      await voidReservation(blob, entryId);   // unexpected throw with a landed reservation - release the budget
+      throw sendErr;                           // let the module-level catch produce the 500
+    }
   } catch (err) {
     context.log.error("send-bid error", err && err.message);
     context.res = json(500, { error: "internal error" });
