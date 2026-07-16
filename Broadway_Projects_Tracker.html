@@ -2370,6 +2370,7 @@ function gotoMapping(prefillStatus){
   ['board','list','gantt','reports'].forEach(x=>document.getElementById('v'+x).classList.toggle('on',x==='reports'));
   rptUiState.statMapOpen=true;
   renderContent();
+  routeSync('reports');   // keep the address bar in sync when jumping to Reports programmatically
   setTimeout(()=>{
     const inp=document.getElementById('statmap-new-key');
     if(prefillStatus && inp) inp.value=prefillStatus;
@@ -2450,6 +2451,28 @@ function ensureToolFrame(key){
   f.addEventListener('load', ()=>{ const s=document.getElementById('search-input'); if(s && s.value.trim() && view===key) gsearchForward(s.value); });
   host.appendChild(f); _toolFrames[key]=f; return f;
 }
+// ── Clean-URL routing ──────────────────────────────────────────────────────
+// Each section has its own path (/board /list /timeline /reports /agent
+// /dashboard /diagnostic /check-in) via SWA rewrites to this shell; the shell
+// opens the matching view and reflects the current view in the address bar with
+// pushState (no reload). Deep links + the browser back button work.
+var SLUG_TO_VIEW = { board:'board', list:'list', timeline:'gantt', reports:'reports', agent:'agent', dashboard:'dashboard', diagnostic:'diagnostic', 'check-in':'checkin' };
+var VIEW_TO_SLUG = { board:'board', list:'list', gantt:'timeline', reports:'reports', agent:'agent', dashboard:'dashboard', diagnostic:'diagnostic', checkin:'check-in' };
+var _routing = false;   // true while APPLYING a route (init/popstate) - suppresses the URL push
+function routeToView(){ var seg = (location.pathname.split('/').filter(Boolean).pop() || '').toLowerCase(); return SLUG_TO_VIEW[seg] || null; }
+function routeSync(v){   // reflect the just-selected view in the address bar (preserve query string)
+  if (_routing) return;
+  var slug = VIEW_TO_SLUG[v]; if (!slug) return;
+  if (location.pathname.toLowerCase() !== '/' + slug) { try { history.pushState({ v: v }, '', '/' + slug + location.search); } catch (e) {} }
+}
+function routeInit(){   // called once after the first render(): open the URL's view + wire back/forward
+  var v = routeToView();
+  if (v && v !== view) { _routing = true; setView(v); _routing = false; }
+  var slug = VIEW_TO_SLUG[view];   // normalize the bar to the canonical slug (replaceState = no history entry)
+  if (slug && location.pathname.toLowerCase() !== '/' + slug) { try { history.replaceState({ v: view }, '', '/' + slug + location.search); } catch (e) {} }
+  window.addEventListener('popstate', function () { var pv = routeToView() || 'board'; if (pv !== view) { _routing = true; setView(pv); _routing = false; } });
+}
+
 function setView(v){
   view=v;
   const isTool = !!EMBED_TOOLS[v];
@@ -2474,6 +2497,7 @@ function setView(v){
     if(swrap) swrap.style.display='';
     renderContent();
   }
+  routeSync(v);
 }
 
 function render(){ updateStatBar(); renderFacets(); renderContent(); }
@@ -4494,6 +4518,7 @@ loadStatMap();
 loadSchedTpls();
 loadHolidays();
 render();
+routeInit();   // open the view named in the URL (/board, /dashboard, ...) + wire back/forward
 
 /* ============================================================================
    BWN LAUNCHER RECEIVER v2 - Projects Job Board
@@ -4569,6 +4594,10 @@ render();
       }
 
       console.info('[BWN RECEIVER v2] pre-filled Create Work Order from Umbrava context');
+      // One-shot: drop the launcher query now that it is consumed, so in-app navigation (which
+      // preserves location.search via routeSync) and reloads do not re-fire this prefill and risk
+      // a duplicate WO. Keeps the path; only strips the query.
+      try { history.replaceState(history.state, '', location.pathname); } catch (e2) {}
     } catch (e) {
       console.warn('[BWN RECEIVER] pre-fill failed:', e);
     }

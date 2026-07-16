@@ -72,6 +72,46 @@
     "allowedRoles": ["anonymous"]
   },
   {
+    "route": "/board",
+    "rewrite": "/Broadway_Projects_Tracker.html",
+    "allowedRoles": ["broadway_employee"]
+  },
+  {
+    "route": "/list",
+    "rewrite": "/Broadway_Projects_Tracker.html",
+    "allowedRoles": ["broadway_employee"]
+  },
+  {
+    "route": "/timeline",
+    "rewrite": "/Broadway_Projects_Tracker.html",
+    "allowedRoles": ["broadway_employee"]
+  },
+  {
+    "route": "/reports",
+    "rewrite": "/Broadway_Projects_Tracker.html",
+    "allowedRoles": ["broadway_employee"]
+  },
+  {
+    "route": "/agent",
+    "rewrite": "/Broadway_Projects_Tracker.html",
+    "allowedRoles": ["broadway_employee"]
+  },
+  {
+    "route": "/dashboard",
+    "rewrite": "/Broadway_Projects_Tracker.html",
+    "allowedRoles": ["broadway_employee"]
+  },
+  {
+    "route": "/diagnostic",
+    "rewrite": "/Broadway_Projects_Tracker.html",
+    "allowedRoles": ["broadway_employee"]
+  },
+  {
+    "route": "/check-in",
+    "rewrite": "/Broadway_Projects_Tracker.html",
+    "allowedRoles": ["broadway_employee"]
+  },
+  {
     "route": "/*",
     "allowedRoles": ["broadway_employee"]
   }
