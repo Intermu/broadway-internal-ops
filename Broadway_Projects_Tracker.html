@@ -472,6 +472,30 @@ tr.bn-row-hidden{display:none}
 .rpt-editor-cell{display:flex;flex-direction:column;gap:3px}
 .rpt-editor-input{background:#fff;border:1px solid var(--b2);border-radius:7px;padding:5px 8px;font-family:inherit;font-size:12px;color:var(--t1);outline:none;width:100%}
 .rpt-editor-input:focus{border-color:var(--green)}
+/* ── PROSPECTS VIEW ── */
+.prosp-wrap{flex:1;overflow:auto;padding:14px;display:flex;flex-direction:column;gap:12px}
+.prosp-bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.prosp-bar select{background:var(--card2);border:1px solid var(--b2);border-radius:7px;padding:5px 8px;font-family:inherit;font-size:12px;color:var(--t1);outline:none}
+.prosp-bar select:focus{border-color:var(--green)}
+.prosp-refresh{background:var(--card2);border:1px solid var(--b2);border-radius:7px;padding:5px 10px;font-size:12px;font-weight:600;color:var(--t1);cursor:pointer}
+.prosp-refresh:hover:not(:disabled){border-color:var(--green)}
+.prosp-refresh:disabled{opacity:.6;cursor:default}
+.prosp-hint{font-size:11px;color:var(--t3)}
+.prosp-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px}
+.prosp-chip{background:var(--card2);border:1px solid var(--b1);border-radius:10px;padding:8px 10px}
+.prosp-chip-num{font-size:20px;font-weight:800;line-height:1.1;color:var(--t1)}
+.prosp-chip-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:var(--t3);margin-top:3px}
+.prosp-kind{display:inline-block;font-size:10px;font-weight:700;padding:1px 8px;border-radius:99px;letter-spacing:.3px}
+.prosp-kind.contractor{background:var(--blue-bg);color:var(--color-info-text)}
+.prosp-kind.supplier{background:var(--amber-bg);color:var(--amber-text)}
+.prosp-oc{display:inline-block;font-size:10px;font-weight:800;padding:1px 6px;border-radius:4px;letter-spacing:.5px;text-transform:uppercase}
+.prosp-oc.joined{background:var(--green-bg);color:var(--green-d)}
+.prosp-oc.declined,.prosp-oc.do-not-contact{background:var(--red-bg);color:var(--red-text)}
+.prosp-oc.bid-sent,.prosp-oc.contacted,.prosp-oc.no-response,.prosp-oc.note{background:var(--amber-bg);color:var(--amber-text)}
+.prosp-muted{color:var(--t3);font-size:11px}
+.prosp-wrap .rpt-table td a{color:var(--green-d);text-decoration:none}
+.prosp-wrap .rpt-table td a:hover{text-decoration:underline}
+.prosp-rec{background:var(--card2);border:1px solid var(--b2);border-radius:6px;padding:3px 6px;font-family:inherit;font-size:11px;color:var(--t1);outline:none}
 
 /* TOAST */
 .toast{position:fixed;bottom:22px;right:22px;background:var(--green);color:#fff;padding:11px 16px;border-radius:10px;font-size:12px;font-weight:700;z-index:999;opacity:0;transition:opacity .3s;pointer-events:none;max-width:300px;box-shadow:0 4px 12px rgba(0,0,0,.15)}
@@ -828,6 +852,7 @@ tr.bn-row-hidden{display:none}
       <button class="navlink" id="vlist" onclick="setView('list')">List</button>
       <button class="navlink" id="vgantt" onclick="setView('gantt')">Timeline</button>
       <button class="navlink" id="vreports" onclick="setView('reports')">Reports</button>
+      <button class="navlink" id="vprospects" onclick="setView('prospects')">Prospects</button>
       <span class="nav-div" aria-hidden="true"></span>
       <button class="navlink" id="vagent" onclick="setView('agent')">Agent</button>
       <button class="navlink" id="vdashboard" onclick="setView('dashboard')">Dashboard</button>
@@ -1495,6 +1520,7 @@ function getGroupValue(job, field) {
 // ══════════════════════════════════════════════════════
 function onSearch(q){
   searchQ = q.toLowerCase().trim();
+  if(view==='prospects'){ renderProspects(prospBoard()); return; }   // filter the pipeline in place - skip the hidden jobs chrome
   render();
   gsearchForward(q);   // GLOBAL SEARCH BRIDGE - mirror the query into the active embedded tool
 }
@@ -2456,8 +2482,8 @@ function ensureToolFrame(key){
 // /dashboard /diagnostic /check-in) via SWA rewrites to this shell; the shell
 // opens the matching view and reflects the current view in the address bar with
 // pushState (no reload). Deep links + the browser back button work.
-var SLUG_TO_VIEW = { board:'board', list:'list', timeline:'gantt', reports:'reports', agent:'agent', dashboard:'dashboard', diagnostic:'diagnostic', 'check-in':'checkin' };
-var VIEW_TO_SLUG = { board:'board', list:'list', gantt:'timeline', reports:'reports', agent:'agent', dashboard:'dashboard', diagnostic:'diagnostic', checkin:'check-in' };
+var SLUG_TO_VIEW = { board:'board', list:'list', timeline:'gantt', reports:'reports', prospects:'prospects', agent:'agent', dashboard:'dashboard', diagnostic:'diagnostic', 'check-in':'checkin' };
+var VIEW_TO_SLUG = { board:'board', list:'list', gantt:'timeline', reports:'reports', prospects:'prospects', agent:'agent', dashboard:'dashboard', diagnostic:'diagnostic', checkin:'check-in' };
 var _routing = false;   // true while APPLYING a route (init/popstate) - suppresses the URL push
 function routeToView(){ var seg = (location.pathname.split('/').filter(Boolean).pop() || '').toLowerCase(); return SLUG_TO_VIEW[seg] || null; }
 function routeSync(v){   // reflect the just-selected view in the address bar (preserve query string)
@@ -2476,7 +2502,8 @@ function routeInit(){   // called once after the first render(): open the URL's 
 function setView(v){
   view=v;
   const isTool = !!EMBED_TOOLS[v];
-  ['board','list','gantt','reports'].forEach(x=>document.getElementById('v'+x).classList.toggle('on',x===v));
+  const isProspects = (v==='prospects');   // native view, but it owns its chrome (no jobs stat bar / filter sidebar)
+  ['board','list','gantt','reports','prospects'].forEach(x=>{ const el=document.getElementById('v'+x); if(el) el.classList.toggle('on',x===v); });
   Object.keys(EMBED_TOOLS).forEach(k=>{ const el=document.getElementById('v'+k); if(el) el.classList.toggle('on',k===v); });
   const host=document.getElementById('tool-host'), sbar=document.getElementById('sbar'),
         board=document.getElementById('board-area'), empty=document.getElementById('empty-state'),
@@ -2493,11 +2520,166 @@ function setView(v){
     const s=document.getElementById('search-input'); if(s) gsearchForward(s.value);   // unconditional: an empty box must also CLEAR a stale popup left in the frame
   } else {
     host.style.display='none';
-    if(sbar) sbar.style.display='';
-    if(swrap) swrap.style.display='';
+    if(sbar) sbar.style.display = isProspects ? 'none' : '';   // Prospects isn't a jobs view - hide the jobs stat bar + filters
+    if(swrap) swrap.style.display = isProspects ? 'none' : '';
+    if(isProspects){ closePanel(); prospectsState.err=''; }   // clear a stale load error so re-entering retries (the lazy guard won't loop: the error re-render happens without re-entry)
     renderContent();
   }
   routeSync(v);
+}
+
+/* ============================================================================
+   PROSPECTS VIEW - browse the shared vendor-prospect pipeline (api/vendor-prospects)
+   and record recruiting outcomes. This is FREE: pure pipeline data saved by Bid-Out /
+   Find Techs / Find Suppliers when they spend on discovery. Authorized by the AAD
+   session (broadway_employee) - no shared key lives in this page. The top search bar
+   doubles as the name/city/contact filter here.
+   ============================================================================ */
+var prospectsState = { loaded:false, loading:false, err:'', list:[], total:0, kind:'', status:'', sort:'recent' };
+var PROSP_STATUSES = [['','Any outcome'],['none','No outcome yet'],['bid-sent','Bid sent'],['declined','Declined'],['no-response','No response'],['joined','Joined'],['do-not-contact','Do not contact'],['contacted','Contacted'],['note','Note']];
+function prospBoard(){ return document.getElementById('board-area'); }
+function setProspKind(v){ prospectsState.kind=v; if(view==='prospects') renderProspects(prospBoard()); }
+function setProspStatus(v){ prospectsState.status=v; if(view==='prospects') renderProspects(prospBoard()); }
+function setProspSort(v){ prospectsState.sort=v; if(view==='prospects') renderProspects(prospBoard()); }
+function reloadProspects(){ fetchProspects(true); }
+
+function fetchProspects(force){
+  var s = prospectsState;
+  if(s.loading) return;
+  if(s.loaded && !force) return;
+  s.loading=true; s.err='';
+  if(view==='prospects') renderProspects(prospBoard());
+  fetch('/api/vendor-prospects?all=1', { headers:{ 'Accept':'application/json' }, credentials:'same-origin' })
+    .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+    .then(function(d){
+      s.list = (d && d.prospects) || [];
+      s.total = (d && d.total) || s.list.length;
+      s.loaded=true; s.loading=false;
+      if(view==='prospects') renderProspects(prospBoard());
+    })
+    .catch(function(e){ s.loading=false; s.err=String(e && e.message || e); if(s.loaded) toast('Prospects refresh failed: '+s.err); if(view==='prospects') renderProspects(prospBoard()); });
+}
+
+function prospFmtTs(ms){ if(!ms) return ''; var d=new Date(ms); if(isNaN(d.getTime())) return ''; return (d.getMonth()+1)+'/'+d.getDate()+'/'+String(d.getFullYear()).slice(2); }
+function prospHttp(u){ return (u && /^https?:\/\//i.test(u)) ? u : ''; }
+function prospChip(num,lbl){ return '<div class="prosp-chip"><div class="prosp-chip-num">'+num+'</div><div class="prosp-chip-lbl">'+esc(lbl)+'</div></div>'; }
+
+function prospFiltered(){
+  var s = prospectsState;
+  var q = (typeof searchQ==='string' ? searchQ : '');   // unify with the top search bar
+  return s.list.filter(function(p){
+    if(s.kind && p.kind!==s.kind) return false;
+    if(s.status){
+      var st = p.lastOutcome && p.lastOutcome.status;
+      if(s.status==='none'){ if(st) return false; }
+      else if(st!==s.status) return false;
+    }
+    if(q){
+      var hay = (p.name+' '+(p.city||'')+' '+(p.state||'')+' '+(p.contactName||'')+' '+(p.email||'')).toLowerCase();
+      if(hay.indexOf(q)===-1) return false;
+    }
+    return true;
+  }).sort(function(a,b){
+    if(s.sort==='name') return (a.name||'').localeCompare(b.name||'');
+    if(s.sort==='seen') return (b.seenCount||0)-(a.seenCount||0);
+    return (b.lastSeen||0)-(a.lastSeen||0);
+  });
+}
+
+function renderProspects(board){
+  if(!board) return;
+  var s = prospectsState;
+  if(!s.loaded && !s.loading && !s.err) fetchProspects(false);   // lazy first load (a prior error is cleared on view re-entry so it retries, without a refetch loop)
+  var _sc = board.querySelector('.prosp-wrap'); var _scTop = _sc ? _sc.scrollTop : 0;   // preserve scroll across the innerHTML rebuild (e.g. live search)
+  var list = s.list;
+  var contractors = list.filter(function(p){return p.kind!=='supplier';}).length;
+  var suppliers   = list.filter(function(p){return p.kind==='supplier';}).length;
+  var withEmail   = list.filter(function(p){return p.email;}).length;
+  var joined      = list.filter(function(p){return p.lastOutcome && p.lastOutcome.status==='joined';}).length;
+  var dnc         = list.filter(function(p){return p.lastOutcome && p.lastOutcome.status==='do-not-contact';}).length;
+
+  var kindSel = '<select onchange="setProspKind(this.value)" title="Filter by type">'
+    + '<option value="">All types</option>'
+    + '<option value="contractor"'+(s.kind==='contractor'?' selected':'')+'>Contractors</option>'
+    + '<option value="supplier"'+(s.kind==='supplier'?' selected':'')+'>Suppliers</option></select>';
+  var statusSel = '<select onchange="setProspStatus(this.value)" title="Filter by last outcome">'
+    + PROSP_STATUSES.map(function(o){ return '<option value="'+o[0]+'"'+(s.status===o[0]?' selected':'')+'>'+esc(o[1])+'</option>'; }).join('') + '</select>';
+  var sortSel = '<select onchange="setProspSort(this.value)" title="Sort">'
+    + '<option value="recent"'+(s.sort==='recent'?' selected':'')+'>Most recent</option>'
+    + '<option value="name"'+(s.sort==='name'?' selected':'')+'>Name A-Z</option>'
+    + '<option value="seen"'+(s.sort==='seen'?' selected':'')+'>Times seen</option></select>';
+  var bar = '<div class="prosp-bar">'+kindSel+statusSel+sortSel
+    + '<button class="prosp-refresh" onclick="reloadProspects()"'+(s.loading?' disabled':'')+'>'+(s.loading?'Loading...':'&#8635; Refresh')+'</button>'
+    + '<span class="prosp-hint">Filter by name / city / contact using the search bar above.</span></div>';
+  var stats = '<div class="prosp-stats">'
+    + prospChip(list.length,'Prospects') + prospChip(contractors,'Contractors') + prospChip(suppliers,'Suppliers')
+    + prospChip(withEmail,'With email') + prospChip(joined,'Joined') + prospChip(dnc,'Do not contact') + '</div>';
+
+  var bodyHtml;
+  if(s.err && !list.length){   // only blank the panel when there's nothing loaded; a failed refresh keeps the table (+ toast)
+    bodyHtml = '<div class="rpt-empty">Couldn\'t load prospects ('+esc(s.err)+').<br>If the Prospects API was just deployed, give it a minute and hit Refresh.</div>';
+  } else if(s.loading && !s.loaded){
+    bodyHtml = '<div class="rpt-empty">Loading the vendor pipeline...</div>';
+  } else if(!list.length){
+    bodyHtml = '<div class="rpt-empty">No prospects yet. Vendors appear here automatically as Bid-Out, Find Techs, and Find Suppliers discover them near your work orders.</div>';
+  } else {
+    var rows = prospFiltered();
+    bodyHtml = '<div class="prosp-muted" style="margin-bottom:8px">Showing '+rows.length+' of '+list.length+(s.total>list.length?(' loaded (pipeline has '+s.total+')'):'')+'</div>';
+    if(!rows.length){ bodyHtml += '<div class="rpt-empty">Nothing matches these filters.</div>'; }
+    else {
+      bodyHtml += '<table class="rpt-table"><thead><tr>'
+        + '<th>Vendor</th><th>Type</th><th>Trades</th><th>Location</th><th>Contact</th><th>Found by</th><th class="num">Seen</th><th>Last outcome</th><th>Record</th>'
+        + '</tr></thead><tbody>' + rows.map(prospRow).join('') + '</tbody></table>';
+    }
+  }
+  board.innerHTML = '<div class="prosp-wrap">'
+    + '<div class="rpt-section-hdr" style="margin:0">VENDOR PROSPECT PIPELINE <span class="prosp-muted" style="font-weight:500;text-transform:none;letter-spacing:0">saved from paid discovery - free to browse</span></div>'
+    + bar + stats + '<div class="rpt-section" style="padding:12px">'+bodyHtml+'</div></div>';
+  var _sc2 = board.querySelector('.prosp-wrap'); if(_sc2 && _scTop) _sc2.scrollTop = _scTop;
+}
+
+function prospRow(p){
+  var site = prospHttp(p.website);
+  var name = site ? ('<a href="'+esc(site).replace(/"/g,'&quot;')+'" target="_blank" rel="noopener noreferrer">'+esc(p.name)+'</a>') : esc(p.name);
+  var kind = '<span class="prosp-kind '+(p.kind==='supplier'?'supplier':'contractor')+'">'+(p.kind==='supplier'?'Supplier':'Contractor')+'</span>';
+  var trades = (p.trades&&p.trades.length)? esc(p.trades.join(', ')) : '<span class="prosp-muted">-</span>';
+  var loc = (p.city||p.state)? esc([p.city,p.state].filter(Boolean).join(', ')) : '<span class="prosp-muted">-</span>';
+  var contact = '';
+  if(p.contactName||p.contactTitle) contact += '<div>'+esc(p.contactName||'')+(p.contactTitle?(' <span class="prosp-muted">'+esc(p.contactTitle)+'</span>'):'')+'</div>';
+  if(p.email) contact += '<div><a href="mailto:'+esc(p.email).replace(/"/g,'&quot;')+'">'+esc(p.email)+'</a>'+(p.emailSrc?(' <span class="prosp-muted">'+esc(p.emailSrc)+'</span>'):'')+'</div>';
+  if(p.phone) contact += '<div><a href="tel:'+esc(p.phone).replace(/"/g,'&quot;')+'">'+esc(p.phone)+'</a></div>';
+  if(!contact) contact = '<span class="prosp-muted">-</span>';
+  var sources = (p.sources&&p.sources.length)? esc(p.sources.join(', ')) : '<span class="prosp-muted">-</span>';
+  var seen = (p.seenCount||0) + (p.lastSeen?('<div class="prosp-muted">'+prospFmtTs(p.lastSeen)+'</div>'):'');
+  var oc = '<span class="prosp-muted">-</span>';
+  if(p.lastOutcome && p.lastOutcome.status){
+    var st = p.lastOutcome.status;
+    var title = (p.lastOutcome.note||'') + (p.lastOutcome.wo?(' - WO '+p.lastOutcome.wo):'') + (p.lastOutcome.by?(' - '+p.lastOutcome.by):'');
+    oc = '<span class="prosp-oc '+esc(st)+'" title="'+esc(title).replace(/"/g,'&quot;')+'">'+esc(st)+'</span>'
+       + (p.lastOutcome.ts?(' <span class="prosp-muted">'+prospFmtTs(p.lastOutcome.ts)+'</span>'):'');
+  }
+  var rec = '<select class="prosp-rec" data-pkey="'+esc(p.key).replace(/"/g,'&quot;')+'" onchange="recordProspectOutcome(this)" title="Record an outcome (saved to the shared pipeline)">'
+    + '<option value="">Record...</option><option value="contacted">Contacted</option><option value="declined">Declined</option><option value="no-response">No response</option><option value="joined">Joined network</option><option value="do-not-contact">Do not contact</option></select>';
+  return '<tr><td>'+name+'</td><td>'+kind+'</td><td>'+trades+'</td><td>'+loc+'</td><td style="font-size:11px">'+contact+'</td><td class="prosp-muted">'+sources+'</td><td class="num">'+seen+'</td><td>'+oc+'</td><td>'+rec+'</td></tr>';
+}
+
+function recordProspectOutcome(sel){
+  var key = sel.getAttribute('data-pkey'); var status = sel.value;
+  if(!key || !status) return;
+  var p = prospectsState.list.find(function(x){return x.key===key;});
+  var note = prompt('Optional note for "'+((p&&p.name)||'this vendor')+'" ('+status+') - e.g. why they declined:', '');
+  if(note===null){ sel.value=''; return; }   // cancel aborts
+  sel.disabled = true;
+  fetch('/api/vendor-prospects', { method:'POST', headers:{'Content-Type':'application/json'}, credentials:'same-origin',
+      body: JSON.stringify({ outcome: { key:key, status:status, note:note } }) })
+    .then(function(r){ return r.json().then(function(j){ if(!r.ok) throw new Error(j && j.error || ('HTTP '+r.status)); return j; }); })
+    .then(function(d){
+      if(!d || !d.ok || !d.applied) throw new Error('not recorded');
+      if(p){ var e={ ts:Date.now(), status:status, wo:'', note:note, by:'you' }; p.outcomes=(p.outcomes||[]).concat([e]); p.lastOutcome=e; }
+      toast('Outcome saved: '+status);
+      if(view==='prospects') renderProspects(prospBoard());
+    })
+    .catch(function(e){ sel.disabled=false; sel.value=''; toast('Could not save outcome: '+(e && e.message || e)); });
 }
 
 function render(){ updateStatBar(); renderFacets(); renderContent(); }
@@ -2523,6 +2705,7 @@ function renderContent(){
   if(typeof EMBED_TOOLS!=='undefined' && EMBED_TOOLS[view]) return;
   const empty=document.getElementById('empty-state');
   const board=document.getElementById('board-area');
+  if(view==='prospects'){ empty.style.display='none'; board.style.display='flex'; renderProspects(board); return; }   // pipeline data, not jobs - render even with 0 jobs loaded
   if(!jobs.length){ empty.style.display='flex'; board.style.display='none'; board.innerHTML=''; return; }
   empty.style.display='none'; board.style.display='flex';
   const list = filteredJobs();

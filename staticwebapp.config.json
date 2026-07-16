@@ -100,6 +100,11 @@
     "allowedRoles": ["broadway_employee"]
   },
   {
+    "route": "/prospects",
+    "rewrite": "/Broadway_Projects_Tracker.html",
+    "allowedRoles": ["broadway_employee"]
+  },
+  {
     "route": "/agent",
     "rewrite": "/Broadway_Projects_Tracker.html",
     "allowedRoles": ["broadway_employee"]

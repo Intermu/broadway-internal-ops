@@ -6,10 +6,13 @@ const { BlobServiceClient } = require("@azure/storage-blob");
 // found once is never paid for twice, and outcome history ("declined 6/12 - too far",
 // "do-not-contact") follows the prospect into every future search near that area.
 //
-// Reached ANONYMOUSLY at the SWA route layer (Umbrava is a different origin) and gated by the
-// SAME shared function key as wo-ingest (x-bwn-key vs WO_INGEST_KEY). Fails CLOSED.
+// Reached ANONYMOUSLY at the SWA route layer (Umbrava is a different origin). TWO authorized
+// callers: (a) a userscript presenting the shared key (x-bwn-key vs WO_INGEST_KEY), or (b) an
+// AAD-authenticated Broadway employee on a same-origin SWA page (the Projects Tracker Prospects
+// view), recognized by the SWA-injected x-ms-client-principal. Fails CLOSED.
 //
 // API:
+//   GET  ?all=1                                              (whole pipeline, newest first; the browser view)
 //   GET  ?near=<lat>,<lng>&mi=<radius>[&kind=contractor|supplier][&q=<name substring>]
 //   GET  ?city=<city>&state=<ST>[&kind=...][&q=...]          (free text match - no geocode cost)
 //   POST { upsert: [ {name, website, phone, email, contactName, contactTitle, emailSrc,
@@ -26,6 +29,7 @@ const MAX_UPSERT = 40;
 const MAX_ITEMS = 3000;          // evict oldest lastSeen beyond this
 const MAX_OUTCOMES = 20;         // per prospect, keep newest
 const MAX_RESULTS = 200;
+const ALL_CAP = 1000;            // scope=all (the Prospects browser) - full pipeline, newest first
 const OUTCOME_STATUSES = ["contacted", "bid-sent", "declined", "no-response", "joined", "do-not-contact", "note"];
 
 const CORS = {
@@ -36,6 +40,22 @@ const CORS = {
 };
 function json(status, body) {
   return { status, headers: Object.assign({ "Content-Type": "application/json" }, CORS), body };
+}
+
+// Same-origin SWA pages (the Projects Tracker) authenticate with AAD, not the shared key.
+// Azure SWA STRIPS any client-supplied x-ms-client-principal and injects its own for a signed-in
+// session, so trusting it here is safe (the cross-origin userscript has no session -> no header ->
+// falls back to the key). Mirrors api/data-store.
+function principalFromReq(req) {
+  try {
+    const h = req.headers && (req.headers["x-ms-client-principal"] || req.headers["X-MS-CLIENT-PRINCIPAL"]);
+    if (!h) return null;
+    return JSON.parse(Buffer.from(h, "base64").toString("utf-8"));
+  } catch (e) { return null; }
+}
+function isEmployee(req) {
+  const p = principalFromReq(req);
+  return !!(p && Array.isArray(p.userRoles) && p.userRoles.indexOf("broadway_employee") !== -1);
 }
 
 // ---- key derivation: MUST mirror the Bid-Out userscript (ziKey) ----------------
@@ -200,10 +220,16 @@ module.exports = async function (context, req) {
   try {
     if (req.method === "OPTIONS") { context.res = { status: 204, headers: CORS }; return; }
 
+    // Two authorized callers: (a) an AAD-authenticated Broadway employee on a same-origin SWA
+    // page (the Projects Tracker Prospects view), or (b) a userscript presenting the shared key.
+    const employee = isEmployee(req);
     const expected = process.env.WO_INGEST_KEY;
-    if (!expected) { context.res = json(503, { error: "prospects not configured" }); return; }
-    const key = req.headers && (req.headers["x-bwn-key"] || req.headers["X-BWN-KEY"]);
-    if (!key || key !== expected) { context.res = json(403, { error: "unauthorized" }); return; }
+    const keyHdr = req.headers && (req.headers["x-bwn-key"] || req.headers["X-BWN-KEY"]);
+    const keyOk = !!(expected && keyHdr && keyHdr === expected);
+    if (!employee && !keyOk) {
+      if (!expected) { context.res = json(503, { error: "prospects not configured" }); return; }
+      context.res = json(403, { error: "unauthorized" }); return;
+    }
 
     const blob = await dbBlobClient();
 
@@ -213,7 +239,13 @@ module.exports = async function (context, req) {
       const kind = q.kind === "supplier" ? "supplier" : (q.kind === "contractor" ? "contractor" : null);
       const nameQ = s(q.q, 80).toLowerCase();
       let out = [];
-      if (q.near) {
+      let cap = MAX_RESULTS;
+      if (q.all === "1" || q.scope === "all") {
+        // Whole pipeline for the browser view (employee-facing). Newest activity first.
+        Object.keys(db.items).forEach((k) => { out.push(publicView(k, db.items[k])); });
+        out.sort((a, b) => (b.lastSeen || 0) - (a.lastSeen || 0));
+        cap = ALL_CAP;
+      } else if (q.near) {
         const m = String(q.near).match(/^(-?[\d.]+),(-?[\d.]+)$/);
         if (!m) { context.res = json(400, { error: "near must be lat,lng" }); return; }
         const lat = +m[1], lng = +m[2];
@@ -237,7 +269,7 @@ module.exports = async function (context, req) {
       } else { context.res = json(400, { error: "near=lat,lng or city/state required" }); return; }
       if (kind) out = out.filter((r) => r.kind === kind);
       if (nameQ) out = out.filter((r) => (r.name || "").toLowerCase().indexOf(nameQ) !== -1);
-      context.res = json(200, { ok: true, total: out.length, prospects: out.slice(0, MAX_RESULTS) });
+      context.res = json(200, { ok: true, total: out.length, prospects: out.slice(0, cap) });
       return;
     }
 
@@ -246,6 +278,9 @@ module.exports = async function (context, req) {
     const now = Date.now();
 
     if (Array.isArray(body.upsert)) {
+      // Only the key-holding discovery tools write vendor records. Employees browse + record
+      // outcomes; they must not be able to inject/overwrite pipeline records from the console.
+      if (!keyOk) { context.res = json(403, { error: "upsert requires the discovery key" }); return; }
       const incoming = body.upsert.map(sanitizeProspect).filter((p) => p.name).slice(0, MAX_UPSERT);
       if (!incoming.length) { context.res = json(400, { error: "upsert[] with a name each is required" }); return; }
       let stored = 0;
@@ -260,10 +295,13 @@ module.exports = async function (context, req) {
     const outcomeList = Array.isArray(body.outcomes) ? body.outcomes
       : (body.outcome && typeof body.outcome === "object" ? [body.outcome] : null);
     if (outcomeList) {
+      const who = employee ? ((principalFromReq(req) || {}).userDetails || "") : "";
       const entries = outcomeList.map((o) => ({
         key: s(o && o.key, 220),
         status: OUTCOME_STATUSES.indexOf(o && o.status) !== -1 ? o.status : null,
-        wo: s(o && o.wo, 40), note: s(o && o.note, 500), by: s(o && o.by, 120),
+        // Employee attribution is NON-spoofable: force the signed-in identity, ignore any client
+        // 'by'. The userscript (key) path has no principal, so it supplies its own 'by'.
+        wo: s(o && o.wo, 40), note: s(o && o.note, 500), by: employee ? s(who, 120) : (s(o && o.by, 120) || s(who, 120)),
       })).filter((e) => e.key && e.status).slice(0, 60);
       if (!entries.length) { context.res = json(400, { error: "outcome.key and a valid outcome.status are required" }); return; }
       let applied = 0, unknown = [];
