@@ -2174,6 +2174,52 @@ function applyLiveJobs(){
     j._live = lj.ts;
   });
 }
+// ── AUTO-REFRESH (the "feel live" layer) ──────────────────────────────────
+// Re-read the userscript-pushed / cross-coordinator stores on an interval so pushes (Over-30
+// lines, job plans, live WO facts) and other coordinators' case-file notes appear WITHOUT a
+// manual reload. Deliberately unobtrusive: skipped on saved copies, hidden tabs, in-flight saves,
+// or while a field is focused; repaints only when something ACTUALLY changed and preserves
+// scroll; never repaints out from under an open modal (its data is still refreshed, so the next
+// open shows the latest). Reads only - every write still goes through the normal save paths.
+const AUTO_REFRESH_MS = 75000;
+let _bnRefreshBusy = false, _bnRefreshSig = null;
+function _bnTyping(){ const a=document.activeElement; return !!(a && (/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) || a.isContentEditable)); }
+function _bnRefreshSigOf(){
+  try { return JSON.stringify(O30_LINES)+'~||~'+JSON.stringify(JOB_PLANS)+'~||~'+JSON.stringify(LIVE_JOBS)+'~||~'+JSON.stringify(JOB_NOTES); }
+  catch(_){ return null; }
+}
+async function _bnAutoRefresh(){
+  if(window.BROADWAY_SNAPSHOT || _bnRefreshBusy || document.hidden || _bnSaveN>0 || _bnTyping()) return;
+  _bnRefreshBusy = true;
+  try{
+    const [o30, plans, live, notes] = await Promise.all([
+      bnClientGet('o30-lines'), bnClientGet('job-plans'), bnClientGet('live-jobs'), bnClientGet('job-notes')
+    ]);
+    if(o30 && o30.exists && o30.data && o30.data.items && typeof o30.data.items==='object') O30_LINES = o30.data.items;
+    if(plans && plans.exists && plans.data && plans.data.plans && typeof plans.data.plans==='object') JOB_PLANS = plans.data.plans;
+    if(live){ LIVE_JOBS = (live.exists && live.data && live.data.jobs && typeof live.data.jobs==='object') ? live.data.jobs : LIVE_JOBS; applyLiveJobs(); }
+    if(notes && _bnSaveN===0){   // re-check: a save may have begun during the awaits - don't touch JN_ETAG then
+      JN_ETAG = notes.etag || JN_ETAG;
+      if(notes.exists && notes.data && notes.data.notes && typeof notes.data.notes==='object'){
+        const blob = notes.data.notes;   // newest-wins merge, same rule as loadJobNotes (never clobbers a locally-newer edit)
+        Object.keys(blob).forEach(function(id){ const a=JOB_NOTES[id], b=blob[id]; if(!a || (b.updatedAt||'') >= (a.updatedAt||'')) JOB_NOTES[id]=b; });
+        _jnSaveLocal();
+      }
+    }
+    const sig = _bnRefreshSigOf();
+    if(_bnRefreshSig === null){ _bnRefreshSig = sig; return; }   // first tick just seeds the baseline - no repaint
+    if(sig !== _bnRefreshSig){
+      _bnRefreshSig = sig;
+      // repaint only when it won't disturb the user: not typing, no save in flight, no modal open
+      if(!_bnTyping() && _bnSaveN===0 && JOBS.length && !_bnOpenModalBox()){
+        const mc=document.getElementById('mainContent'); const st=mc?mc.scrollTop:0, wy=window.scrollY;
+        render(currentView);
+        if(mc) mc.scrollTop=st; try{ window.scrollTo(0,wy); }catch(_){}
+      }
+    }
+  }catch(_){ /* transient - just try again next tick */ }
+  finally{ _bnRefreshBusy=false; }
+}
 // Load the Drilldown Note history (local first, then merge the shared slot by union of note text).
 async function loadStatusHist(){
   STATUS_HIST = _shLoadLocal();
@@ -6038,6 +6084,14 @@ loadVendorKinds();
 loadJobDivisions();
 loadClientConfig();
 loadDataFreshness();   // header freshness line + connectivity probe
+
+// Keep the userscript-pushed / cross-coordinator stores live without a manual reload (the
+// "feel live" layer). Polls on an interval + immediately when the tab regains focus.
+if(!window.BROADWAY_SNAPSHOT && !window._bnRefreshStarted){
+  window._bnRefreshStarted = true;
+  setInterval(_bnAutoRefresh, AUTO_REFRESH_MS);
+  document.addEventListener('visibilitychange', function(){ if(!document.hidden) _bnAutoRefresh(); });
+}
 
 // Exception Queue: load ack/snooze state, ensure over-30 history is available
 // for the 'chronic' signal (without needing to visit the trend view first),
