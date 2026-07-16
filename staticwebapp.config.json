@@ -28,6 +28,14 @@
     "allowedRoles": ["anonymous"]
   },
   {
+    "route": "/api/enrich-contacts",
+    "allowedRoles": ["anonymous"]
+  },
+  {
+    "route": "/api/vendor-prospects",
+    "allowedRoles": ["anonymous"]
+  },
+  {
     "route": "/api/send-bid",
     "allowedRoles": ["anonymous"]
   },
