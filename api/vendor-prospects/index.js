@@ -64,10 +64,16 @@ function cityStateFromAddr(addr) {
 }
 
 // ---- blob ----------------------------------------------------------------------
-function dbBlobClient() {
+let _containerP = null;
+async function dbBlobClient() {
   const conn = process.env.AZURE_STORAGE_CONNECTION_STRING;
   if (!conn) throw new Error("AZURE_STORAGE_CONNECTION_STRING not set");
-  return BlobServiceClient.fromConnectionString(conn).getContainerClient(CONTAINER_NAME).getBlockBlobClient(DB_BLOB);
+  if (!_containerP) {
+    const container = BlobServiceClient.fromConnectionString(conn).getContainerClient(CONTAINER_NAME);
+    _containerP = container.createIfNotExists().then(() => container).catch((e) => { _containerP = null; throw e; });
+  }
+  const c = await _containerP;
+  return c.getBlockBlobClient(DB_BLOB);
 }
 function streamToString(readable) {
   return new Promise((resolve, reject) => {
@@ -87,8 +93,15 @@ async function readDb(blob) {
 async function writeDb(blob, db) {
   const keys = Object.keys(db.items);
   if (keys.length > MAX_ITEMS) {
-    keys.sort((a, b) => (db.items[b].lastSeen || 0) - (db.items[a].lastSeen || 0));
-    const trimmed = {}; keys.slice(0, MAX_ITEMS).forEach((k) => { trimmed[k] = db.items[k]; });
+    // Eviction is by oldest lastSeen, but do-not-contact history is EXEMPT - dropping it would
+    // let an aged DNC vendor be re-discovered clean and bid again.
+    const isDnc = (k) => { const o = db.items[k].outcomes; return !!(o && o.length && o[o.length - 1].status === "do-not-contact"); };
+    const dncKeys = keys.filter(isDnc);
+    const rest = keys.filter((k) => !isDnc(k));
+    rest.sort((a, b) => (db.items[b].lastSeen || 0) - (db.items[a].lastSeen || 0));
+    const trimmed = {};
+    dncKeys.forEach((k) => { trimmed[k] = db.items[k]; });
+    rest.slice(0, Math.max(0, MAX_ITEMS - dncKeys.length)).forEach((k) => { trimmed[k] = db.items[k]; });
     db.items = trimmed;
   }
   const body = JSON.stringify({ v: 1, items: db.items });
@@ -132,14 +145,34 @@ function sanitizeProspect(p) {
     source: s(p.source, 24),
   };
   if (rec.email && !EMAIL_RE.test(rec.email)) rec.email = "";
+  // http(s) only: a stored javascript: URL would become a clickable link in the userscripts
+  // (stored-XSS via a leaked key). Key derivation is unaffected - non-http URLs already yield
+  // an empty hostname on both sides, falling back to the name.
+  if (rec.website && !/^https?:\/\//i.test(rec.website)) rec.website = "";
   if (!rec.city && rec.addr) { const cs = cityStateFromAddr(rec.addr); rec.city = cs.city; rec.state = rec.state || cs.state; }
   return rec;
 }
+const EMAIL_SRC_RANK = { zoominfo: 2, manual: 2, scrape: 1, "": 0 };
 function mergeProspect(existing, inc, now) {
   const e = existing || { firstSeen: now, seenCount: 0, trades: [], sources: [], outcomes: [] };
-  ["name", "website", "phone", "email", "contactName", "contactTitle", "emailSrc", "addr", "city", "state", "kind"].forEach((f) => {
+  ["name", "website", "phone", "addr", "city", "state"].forEach((f) => {
     if (inc[f]) e[f] = inc[f];                         // non-empty incoming wins; never blank a field
   });
+  // kind is FIRST-writer-wins: a supplier saved by Find Suppliers must not flip to contractor
+  // just because a later contractor-mode search re-found the same company (and vice versa).
+  if (inc.kind && !e.kind) e.kind = inc.kind;
+  // Email upgrades only: a scraped generic address must not clobber a ZoomInfo/manual direct
+  // contact. When the email IS replaced, the contact name/title move with it (even to empty)
+  // so the name/email pairing stays coherent.
+  const incRank = EMAIL_SRC_RANK[inc.emailSrc || ""] || 0, curRank = EMAIL_SRC_RANK[e.emailSrc || ""] || 0;
+  if (inc.email && (!e.email || incRank >= curRank)) {
+    if (inc.email !== e.email) { e.contactName = inc.contactName || ""; e.contactTitle = inc.contactTitle || ""; }
+    else { if (inc.contactName) e.contactName = inc.contactName; if (inc.contactTitle) e.contactTitle = inc.contactTitle; }
+    e.email = inc.email; e.emailSrc = inc.emailSrc || "";
+  } else if (!inc.email) {
+    if (inc.contactName && !e.contactName) e.contactName = inc.contactName;
+    if (inc.contactTitle && !e.contactTitle) e.contactTitle = inc.contactTitle;
+  }
   ["lat", "lng", "rating", "ratingCount"].forEach((f) => { if (inc[f] != null) e[f] = inc[f]; });
   (inc.trades || []).forEach((t) => { if (e.trades.indexOf(t) === -1 && e.trades.length < 12) e.trades.push(t); });
   if (inc.source && e.sources.indexOf(inc.source) === -1 && e.sources.length < 8) e.sources.push(inc.source);
@@ -172,7 +205,7 @@ module.exports = async function (context, req) {
     const key = req.headers && (req.headers["x-bwn-key"] || req.headers["X-BWN-KEY"]);
     if (!key || key !== expected) { context.res = json(403, { error: "unauthorized" }); return; }
 
-    const blob = dbBlobClient();
+    const blob = await dbBlobClient();
 
     if (req.method === "GET") {
       const q = req.query || {};
