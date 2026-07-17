@@ -79,21 +79,42 @@ async function getKey(kid) {
   return jwks.byKid[kid] || null;
 }
 
-// Verify an Umbrava access token: RS256 signature (JWKS) + iss + aud-includes + exp. Returns the
-// verified claims, or throws an Error whose message is a stable code.
+// Asymmetric JWS algs verifiable with a JWKS public key. Auth0 APIs can sign with any of these
+// (RS256 is the default, but PS256 and ES256 are selectable), so accepting only RS256 rejected
+// every token from a PS256/ES256-configured API with "bad-alg". HS*/none are intentionally
+// ABSENT: they are symmetric / unsigned, and verifying an HS* token against a public key would be
+// a critical auth-bypass - they fall through to `bad-alg:<alg>` so the exact alg is diagnosable
+// without ever exposing the token.
+// Null-prototype so a token claiming alg "__proto__"/"constructor"/"hasOwnProperty" resolves to
+// undefined (not an inherited object) and hits the bad-alg guard directly, not a downstream defense.
+const JWS_ALGS = Object.assign(Object.create(null), {
+  RS256: { hash: "RSA-SHA256", kty: "RSA" }, RS384: { hash: "RSA-SHA384", kty: "RSA" }, RS512: { hash: "RSA-SHA512", kty: "RSA" },
+  PS256: { hash: "RSA-SHA256", kty: "RSA", pss: true }, PS384: { hash: "RSA-SHA384", kty: "RSA", pss: true }, PS512: { hash: "RSA-SHA512", kty: "RSA", pss: true },
+  ES256: { hash: "SHA256", kty: "EC", ec: true }, ES384: { hash: "SHA384", kty: "EC", ec: true }, ES512: { hash: "SHA512", kty: "EC", ec: true },
+});
+
+// Verify an Umbrava access token: signature (JWKS, RS/PS/ES) + iss + aud-includes + exp. Returns
+// the verified claims, or throws an Error whose message is a stable code.
 async function verifyToken(bearer) {
   const parts = String(bearer || "").split(".");
   if (parts.length !== 3) throw new Error("malformed");
   const header = b64urlJson(parts[0]);
   const claims = b64urlJson(parts[1]);
   if (!header || !claims) throw new Error("malformed");
-  if (header.alg !== "RS256") throw new Error("bad-alg");
+  const spec = JWS_ALGS[header.alg];
+  if (!spec) throw new Error("bad-alg:" + header.alg);   // e.g. HS256 (symmetric) or none - not JWKS-verifiable
   if (!header.kid) throw new Error("no-kid");
 
   const jwk = await getKey(header.kid);
   if (!jwk) throw new Error("unknown-kid");
+  if (jwk.kty && jwk.kty !== spec.kty) throw new Error("kty-mismatch");   // never verify an RSA token against an EC key or vice versa
   const pub = crypto.createPublicKey({ key: jwk, format: "jwk" });
-  const ok = crypto.verify("RSA-SHA256", Buffer.from(parts[0] + "." + parts[1]), pub, b64urlToBuf(parts[2]));
+  const data = Buffer.from(parts[0] + "." + parts[1]);
+  const sig = b64urlToBuf(parts[2]);
+  let ok;
+  if (spec.ec) ok = crypto.verify(spec.hash, data, { key: pub, dsaEncoding: "ieee-p1363" }, sig);         // JWS ECDSA sigs are raw r||s, not DER
+  else if (spec.pss) ok = crypto.verify(spec.hash, data, { key: pub, padding: crypto.constants.RSA_PKCS1_PSS_PADDING, saltLength: crypto.constants.RSA_PSS_SALTLEN_DIGEST }, sig);
+  else ok = crypto.verify(spec.hash, data, pub, sig);
   if (!ok) throw new Error("bad-signature");
 
   if (claims.iss !== ISS) throw new Error("bad-iss");
