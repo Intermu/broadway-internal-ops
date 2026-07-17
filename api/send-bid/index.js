@@ -50,10 +50,23 @@ const MAX_RETRIES = 5;
 const MAX_BCC = 60;                 // matches the userscript's cap
 const MAX_SUBJECT = 300;
 const MAX_HTML = 300000;            // ~300KB - the template is ~15KB filled
-const MAX_ATTACH = 3;               // files per send
-const MAX_ATTACH_BYTES = 2000000;   // ~2MB total (base64-decoded) - a per-unit CSV is tiny
+const MAX_ATTACH = 6;               // files per send (HVAC schedule + a few coordinator-curated files)
+const MAX_ATTACH_BYTES = 12000000;  // ~12MB total (base64-decoded) - photos/PDFs run larger than the tiny schedule
+const MAX_ATTACH_B64 = Math.ceil(MAX_ATTACH_BYTES / 3) * 4 + 8;   // base64 length ceiling per file - bound the decode BEFORE Buffer.from allocates
 const ATTACH_NAME_RE = /^[A-Za-z0-9 ._\-()]+\.[A-Za-z0-9]{1,8}$/;   // no path separators / control chars
-const ATTACH_TYPE_RE = /^[A-Za-z0-9][A-Za-z0-9.+\-]*\/[A-Za-z0-9][A-Za-z0-9.+\-]*$/;   // simple MIME type, no params
+// Extension -> allowed MIME(s). Two sources: the HVAC PM equipment schedule (.xlsx / .csv), and
+// coordinator-curated files a user manually picks (spec sheets / site photos: .pdf .jpg .png
+// .heic). Allowlisted so a leaked-key caller cannot relay anything executable (.exe/.js/.hta/...)
+// from a real Broadway mailbox - content is never inspected, so the extension+MIME gate is the control.
+const ATTACH_ALLOW = {
+  ".xlsx": ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"],
+  ".csv": ["text/csv"],
+  ".pdf": ["application/pdf"],
+  ".jpg": ["image/jpeg"],
+  ".jpeg": ["image/jpeg"],
+  ".png": ["image/png"],
+  ".heic": ["image/heic"],
+};
 const DAILY_RECIPIENTS = 500;       // ceiling across all senders per UTC day
 const PER_SEND_TIMEOUT = 25000;     // per-vendor Graph send ceiling; CONCURRENCY*ceil(MAX_BCC/C) must stay < functionTimeout
 const CONCURRENCY = 4;              // parallel per-vendor Graph sends (Graph tolerates this per mailbox; keeps the batch well inside functionTimeout)
@@ -311,9 +324,10 @@ module.exports = async function (context, req) {
         /\bformaction\s*=/i.test(html)) {
       context.res = json(400, { error: "html contains disallowed markup" }); return;
     }
-    // Optional file attachments (e.g. the HVAC PM full equipment list as a CSV). Validated to
-    // Graph fileAttachment shape; sizes/counts capped; names/types constrained. Same trust
-    // posture as `html` - a leaked-key caller can't smuggle anything a mailbox would execute.
+    // Optional file attachments (the HVAC PM equipment schedule: .xlsx, or a .csv fallback).
+    // Validated to Graph fileAttachment shape; count + string-length + decoded-size capped;
+    // extension/MIME allowlisted so a leaked-key caller cannot relay anything a mailbox would
+    // execute. Same trust posture as `html`.
     var graphAttachments = [];
     if (body.attachments != null) {
       if (!Array.isArray(body.attachments) || body.attachments.length > MAX_ATTACH) {
@@ -324,8 +338,12 @@ module.exports = async function (context, req) {
         var at = body.attachments[ai] || {};
         var an = String(at.name || "").trim(), act = String(at.contentType || "").trim(), ab = String(at.contentBase64 || "");
         if (!ATTACH_NAME_RE.test(an)) { context.res = json(400, { error: "invalid attachment name" }); return; }
-        if (!ATTACH_TYPE_RE.test(act)) { context.res = json(400, { error: "invalid attachment contentType" }); return; }
-        if (!/^[A-Za-z0-9+/=\r\n]+$/.test(ab) || !ab) { context.res = json(400, { error: "invalid attachment contentBase64" }); return; }
+        var dot = an.lastIndexOf("."), ext = dot === -1 ? "" : an.slice(dot).toLowerCase();
+        var allowedTypes = ATTACH_ALLOW[ext];
+        if (!allowedTypes) { context.res = json(400, { error: "attachment type not allowed (allowed: " + Object.keys(ATTACH_ALLOW).join(" ") + ")" }); return; }
+        if (allowedTypes.indexOf(act) === -1) { context.res = json(400, { error: "attachment contentType does not match its extension" }); return; }
+        if (!ab || ab.length > MAX_ATTACH_B64) { context.res = json(400, { error: "attachment too large or empty" }); return; }   // bound the decode BEFORE allocating
+        if (!/^[A-Za-z0-9+/=\r\n]+$/.test(ab)) { context.res = json(400, { error: "invalid attachment contentBase64" }); return; }
         var decoded = Buffer.from(ab, "base64");
         attachTotal += decoded.length;
         if (attachTotal > MAX_ATTACH_BYTES) { context.res = json(400, { error: "attachments too large (max " + MAX_ATTACH_BYTES + " bytes)" }); return; }
