@@ -1,4 +1,3 @@
-const crypto = require("crypto");
 const https = require("https");
 
 // HTTP via the `https` module (NOT global fetch - the SWA Functions runtime doesn't expose it;
@@ -21,20 +20,28 @@ function httpsJson(method, urlStr, headers, body) {
   });
 }
 
-// Verifies the Umbrava Auth0 access token a userscript sends, then resolves the caller's
-// Umbrava ROLE - so role-based access levels can be TRULY enforced (the identity is proven by
-// the token's signature; a tampered script can't forge it or claim someone else's email).
+// Resolves the caller's Umbrava ROLE from the Umbrava access token a userscript sends, so
+// role-based access can be TRULY enforced.
+//
+// Umbrava signs its access tokens with HS256 (symmetric) - verified live 2026-07 via the token
+// header (alg:HS256). A symmetric token CANNOT be verified by a third party without Umbrava's
+// signing secret (which we must never hold), so we do NOT verify the signature locally. Instead
+// the token is PROVEN by asking Umbrava's OWN API to identify the caller: we POST the token to
+// Umbrava's GraphQL current-user query. If Umbrava returns the caller's user, the token is valid
+// (Umbrava verified the signature it owns); a forged / tampered / expired token is rejected by
+// Umbrava and returns no user. Identity (email, sub, tenant) then comes from the token's own
+// claims, which are authentic once Umbrava has vouched for the token (the HS256 signature Umbrava
+// validated covers them) - a tampered claim would have broken the signature Umbrava just checked.
 //
 // Reached ANONYMOUSLY at the SWA route layer (Umbrava is a different origin). Auth is layered:
 //   1. shared key (x-bwn-key vs WO_INGEST_KEY) - coarse gate, same as the rest of the suite
-//   2. the Umbrava access token (Authorization: Bearer <token>) - the REAL identity, verified
-//      against Umbrava's JWKS (RS256). Identity claims come straight from the verified token.
-//   3. the Umbrava ROLE name (e.g. "National Account Manager") is NOT in the token, so it is
-//      fetched from Umbrava's own current-user API using that same token (authoritative + live).
+//   2. the Umbrava access token (Authorization: Bearer <token>) - the REAL identity, vouched by
+//      Umbrava's current-user API using that same token.
 //
-// Verified live against a real Umbrava token (2026-07): iss https://login.umbrava.com/, aud is
-// an ARRAY that includes https://app.umbrava.com/api, email in the namespaced claim
-// https://umbrava.com/email, tenant in https://umbrava.com/tenantid, sub = "waad|...".
+// Verified live against a real Umbrava token (2026-07): iss https://login.umbrava.com/, aud is an
+// ARRAY that includes https://app.umbrava.com/api, email in the namespaced claim
+// https://umbrava.com/email, tenant in https://umbrava.com/tenantid, sub = "waad|...", alg HS256.
+// Umbrava's currentUser exposes { id, role, tenantId, email } (confirmed via the read API).
 //
 // Returns { ok, email, sub, tenantId, role, roleSource }. NEVER stores or forwards the token.
 
@@ -49,8 +56,6 @@ const ALLOWED_TENANTS = (process.env.UMBRAVA_TENANTS ||
   "42726f61-6477-6179-4e61-74696f6e616c,2fc24a61-4adf-41b0-a0f0-5c50fb9a862b")
   .split(",").map((s) => s.trim()).filter(Boolean);
 const CLOCK_SKEW_S = 60;
-const ROLE_TTL_MS = 10 * 60 * 1000;
-const JWKS_MIN_REFETCH_MS = 5 * 60 * 1000;
 
 const CORS = {
   "Access-Control-Allow-Origin": "https://app.umbrava.com",
@@ -64,59 +69,14 @@ function json(status, body) {
 function b64urlToBuf(s) { return Buffer.from(String(s).replace(/-/g, "+").replace(/_/g, "/"), "base64"); }
 function b64urlJson(s) { try { return JSON.parse(b64urlToBuf(s).toString("utf-8")); } catch (e) { return null; } }
 
-// ---- JWKS cache (by kid), with rotation-aware refetch --------------------------
-let jwks = { byKid: {}, fetchedAt: 0 };
-async function getKey(kid) {
-  if (jwks.byKid[kid]) return jwks.byKid[kid];
-  if (Date.now() - jwks.fetchedAt < JWKS_MIN_REFETCH_MS && jwks.fetchedAt) return null;   // don't hammer on an unknown kid
-  const url = ISS.replace(/\/?$/, "/") + ".well-known/jwks.json";
-  const r = await httpsJson("GET", url);
-  if (r.status !== 200 || !r.json) throw new Error("jwks-fetch-" + r.status);
-  const data = r.json;
-  const byKid = {};
-  (data.keys || []).forEach((k) => { if (k.kid) byKid[k.kid] = k; });
-  jwks = { byKid, fetchedAt: Date.now() };
-  return jwks.byKid[kid] || null;
-}
-
-// Asymmetric JWS algs verifiable with a JWKS public key. Auth0 APIs can sign with any of these
-// (RS256 is the default, but PS256 and ES256 are selectable), so accepting only RS256 rejected
-// every token from a PS256/ES256-configured API with "bad-alg". HS*/none are intentionally
-// ABSENT: they are symmetric / unsigned, and verifying an HS* token against a public key would be
-// a critical auth-bypass - they fall through to `bad-alg:<alg>` so the exact alg is diagnosable
-// without ever exposing the token.
-// Null-prototype so a token claiming alg "__proto__"/"constructor"/"hasOwnProperty" resolves to
-// undefined (not an inherited object) and hits the bad-alg guard directly, not a downstream defense.
-const JWS_ALGS = Object.assign(Object.create(null), {
-  RS256: { hash: "RSA-SHA256", kty: "RSA" }, RS384: { hash: "RSA-SHA384", kty: "RSA" }, RS512: { hash: "RSA-SHA512", kty: "RSA" },
-  PS256: { hash: "RSA-SHA256", kty: "RSA", pss: true }, PS384: { hash: "RSA-SHA384", kty: "RSA", pss: true }, PS512: { hash: "RSA-SHA512", kty: "RSA", pss: true },
-  ES256: { hash: "SHA256", kty: "EC", ec: true }, ES384: { hash: "SHA384", kty: "EC", ec: true }, ES512: { hash: "SHA512", kty: "EC", ec: true },
-});
-
-// Verify an Umbrava access token: signature (JWKS, RS/PS/ES) + iss + aud-includes + exp. Returns
-// the verified claims, or throws an Error whose message is a stable code.
-async function verifyToken(bearer) {
+// Decode (NOT verify) the token claims + cheap pre-checks. These only ever REJECT obviously-bad
+// tokens cheaply (a forged token that fakes these still fails the Umbrava vouch below); they never
+// grant access. Throws an Error whose message is a stable code.
+function decodeClaims(bearer) {
   const parts = String(bearer || "").split(".");
   if (parts.length !== 3) throw new Error("malformed");
-  const header = b64urlJson(parts[0]);
   const claims = b64urlJson(parts[1]);
-  if (!header || !claims) throw new Error("malformed");
-  const spec = JWS_ALGS[header.alg];
-  if (!spec) throw new Error("bad-alg:" + header.alg);   // e.g. HS256 (symmetric) or none - not JWKS-verifiable
-  if (!header.kid) throw new Error("no-kid");
-
-  const jwk = await getKey(header.kid);
-  if (!jwk) throw new Error("unknown-kid");
-  if (jwk.kty && jwk.kty !== spec.kty) throw new Error("kty-mismatch");   // never verify an RSA token against an EC key or vice versa
-  const pub = crypto.createPublicKey({ key: jwk, format: "jwk" });
-  const data = Buffer.from(parts[0] + "." + parts[1]);
-  const sig = b64urlToBuf(parts[2]);
-  let ok;
-  if (spec.ec) ok = crypto.verify(spec.hash, data, { key: pub, dsaEncoding: "ieee-p1363" }, sig);         // JWS ECDSA sigs are raw r||s, not DER
-  else if (spec.pss) ok = crypto.verify(spec.hash, data, { key: pub, padding: crypto.constants.RSA_PKCS1_PSS_PADDING, saltLength: crypto.constants.RSA_PSS_SALTLEN_DIGEST }, sig);
-  else ok = crypto.verify(spec.hash, data, pub, sig);
-  if (!ok) throw new Error("bad-signature");
-
+  if (!claims) throw new Error("malformed");
   if (claims.iss !== ISS) throw new Error("bad-iss");
   const auds = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
   if (auds.indexOf(API_AUD) === -1) throw new Error("bad-aud");
@@ -125,10 +85,10 @@ async function verifyToken(bearer) {
   return claims;
 }
 
-// ---- Umbrava role lookup (role is NOT in the token) -----------------------------
-// The exact current-user root field isn't publicly documented; self-discover it once (a wrong
-// name returns a fast GraphQL error, never a hang, server-side) and cache the winner. Role is
-// cached per-sub with a short TTL so we don't call Umbrava on every request.
+// ---- Umbrava vouch: the token's signature is HS256 (Umbrava-only), so Umbrava is the verifier.
+// The current-user root field isn't publicly documented; self-discover it once (a wrong name
+// returns a fast GraphQL error/null, never a hang) and cache the winner. A returned user with a
+// truthy id is the proof the token is valid AND identifies the caller.
 let ROLE_QUERY = null;
 const ROLE_CANDIDATES = [
   ["currentUser", "{ currentUser { id role } }"],
@@ -137,29 +97,25 @@ const ROLE_CANDIDATES = [
   ["currentMember", "{ currentMember { id role } }"],
   ["user", "{ user { id role } }"],
 ];
-const roleCache = {};   // sub -> { role, exp }
-async function gql(bearer, query) {
-  const r = await httpsJson("POST", GRAPHQL_URL, { "Authorization": "Bearer " + bearer }, { query });
-  if (r.status < 200 || r.status >= 300) return null;
-  return r.json;
-}
-async function fetchRole(bearer, sub, log) {
-  const c = roleCache[sub];
-  if (c && Date.now() < c.exp) return c.role;
-  let role = null;
+// { ok:true, user } if Umbrava accepts the token; { ok:false } if Umbrava rejects it (invalid
+// token); throws "upstream" on network/5xx so the caller can 503 rather than falsely 401.
+async function umbravaVouch(bearer) {
   const tries = ROLE_QUERY ? [ROLE_QUERY] : ROLE_CANDIDATES;
+  let sawAuthFail = false, sawNet = false, saw200 = false;
   for (const [name, q] of tries) {
-    let j = null;
-    try { j = await gql(bearer, q); } catch (e) { continue; }
-    if (j && j.data && j.data[name] && "role" in j.data[name]) {
-      ROLE_QUERY = [name, q];
-      role = j.data[name].role || null;
-      break;
-    }
+    let r;
+    try { r = await httpsJson("POST", GRAPHQL_URL, { "Authorization": "Bearer " + bearer }, { query: q }); }
+    catch (e) { sawNet = true; continue; }
+    if (r.status === 401 || r.status === 403) { sawAuthFail = true; continue; }   // token rejected
+    if (r.status < 200 || r.status >= 300) { sawNet = true; continue; }           // 5xx / gateway
+    saw200 = true;
+    const u = r.json && r.json.data && r.json.data[name];
+    if (u && u.id) { ROLE_QUERY = [name, q]; return { ok: true, user: u }; }
+    // 200 but no user: with the discovered root cached this means an invalid/anonymous token;
+    // during first-time discovery it may just be a wrong root, so keep trying the others.
   }
-  if (ROLE_QUERY && log) log("user-role: resolved via '" + ROLE_QUERY[0] + "'");
-  roleCache[sub] = { role, exp: Date.now() + ROLE_TTL_MS };
-  return role;
+  if (sawNet && !saw200 && !sawAuthFail) throw new Error("upstream");   // never reached Umbrava cleanly
+  return { ok: false };
 }
 
 module.exports = async function (context, req) {
@@ -178,41 +134,39 @@ module.exports = async function (context, req) {
     const token = m ? m[1] : ((req.body && req.body.token) || "");
     if (!token) { context.res = json(401, { error: "no token", code: "NO_TOKEN" }); return; }
 
-    // TEMP diagnostic (key-gated): echo what the server actually received - alg/kid only, NEVER
-    // the signature. Reveals whether the Authorization token is altered in transit.
+    // TEMP diagnostic (key-gated): echo header alg/kid/typ only, NEVER the signature.
     if (req.query && req.query.debug === "1") {
       const dp = String(token).split(".");
       const dh = dp.length >= 1 ? b64urlJson(dp[0]) : null;
       context.res = json(200, {
         debug: true, authPrefix: String(authz).slice(0, 14), tokenParts: dp.length,
         recvAlg: dh && dh.alg, recvKid: dh && dh.kid, recvTyp: dh && dh.typ,
-        headerNames: Object.keys(req.headers || {}),
       });
       return;
     }
 
     let claims;
-    try { claims = await verifyToken(token); }
-    catch (e) {
-      const code = String((e && e.message) || "invalid");
-      if (code.indexOf("jwks-fetch") === 0) { context.res = json(503, { error: "identity provider unavailable", code: "JWKS_UNAVAILABLE" }); return; }
-      context.res = json(401, { error: "invalid token", code: code });
-      return;
-    }
+    try { claims = decodeClaims(token); }
+    catch (e) { context.res = json(401, { error: "invalid token", code: String((e && e.message) || "invalid") }); return; }
 
+    // Prove the token with Umbrava (it owns the HS256 secret). This is the identity boundary.
+    let vouch;
+    try { vouch = await umbravaVouch(token); }
+    catch (e) { context.res = json(503, { error: "identity provider unavailable", code: "UMBRAVA_UNAVAILABLE" }); return; }
+    if (!vouch.ok) { context.res = json(401, { error: "token not accepted by Umbrava", code: "not-vouched" }); return; }
+
+    // Identity from the token claims - authentic now that Umbrava has vouched for the signature.
     const email = claims[EMAIL_CLAIM] || claims.email || "";
-    const sub = claims.sub || "";
+    const sub = claims.sub || (vouch.user && vouch.user.id) || "";
     const tenantId = claims[TENANT_CLAIM] || "";
-    if (ALLOWED_TENANTS.length && ALLOWED_TENANTS.indexOf(tenantId) === -1) {
+    // Fail CLOSED: a mis-set UMBRAVA_TENANTS (empty) denies everyone rather than admitting all tenants.
+    if (!ALLOWED_TENANTS.length || ALLOWED_TENANTS.indexOf(tenantId) === -1) {
       context.res = json(403, { error: "not a Broadway tenant", code: "WRONG_TENANT", tenantId });
       return;
     }
 
-    let role = null, roleSource = "none";
-    try { role = await fetchRole(token, sub, context.log); if (role) roleSource = "umbrava"; }
-    catch (e) { /* identity still valid; role stays null */ }
-
-    context.res = json(200, { ok: true, email: email, sub: sub, tenantId: tenantId, role: role, roleSource: roleSource, roleQuery: ROLE_QUERY ? ROLE_QUERY[0] : null });
+    const role = (vouch.user && vouch.user.role) || null;
+    context.res = json(200, { ok: true, email: email, sub: sub, tenantId: tenantId, role: role, roleSource: role ? "umbrava" : "none", roleQuery: ROLE_QUERY ? ROLE_QUERY[0] : null });
   } catch (err) {
     context.log && context.log.error && context.log.error("user-role error:", String((err && err.message) || err));
     context.res = json(500, { error: "user-role failed" });

@@ -50,6 +50,10 @@ const MAX_RETRIES = 5;
 const MAX_BCC = 60;                 // matches the userscript's cap
 const MAX_SUBJECT = 300;
 const MAX_HTML = 300000;            // ~300KB - the template is ~15KB filled
+const MAX_ATTACH = 3;               // files per send
+const MAX_ATTACH_BYTES = 2000000;   // ~2MB total (base64-decoded) - a per-unit CSV is tiny
+const ATTACH_NAME_RE = /^[A-Za-z0-9 ._\-()]+\.[A-Za-z0-9]{1,8}$/;   // no path separators / control chars
+const ATTACH_TYPE_RE = /^[A-Za-z0-9][A-Za-z0-9.+\-]*\/[A-Za-z0-9][A-Za-z0-9.+\-]*$/;   // simple MIME type, no params
 const DAILY_RECIPIENTS = 500;       // ceiling across all senders per UTC day
 const PER_SEND_TIMEOUT = 25000;     // per-vendor Graph send ceiling; CONCURRENCY*ceil(MAX_BCC/C) must stay < functionTimeout
 const CONCURRENCY = 4;              // parallel per-vendor Graph sends (Graph tolerates this per mailbox; keeps the batch well inside functionTimeout)
@@ -307,6 +311,27 @@ module.exports = async function (context, req) {
         /\bformaction\s*=/i.test(html)) {
       context.res = json(400, { error: "html contains disallowed markup" }); return;
     }
+    // Optional file attachments (e.g. the HVAC PM full equipment list as a CSV). Validated to
+    // Graph fileAttachment shape; sizes/counts capped; names/types constrained. Same trust
+    // posture as `html` - a leaked-key caller can't smuggle anything a mailbox would execute.
+    var graphAttachments = [];
+    if (body.attachments != null) {
+      if (!Array.isArray(body.attachments) || body.attachments.length > MAX_ATTACH) {
+        context.res = json(400, { error: "attachments must be an array of at most " + MAX_ATTACH }); return;
+      }
+      var attachTotal = 0;
+      for (var ai = 0; ai < body.attachments.length; ai++) {
+        var at = body.attachments[ai] || {};
+        var an = String(at.name || "").trim(), act = String(at.contentType || "").trim(), ab = String(at.contentBase64 || "");
+        if (!ATTACH_NAME_RE.test(an)) { context.res = json(400, { error: "invalid attachment name" }); return; }
+        if (!ATTACH_TYPE_RE.test(act)) { context.res = json(400, { error: "invalid attachment contentType" }); return; }
+        if (!/^[A-Za-z0-9+/=\r\n]+$/.test(ab) || !ab) { context.res = json(400, { error: "invalid attachment contentBase64" }); return; }
+        var decoded = Buffer.from(ab, "base64");
+        attachTotal += decoded.length;
+        if (attachTotal > MAX_ATTACH_BYTES) { context.res = json(400, { error: "attachments too large (max " + MAX_ATTACH_BYTES + " bytes)" }); return; }
+        graphAttachments.push({ "@odata.type": "#microsoft.graph.fileAttachment", name: an, contentType: act, contentBytes: decoded.toString("base64") });
+      }
+    }
     const tracking = body.tracking ? String(body.tracking).slice(0, 64) : null;
     // Idempotency key: the client sends a STABLE key per prepared bid and re-sends the SAME
     // key on any retry. It is what stops a client timeout (the sequential per-vendor loop can
@@ -412,6 +437,7 @@ module.exports = async function (context, req) {
           toRecipients: [{ emailAddress: { address: from } }],
           bccRecipients: bcc.map((a) => ({ emailAddress: { address: a } })),
           replyTo: [{ emailAddress: { address: from } }],
+          attachments: graphAttachments,
         },
         saveToSentItems: true,
       };
@@ -458,6 +484,7 @@ module.exports = async function (context, req) {
             body: { contentType: "HTML", content: injectPixel(html, pixelUrl) },
             toRecipients: [{ emailAddress: { address: v.email } }],
             replyTo: [{ emailAddress: { address: from } }],
+            attachments: graphAttachments,
           },
           saveToSentItems: true,
         };
