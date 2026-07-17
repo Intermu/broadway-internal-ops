@@ -36,6 +36,10 @@
     "allowedRoles": ["anonymous"]
   },
   {
+    "route": "/api/user-role",
+    "allowedRoles": ["anonymous"]
+  },
+  {
     "route": "/api/send-bid",
     "allowedRoles": ["anonymous"]
   },
