@@ -157,6 +157,19 @@ module.exports = async function (context, req) {
     const token = m ? m[1] : ((req.body && req.body.token) || "");
     if (!token) { context.res = json(401, { error: "no token", code: "NO_TOKEN" }); return; }
 
+    // TEMP diagnostic (key-gated): echo what the server actually received - alg/kid only, NEVER
+    // the signature. Reveals whether the Authorization token is altered in transit.
+    if (req.query && req.query.debug === "1") {
+      const dp = String(token).split(".");
+      const dh = dp.length >= 1 ? b64urlJson(dp[0]) : null;
+      context.res = json(200, {
+        debug: true, authPrefix: String(authz).slice(0, 14), tokenParts: dp.length,
+        recvAlg: dh && dh.alg, recvKid: dh && dh.kid, recvTyp: dh && dh.typ,
+        headerNames: Object.keys(req.headers || {}),
+      });
+      return;
+    }
+
     let claims;
     try { claims = await verifyToken(token); }
     catch (e) {
