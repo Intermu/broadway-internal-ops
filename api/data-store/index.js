@@ -4,7 +4,7 @@ const CONTAINER_NAME = "broadway-data";
 
 // SLOTS are types of data. Same set for every client.
 // Adding a slot = ship code. Adding a client = edit VALID_CLIENTS below.
-const VALID_SLOTS = ["revenue", "wo-snapshot-today", "wo-snapshot-previous", "workbook", "over30-history", "job-notes", "config", "checkin", "om-bonus", "wo-audit", "exception-queue", "o30-lines", "job-plans", "live-jobs", "job-divisions"];
+const VALID_SLOTS = ["revenue", "revenue-gp", "wo-snapshot-today", "wo-snapshot-previous", "workbook", "over30-history", "job-notes", "config", "checkin", "om-bonus", "wo-audit", "exception-queue", "o30-lines", "job-plans", "live-jobs", "job-divisions"];
 // "o30-lines": per-client Over-30 audit lines + board trend, WRITTEN by the userscript
 // connector via /api/wo-ingest (key-gated); the dashboard READS it here (AAD gate):
 //   { v:1, items:{ "<tracking>": { line, ts, by, prev:[{line,ts,by}×≤4] } },
@@ -27,14 +27,15 @@ const VALID_SLOTS = ["revenue", "wo-snapshot-today", "wo-snapshot-previous", "wo
 const VALID_CLIENTS = ["pilot"];
 
 // ── Role gating ──────────────────────────────────────────────────────────
-// Slots holding financial data (GP / revenue) require Operations Manager (L4)
-// or above to READ. Everything else stays at the broadway_employee gate that
-// the SWA route config already enforces. Server-side because the front-end /
-// route checks are convenience only - this is the real boundary.
-// NOTE: "revenue" is intentionally NOT in this list -- coordinators are meant
-// to read the monthly revenue numbers (approved by Mike, 2026-06), so it stays
-// at the broadway_employee gate. The "revenue-gp" GP lookup remains Operations
-// Manager (L4)+ only.
+// Slots holding GP data require Operations Manager (L4) or above for ALL access
+// (read, write, delete). Everything else stays at the broadway_employee gate the
+// SWA route config already enforces. Server-side because the front-end / route
+// checks are convenience only - this is the real boundary.
+// NOTE: "revenue" is intentionally NOT in this list -- coordinators are meant to
+// read the monthly revenue numbers (approved by Mike, 2026-06), so it stays at
+// the broadway_employee gate. "revenue-gp" (GP lookup) is L4+ only and IS in
+// VALID_SLOTS so this gate is reachable (previously it named a slot resolveTarget
+// rejected with 400 first, making the boundary dead code).
 const FINANCIAL_SLOTS = ["revenue-gp"];
 const ROLE_LEVELS = ["ops_coordinator", "lead_ops_coordinator", "ops_supervisor", "ops_manager", "dir_ops", "vp_ops"];
 const MIN_FINANCIAL_LEVEL = 4; // ops_manager
@@ -93,9 +94,13 @@ async function readBlob(container, name) {
     const dl = await blob.download();
     const text = await streamToString(dl.readableStreamBody);
     const data = JSON.parse(text);
-    const props = await blob.getProperties();
-    const metadata = props.metadata || {};
-    return { data, metadata, etag: props.etag, exists: true };
+    // Take content, metadata, and etag from the SAME download response. A separate
+    // getProperties() is a TOCTOU: a concurrent write landing between the two calls
+    // pairs the bytes we just read with a NEWER etag, and the caller's next If-Match
+    // write then passes against content it never saw and silently clobbers that write.
+    // job-notes has two concurrent writers (dashboard POST here + userscript via
+    // wo-ingest), so this is reachable. Mirrors wo-ingest / activity-log readLog.
+    return { data, metadata: dl.metadata || {}, etag: dl.etag, exists: true };
   } catch (err) {
     if (err.statusCode === 404) return { exists: false, data: null, metadata: null, etag: null };
     throw err;
@@ -174,8 +179,10 @@ module.exports = async function (context, req) {
           return;
         }
         const out = {};
+        const lvl = roleLevelFromReq(req);   // financial slots stay L4+ even for existence/metadata
         await Promise.all(
           VALID_SLOTS.map(async (slot) => {
+            if (FINANCIAL_SLOTS.includes(slot) && lvl < MIN_FINANCIAL_LEVEL) { out[slot] = { exists: false }; return; }
             const blob = container.getBlockBlobClient(blobName(params.client, slot));
             try {
               const props = await blob.getProperties();
@@ -202,12 +209,11 @@ module.exports = async function (context, req) {
     }
     const { client, slot, name: targetName } = resolved;
 
-    // Financial slots: require Operations Manager (L4)+ to READ. Fail closed.
-    if (req.method === "GET" && FINANCIAL_SLOTS.includes(slot)) {
-      if (roleLevelFromReq(req) < MIN_FINANCIAL_LEVEL) {
-        context.res = { status: 403, headers: { "Content-Type": "application/json" }, body: { error: "Insufficient role for financial data" } };
-        return;
-      }
+    // Financial slots: require Operations Manager (L4)+ for ALL access (read,
+    // write, and delete). Fail closed.
+    if (FINANCIAL_SLOTS.includes(slot) && roleLevelFromReq(req) < MIN_FINANCIAL_LEVEL) {
+      context.res = { status: 403, headers: { "Content-Type": "application/json" }, body: { error: "Insufficient role for financial data" } };
+      return;
     }
 
     if (req.method === "GET") {

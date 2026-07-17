@@ -1,4 +1,35 @@
-const Anthropic = require("@anthropic-ai/sdk");
+const https = require("https");
+
+// Anthropic Messages call over the `https` module (NOT the @anthropic-ai/sdk,
+// which does its HTTP via global fetch that the SWA runtime may not expose;
+// CLAUDE.md forbids fetch / HTTP libraries in Functions). Fixed host.
+function anthropicMessages(apiKey, body) {
+  return new Promise((resolve, reject) => {
+    const payload = JSON.stringify(body);
+    const req = https.request({
+      host: "api.anthropic.com",
+      path: "/v1/messages",
+      method: "POST",
+      headers: {
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+        "content-length": Buffer.byteLength(payload),
+      },
+      timeout: 60000,
+    }, (res) => {
+      let buf = "";
+      res.on("data", (c) => { buf += c; if (buf.length > 5000000) { req.destroy(); reject(new Error("anthropic response too large")); } });
+      res.on("end", () => {
+        let j = null; try { j = JSON.parse(buf); } catch (e) { /* leave null */ }
+        resolve({ status: res.statusCode, json: j, raw: buf });
+      });
+    });
+    req.on("timeout", () => { req.destroy(new Error("anthropic request timed out")); });
+    req.on("error", reject);
+    req.end(payload);
+  });
+}
 
 // Phase 2 schema inference. The agent calls this only when its static alias
 // map can't place a metric-critical column. We send the canonical fields that
@@ -73,13 +104,21 @@ module.exports = async function (context, req) {
       "\n\nFile headers with sample values:\n" +
       sampleLines;
 
-    const client = new Anthropic({ apiKey });
-    const msg = await client.messages.create({
+    const r = await anthropicMessages(apiKey, {
       model: process.env.INFER_SCHEMA_MODEL || process.env.GENERATE_MODEL || "claude-sonnet-4-6",
       max_tokens: 600,
       system: system,
       messages: [{ role: "user", content: user }],
     });
+    // Upstream failure degrades to Phase-1 (empty mapping), same as a parse failure -
+    // the agent re-validates every suggestion, so an empty result just means no
+    // auto-mapping this pass. Never 500 the caller over an inference blip.
+    if (r.status !== 200 || !r.json) {
+      context.log.warn("infer-schema: Anthropic API error", r.status, (r.raw || "").slice(0, 300));
+      context.res = { status: 200, headers: { "Content-Type": "application/json" }, body: { mappings: [] } };
+      return;
+    }
+    const msg = r.json;
 
     const outText = Array.isArray(msg.content)
       ? msg.content.filter(function (b) { return b && b.type === "text"; }).map(function (b) { return b.text; }).join("")
