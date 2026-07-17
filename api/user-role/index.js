@@ -1,4 +1,25 @@
 const crypto = require("crypto");
+const https = require("https");
+
+// HTTP via the `https` module (NOT global fetch - the SWA Functions runtime doesn't expose it;
+// every other api/ function uses `https` too). Resolves { status, json }.
+function httpsJson(method, urlStr, headers, body) {
+  return new Promise((resolve, reject) => {
+    let u;
+    try { u = new URL(urlStr); } catch (e) { reject(new Error("bad-url")); return; }
+    const payload = body ? (typeof body === "string" ? body : JSON.stringify(body)) : "";
+    const h = Object.assign({ "Accept": "application/json" }, headers || {});
+    if (payload) { h["Content-Type"] = h["Content-Type"] || "application/json"; h["Content-Length"] = Buffer.byteLength(payload); }
+    const req = https.request({ hostname: u.hostname, path: u.pathname + u.search, method: method, headers: h, timeout: 10000 }, (res) => {
+      let buf = "";
+      res.on("data", (c) => { buf += c; if (buf.length > 2000000) { req.destroy(); reject(new Error("resp-too-large")); } });
+      res.on("end", () => { let j = null; try { j = JSON.parse(buf); } catch (e) { /* leave null */ } resolve({ status: res.statusCode, json: j }); });
+    });
+    req.on("timeout", () => req.destroy(new Error("timeout")));
+    req.on("error", reject);
+    req.end(payload);
+  });
+}
 
 // Verifies the Umbrava Auth0 access token a userscript sends, then resolves the caller's
 // Umbrava ROLE - so role-based access levels can be TRULY enforced (the identity is proven by
@@ -49,9 +70,9 @@ async function getKey(kid) {
   if (jwks.byKid[kid]) return jwks.byKid[kid];
   if (Date.now() - jwks.fetchedAt < JWKS_MIN_REFETCH_MS && jwks.fetchedAt) return null;   // don't hammer on an unknown kid
   const url = ISS.replace(/\/?$/, "/") + ".well-known/jwks.json";
-  const res = await fetch(url);
-  if (!res.ok) throw new Error("jwks-fetch-" + res.status);
-  const data = await res.json();
+  const r = await httpsJson("GET", url);
+  if (r.status !== 200 || !r.json) throw new Error("jwks-fetch-" + r.status);
+  const data = r.json;
   const byKid = {};
   (data.keys || []).forEach((k) => { if (k.kid) byKid[k.kid] = k; });
   jwks = { byKid, fetchedAt: Date.now() };
@@ -97,13 +118,9 @@ const ROLE_CANDIDATES = [
 ];
 const roleCache = {};   // sub -> { role, exp }
 async function gql(bearer, query) {
-  const res = await fetch(GRAPHQL_URL, {
-    method: "POST",
-    headers: { "Authorization": "Bearer " + bearer, "Content-Type": "application/json" },
-    body: JSON.stringify({ query }),
-  });
-  if (!res.ok) return null;
-  return res.json().catch(() => null);
+  const r = await httpsJson("POST", GRAPHQL_URL, { "Authorization": "Bearer " + bearer }, { query });
+  if (r.status < 200 || r.status >= 300) return null;
+  return r.json;
 }
 async function fetchRole(bearer, sub, log) {
   const c = roleCache[sub];
