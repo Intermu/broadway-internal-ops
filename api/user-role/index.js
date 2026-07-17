@@ -161,7 +161,7 @@ module.exports = async function (context, req) {
     try { role = await fetchRole(token, sub, context.log); if (role) roleSource = "umbrava"; }
     catch (e) { /* identity still valid; role stays null */ }
 
-    context.res = json(200, { ok: true, email: email, sub: sub, tenantId: tenantId, role: role, roleSource: roleSource });
+    context.res = json(200, { ok: true, email: email, sub: sub, tenantId: tenantId, role: role, roleSource: roleSource, roleQuery: ROLE_QUERY ? ROLE_QUERY[0] : null });
   } catch (err) {
     context.log && context.log.error && context.log.error("user-role error:", String((err && err.message) || err));
     context.res = json(500, { error: "user-role failed" });
