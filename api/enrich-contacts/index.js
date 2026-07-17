@@ -1,4 +1,5 @@
 const https = require("https");
+const crypto = require("crypto");
 const { BlobServiceClient } = require("@azure/storage-blob");
 
 // ZoomInfo contact enrichment for the BWN Bid-Out userscript. Given companies discovered
@@ -11,8 +12,11 @@ const { BlobServiceClient } = require("@azure/storage-blob");
 // app setting WO_INGEST_KEY). Fails CLOSED: 503 if the key is unset, 403 on a bad key.
 //
 // DEPLOY-DARK: a second gate returns 503 "awaiting ZoomInfo credentials" until the ZoomInfo
-// app settings exist (ZI_USERNAME + ZI_PASSWORD - an API user on Broadway's existing
-// ZoomInfo contract; legacy Enterprise API, base https://api.zoominfo.com).
+// app settings exist (Enterprise API on Broadway's contract, base https://api.zoominfo.com).
+// TWO credential shapes, auto-detected (PKI preferred):
+//   PKI (Admin Portal -> Integrations -> API & Webhooks -> Generate New Token):
+//        ZI_USERNAME + ZI_CLIENT_ID + ZI_PRIVATE_KEY  (RS256 client assertion -> access token)
+//   Legacy service account: ZI_USERNAME + ZI_PASSWORD  (POST username/password -> access token)
 //
 // CREDIT PROTECTION (ZoomInfo bills a credit per enriched record, from the pool SHARED with
 // the sales team): (1) results cached 30 days in a blob so repeat bid-outs in the same area
@@ -44,10 +48,12 @@ function json(status, body) {
 // ---- ZoomInfo HTTP (fixed host, JSON in/out) --------------------------------
 function ziPost(path, headers, body) {
   return new Promise((resolve, reject) => {
-    const payload = JSON.stringify(body || {});
+    const payload = body ? JSON.stringify(body) : "";   // PKI /authenticate sends NO body (auth is in the Bearer header)
+    const base = { "Accept": "application/json" };
+    if (payload) { base["Content-Type"] = "application/json"; base["Content-Length"] = Buffer.byteLength(payload); }
     const req = https.request({
       host: ZI_HOST, path, method: "POST",
-      headers: Object.assign({ "Content-Type": "application/json", "Content-Length": Buffer.byteLength(payload) }, headers || {}),
+      headers: Object.assign(base, headers || {}),
       timeout: ZI_TIMEOUT_MS,
     }, (res) => {
       let buf = "";
@@ -63,14 +69,48 @@ function ziPost(path, headers, body) {
   });
 }
 
+// Is a usable ZoomInfo credential configured? PKI (client id + private key) OR the legacy
+// username/password service account. Both need ZI_USERNAME.
+function ziConfigured() {
+  return !!(process.env.ZI_USERNAME && (process.env.ZI_PASSWORD || (process.env.ZI_CLIENT_ID && process.env.ZI_PRIVATE_KEY)));
+}
+function ziPrivateKey() {
+  // App-setting values often arrive with escaped "\n" instead of real newlines - normalize so
+  // the PEM parses.
+  return (process.env.ZI_PRIVATE_KEY || "").replace(/\\n/g, "\n");
+}
+function b64url(input) {
+  return Buffer.from(input).toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+// Build the short-lived (5 min) client assertion JWT that PKI auth exchanges for an access
+// token. Claims + RS256 signing MIRROR ZoomInfo's official auth client exactly.
+function buildClientJwt(username, clientId, privateKey) {
+  const now = Math.floor(Date.now() / 1000);
+  const header = { alg: "RS256", typ: "JWT" };
+  const claims = { aud: "enterprise_api", iss: "api-client@zoominfo.com", iat: now, exp: now + 300, client_id: clientId, username: username };
+  const signingInput = b64url(JSON.stringify(header)) + "." + b64url(JSON.stringify(claims));
+  const sig = crypto.createSign("RSA-SHA256").update(signingInput).sign(privateKey);
+  return signingInput + "." + b64url(sig);
+}
+
 // Module-cached JWT (ZoomInfo tokens last ~60 min; refresh at 50).
 let tokenCache = { jwt: null, exp: 0 };
 async function ziToken() {
   if (tokenCache.jwt && Date.now() < tokenCache.exp) return tokenCache.jwt;
-  const r = await ziPost("/authenticate", {}, {
-    username: process.env.ZI_USERNAME,
-    password: process.env.ZI_PASSWORD,
-  });
+  const clientId = process.env.ZI_CLIENT_ID;
+  const privateKey = ziPrivateKey();
+  let r;
+  if (clientId && privateKey) {
+    // PKI: sign a client JWT with the private key, exchange it (Bearer header, no body) for the
+    // access token. This is the credential the ZoomInfo Admin Portal issues (Generate New Token).
+    let clientJwt;
+    try { clientJwt = buildClientJwt(process.env.ZI_USERNAME, clientId, privateKey); }
+    catch (e) { throw new Error("zi-auth-failed:badkey"); }   // malformed PEM
+    r = await ziPost("/authenticate", { Authorization: "Bearer " + clientJwt }, null);
+  } else {
+    // Legacy username/password service account.
+    r = await ziPost("/authenticate", {}, { username: process.env.ZI_USERNAME, password: process.env.ZI_PASSWORD });
+  }
   const jwt = r.json && (r.json.jwt || r.json.token);
   if (r.status !== 200 || !jwt) throw new Error("zi-auth-failed:" + r.status);
   tokenCache = { jwt, exp: Date.now() + 50 * 60 * 1000 };
@@ -207,7 +247,7 @@ module.exports = async function (context, req) {
     if (!key || key !== expected) { context.res = json(403, { error: "unauthorized" }); return; }
 
     // Deploy-dark gate: no ZoomInfo credentials yet -> tell the client cleanly.
-    if (!process.env.ZI_USERNAME || !process.env.ZI_PASSWORD) {
+    if (!ziConfigured()) {
       context.res = json(503, { error: "awaiting ZoomInfo credentials", code: "ZI_UNCONFIGURED" });
       return;
     }
@@ -287,14 +327,14 @@ module.exports = async function (context, req) {
     }
 
     if (authFailed) {
-      context.res = json(502, { error: "ZoomInfo auth failed - check ZI_USERNAME/ZI_PASSWORD", code: "ZI_AUTH", results, spentToday, dailyCap });
+      context.res = json(502, { error: "ZoomInfo auth failed - check the ZoomInfo credentials (ZI_CLIENT_ID+ZI_PRIVATE_KEY or ZI_PASSWORD)", code: "ZI_AUTH", results, spentToday, dailyCap });
       return;
     }
     context.res = json(200, { ok: true, results, spentToday, dailyCap, skippedForCap, skippedForTime });
   } catch (err) {
     const msg = String((err && err.message) || err);
     if (msg.indexOf("zi-auth-failed") === 0 || msg.indexOf("zi-unauthorized") === 0) {
-      context.res = json(502, { error: "ZoomInfo auth failed - check ZI_USERNAME/ZI_PASSWORD", code: "ZI_AUTH" });
+      context.res = json(502, { error: "ZoomInfo auth failed - check the ZoomInfo credentials (ZI_CLIENT_ID+ZI_PRIVATE_KEY or ZI_PASSWORD)", code: "ZI_AUTH" });
       return;
     }
     context.log && context.log.error && context.log.error("enrich-contacts error:", msg);
