@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com 'unsafe-inline'; style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; base-uri 'self'; form-action 'none'; frame-ancestors 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; base-uri 'self'; form-action 'none'; frame-ancestors 'none';">
 <title>Broadway National - Coordinator Check-In</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3CclipPath id='b'%3E%3Crect width='512' height='512' rx='104'/%3E%3C/clipPath%3E%3Cg clip-path='url(%23b)'%3E%3Crect width='512' height='512' fill='%2339DE26'/%3E%3Crect width='150' height='512' fill='%23191919'/%3E%3Crect x='150' y='92' width='74' height='366' rx='16' fill='%23ffffff'/%3E%3Ccircle cx='300' cy='330' r='140' fill='%23ffffff'/%3E%3Ccircle cx='302' cy='336' r='82' fill='%2339DE26'/%3E%3C/g%3E%3C/svg%3E">
 <!--
@@ -18,8 +18,6 @@
   and are CONFIG-driven (CFG.over30Days / CFG.under15Days) so the rule is a one-line change if
   Analytics computes them on a different basis.
 -->
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"
         integrity="sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw"
         crossorigin="anonymous" referrerpolicy="no-referrer"></script>
@@ -95,8 +93,8 @@
   --shadow-sm: 0 1px 3px rgba(0,0,0,.06),0 1px 2px rgba(0,0,0,.08);
   --shadow-md: 0 4px 14px rgba(0,0,0,.10),0 2px 4px rgba(0,0,0,.08);
   /* ── TYPOGRAPHY ─────────────────────────────────────────── */
-  --font-sans: 'DM Sans',system-ui,-apple-system,sans-serif;
-  --font-mono: 'DM Mono','Cascadia Code',ui-monospace,monospace;
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   /* ── TRANSITIONS ────────────────────────────────────────── */
   --transition-fast: 0.12s ease;
   --transition-base: 0.20s ease;
@@ -144,13 +142,13 @@ html[data-theme="dark"] .pri2-other{border-color:var(--color-success-border);}
   --green-d: var(--color-primary, #1a5f3e);
   --green-dd: var(--color-primary-strong, #0d3d26);
   --radius: var(--radius-lg, 9px);
-  --sans: var(--font-sans, 'DM Sans', system-ui, sans-serif);
-  --mono: var(--font-mono, 'DM Mono', ui-monospace, monospace);
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 *{box-sizing:border-box}
 body{margin:0;font-family:var(--sans);background:var(--bg);color:var(--ink);font-size:14px}
 .app-header{background:linear-gradient(135deg,var(--green-d),var(--green-dd));color:#fff;padding:14px 22px;display:flex;align-items:center;gap:14px}
-.app-header h1{font-size:17px;font-weight:700;margin:0;letter-spacing:.2px}
+.app-header h1{font-size:17px;font-weight:600;margin:0;letter-spacing:.2px}
 .app-header .logo{font-family:var(--mono);font-weight:600;background:rgba(255,255,255,.12);padding:4px 10px;border-radius:6px;font-size:13px}
 .app-header .sub{margin-left:auto;font-size:12px;opacity:.85;font-family:var(--mono)}
 #healthBanner{padding:8px 22px;font-size:12px;font-family:var(--mono);border-bottom:1px solid var(--border)}
@@ -159,26 +157,26 @@ body{margin:0;font-family:var(--sans);background:var(--bg);color:var(--ink);font
 #healthBanner.err{background:#fde8e8;color:#9b1c1c}
 .layout{display:flex;min-height:calc(100vh - 96px)}
 .sidebar{width:248px;flex:0 0 248px;background:var(--card);border-right:1px solid var(--border);padding:14px 10px;overflow-y:auto}
-.sb-title{font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);font-weight:700;margin:14px 8px 6px}
+.sb-title{font-size:10px;text-transform:none;letter-spacing:normal;color:var(--muted);font-weight:600;margin:14px 8px 6px}
 .nav-btn,.coord-btn{display:flex;justify-content:space-between;align-items:center;width:100%;text-align:left;background:none;border:1px solid transparent;border-radius:7px;padding:8px 10px;margin-bottom:3px;cursor:pointer;font-family:var(--sans);font-size:13px;color:var(--ink)}
 .nav-btn:hover,.coord-btn:hover{background:#f1f5f9}
 .nav-btn.active,.coord-btn.active{background:#e8f5ee;border-color:#bfe6cf;color:var(--green-d);font-weight:600}
 .coord-btn .cb-jobs{font-size:11px;color:var(--muted);font-family:var(--mono)}
 .main{flex:1;padding:20px 24px;overflow-x:auto}
-.page-title{font-size:20px;font-weight:700;margin-bottom:2px}
+.page-title{font-size:20px;font-weight:600;margin-bottom:2px}
 .page-sub{font-size:12px;color:var(--muted);font-family:var(--mono);margin-bottom:16px}
 .card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:16px;overflow:hidden}
 .card-header{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--border)}
-.card-header h3{font-size:14px;margin:0;font-weight:700}
+.card-header h3{font-size:14px;margin:0;font-weight:600}
 .card-header .ch-meta{font-size:11px;color:var(--muted)}
 .card-body{padding:14px 16px}
 .kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px}
 .kpi-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px}
-.kc-label{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:700}
-.kc-value{font-size:24px;font-weight:700;font-family:var(--mono);margin:4px 0}
+.kc-label{font-size:10px;text-transform:none;letter-spacing:normal;color:var(--muted);font-weight:600}
+.kc-value{font-size:24px;font-weight:600;font-family:var(--mono);margin:4px 0}
 .kc-sub{font-size:11px;color:var(--muted)}
 .data-table{width:100%;border-collapse:collapse;font-size:12.5px}
-.data-table th{text-align:left;padding:8px 10px;background:#f8fafc;border-bottom:1px solid var(--border);font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);white-space:nowrap}
+.data-table th{text-align:left;padding:8px 10px;background:#f8fafc;border-bottom:1px solid var(--border);font-size:11px;text-transform:none;letter-spacing:normal;color:var(--muted);white-space:nowrap}
 .data-table td{padding:8px 10px;border-bottom:1px solid #f1f5f9;vertical-align:top}
 .data-table tr:hover td{background:#fafcff}
 .num{font-family:var(--mono)}
@@ -192,14 +190,14 @@ body{margin:0;font-family:var(--sans);background:var(--bg);color:var(--ink);font
 .tab-pane{display:none}.tab-pane.active{display:block}
 .scorecard{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
 .kpi-tile{border:1px solid var(--border);border-radius:var(--radius);padding:14px;background:var(--card)}
-.kpi-tile .t-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
-.kpi-tile .t-val{font-size:26px;font-weight:700;font-family:var(--mono);margin:6px 0 2px}
+.kpi-tile .t-label{font-size:11px;font-weight:600;color:var(--muted);text-transform:none;letter-spacing:normal}
+.kpi-tile .t-val{font-size:26px;font-weight:600;font-family:var(--mono);margin:6px 0 2px}
 .kpi-tile .t-meta{font-size:11px;color:var(--muted)}
 .kpi-tile .t-bar{height:6px;border-radius:4px;background:#eef2f5;margin-top:8px;overflow:hidden}
 .kpi-tile .t-bar span{display:block;height:100%}
 .form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
 .form-row-3{grid-template-columns:1fr 1fr 1fr}
-.form-group label{display:block;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px}
+.form-group label{display:block;font-size:11px;font-weight:600;color:var(--muted);text-transform:none;letter-spacing:normal;margin-bottom:4px}
 .form-group input,.form-group textarea,.form-group select{width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:7px;font-family:var(--sans);font-size:13px}
 .form-group input.num,.bonus-input{font-family:var(--mono)}
 .radio-group{display:flex;gap:6px;flex-wrap:wrap}
@@ -213,14 +211,14 @@ body{margin:0;font-family:var(--sans);background:var(--bg);color:var(--ink);font
 .section-note{font-size:12px;background:#f8fafc;border:1px solid var(--border);border-radius:7px;padding:10px 12px;margin-bottom:12px}
 .bonus-table{width:100%;border-collapse:collapse;font-size:13px}
 .bonus-table td,.bonus-table th{padding:7px 10px;border-bottom:1px solid #f1f5f9}
-.bonus-table th{font-size:11px;text-transform:uppercase;color:var(--muted);text-align:left}
+.bonus-table th{font-size:11px;text-transform:none;color:var(--muted);text-align:left}
 .bonus-table input{width:120px;padding:5px 8px;border:1.5px solid var(--border);border-radius:6px;font-family:var(--mono);font-size:12px}
 .bonus-guide{font-size:11px;color:var(--muted);font-family:var(--mono);line-height:1.55;padding:10px 16px;border-top:1px solid #f1f5f9}
-.bonus-guide .step-payout{font-weight:700;color:var(--green-d)}
+.bonus-guide .step-payout{font-weight:600;color:var(--green-d)}
 .elig-note{font-size:11px;color:var(--muted);line-height:1.7;margin-top:14px;padding:12px 16px;background:#f8fafc;border:1px solid var(--border);border-radius:9px}
 .auto-cell{font-family:var(--mono);color:var(--green-d);font-weight:600}
 .payout-final{background:linear-gradient(135deg,var(--green-d),var(--green-dd));color:#fff;border-radius:var(--radius);padding:18px 22px;display:flex;align-items:center;justify-content:space-between;margin-top:8px}
-.payout-final .pf-val{font-size:30px;font-weight:700;font-family:var(--mono)}
+.payout-final .pf-val{font-size:30px;font-weight:600;font-family:var(--mono)}
 .toast{position:fixed;bottom:20px;right:20px;background:var(--green-d);color:#fff;padding:12px 18px;border-radius:8px;font-size:13px;opacity:0;transform:translateY(8px);transition:.25s;pointer-events:none;z-index:50}
 .toast.show{opacity:1;transform:translateY(0)}
 .empty{text-align:center;padding:40px;color:var(--muted)}
@@ -848,7 +846,7 @@ function renderBonus(){
     <div class="card"><div class="card-header"><h3>Estimated Bonus Summary</h3></div><div class="card-body" style="padding:0;overflow-x:auto">
       <table class="bonus-table"><thead><tr><th>Component</th><th>Weight</th><th>Payout %</th><th>Bonus $</th></tr></thead><tbody id="b-summary"></tbody></table>
     </div></div>
-    <div class="payout-final"><div><div style="font-size:12px;opacity:.85;text-transform:uppercase;letter-spacing:.5px">Estimated Final Bonus</div><div style="font-size:11px;opacity:.8" id="b-vs-target"></div></div><div class="pf-val" id="b-final">-</div></div>
+    <div class="payout-final"><div><div style="font-size:12px;opacity:.85;text-transform:none;letter-spacing:normal">Estimated Final Bonus</div><div style="font-size:11px;opacity:.8" id="b-vs-target"></div></div><div class="pf-val" id="b-final">-</div></div>
     <div style="display:flex;gap:10px;margin-top:14px"><button class="btn btn-save" onclick="saveBonus()">Save Assumptions</button></div>
     <div class="section-note" style="margin-top:14px">Current YTD throughput and team GP$/revenue are derived from the live <code>revenue</code> blob (${esc(REV_META.period||'')}). Prior-year baselines, monthly headcount, the SSS plan, MBOs, and the company estimate are your inputs and persist to the data store. Final multiplier is set by finance at year-end.</div>
     <div class="elig-note"><strong>⚠️ Eligibility reminders:</strong> Must be actively employed at payout · Not in bottom 10% on performance &amp; culture · Not on active PIP · GP$ per Head must not decline &gt;20% YOY · Bonuses paid within 90 days of year-end close</div>`;
