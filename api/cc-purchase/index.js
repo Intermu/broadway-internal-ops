@@ -56,6 +56,10 @@ const FIELDS = [
   { key: "LineItemDescription", max: 4000 },
   { key: "PurchaseLink", max: 2000, url: true },
   { key: "WorkOrderNumber", max: 64 },
+  // v2 receipt: the modal uploads the file via /api/cc-receipt and passes back the resulting
+  // link here. Forwarded to the flow, which writes the Receipt HYPERLINK cell. Optional -
+  // harmless to the flow until that cell mapping is added (unknown body props are ignored).
+  { key: "ReceiptLink", max: 2000, url: true },
 ];
 
 // Best-effort in-memory throttle. Azure Functions reuses the process between invocations, so
