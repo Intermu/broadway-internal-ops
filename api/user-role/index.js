@@ -163,11 +163,11 @@ module.exports = async function (context, req) {
     const token = bodyTok || (m ? m[1] : "");
     const tokenSource = bodyTok ? "body" : (m ? "auth-header" : "none");
 
-    // TEMP diagnostic: echo header alg/kid/typ + the CLAIMS the pre-checks test (iss/aud/exp),
-    // NEVER the signature. Runs BEFORE the key gate so an in-flight header-rewrite (extension /
-    // proxy swapping Authorization) can be detected from any context: without the key it echoes
-    // ONLY what the caller itself sent (its own token's header/claims) - nothing secret. The
-    // expected values + match verdicts stay key-gated.
+    // Diagnostic echo (permanent - this is what exposed the SWA edge Authorization overwrite):
+    // echoes header alg/kid/typ + the CLAIMS the pre-checks test (iss/aud/exp), NEVER the
+    // signature. Runs BEFORE the key gate so an in-flight header rewrite can be detected from
+    // any context: without the key it echoes ONLY what the caller itself sent (its own token's
+    // header/claims) - nothing secret. Expected values + match verdicts stay key-gated.
     if (req.query && req.query.debug === "1") {
       const dp = String(token).split(".");
       const dh = dp.length >= 1 ? b64urlJson(dp[0]) : null;
