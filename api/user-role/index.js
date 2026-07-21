@@ -149,17 +149,18 @@ module.exports = async function (context, req) {
     const expected = process.env.WO_INGEST_KEY;
     if (!expected) { context.res = json(503, { error: "not configured" }); return; }
     const key = req.headers && (req.headers["x-bwn-key"] || req.headers["X-BWN-KEY"]);
-    if (!key || key !== expected) { context.res = json(403, { error: "unauthorized" }); return; }
+    const keyed = !!key && key === expected;
 
-    // The real identity: the Umbrava access token.
+    // The Umbrava access token (may be empty on keyless debug probes).
     const authz = req.headers && (req.headers["authorization"] || req.headers["Authorization"] || "");
     const m = /^Bearer\s+(.+)$/i.exec(String(authz).trim());
     const token = m ? m[1] : ((req.body && req.body.token) || "");
-    if (!token) { context.res = json(401, { error: "no token", code: "NO_TOKEN" }); return; }
 
-    // TEMP diagnostic (key-gated): echo header alg/kid/typ + the CLAIMS the pre-checks test
-    // (iss/aud/exp, plus what this deployment expects), NEVER the signature. Claims are the
-    // caller's own token contents, so echoing them back to the key-holding caller leaks nothing.
+    // TEMP diagnostic: echo header alg/kid/typ + the CLAIMS the pre-checks test (iss/aud/exp),
+    // NEVER the signature. Runs BEFORE the key gate so an in-flight header-rewrite (extension /
+    // proxy swapping Authorization) can be detected from any context: without the key it echoes
+    // ONLY what the caller itself sent (its own token's header/claims) - nothing secret. The
+    // expected values + match verdicts stay key-gated.
     if (req.query && req.query.debug === "1") {
       const dp = String(token).split(".");
       const dh = dp.length >= 1 ? b64urlJson(dp[0]) : null;
@@ -167,16 +168,22 @@ module.exports = async function (context, req) {
       const dAuds = dc ? (Array.isArray(dc.aud) ? dc.aud : [dc.aud]).map(normUrl) : [];
       let dExp = null;   // guarded: a crafted out-of-range exp must not 500 the debug echo
       try { if (dc && typeof dc.exp === "number" && isFinite(dc.exp)) dExp = new Date(dc.exp * 1000).toISOString(); } catch (e) { }
-      context.res = json(200, {
-        debug: true, authPrefix: String(authz).slice(0, 14), tokenParts: dp.length,
+      const echo = {
+        debug: true, keyed: keyed, authPrefix: String(authz).slice(0, 14), tokenParts: dp.length,
         recvAlg: dh && dh.alg, recvKid: dh && dh.kid, recvTyp: dh && dh.typ,
         recvIss: (dc && dc.iss) || null, recvAud: (dc && dc.aud) || null, recvExp: dExp,
-        expectedIss: ISSUERS, expectedAud: AUDS,
-        issMatch: !!dc && ISSUERS.indexOf(normUrl(dc.iss)) !== -1,
-        audMatch: dAuds.some(function (a) { return AUDS.indexOf(a) !== -1; }),
-      });
+      };
+      if (keyed) {
+        echo.expectedIss = ISSUERS; echo.expectedAud = AUDS;
+        echo.issMatch = !!dc && ISSUERS.indexOf(normUrl(dc.iss)) !== -1;
+        echo.audMatch = dAuds.some(function (a) { return AUDS.indexOf(a) !== -1; });
+      }
+      context.res = json(200, echo);
       return;
     }
+
+    if (!keyed) { context.res = json(403, { error: "unauthorized" }); return; }
+    if (!token) { context.res = json(401, { error: "no token", code: "NO_TOKEN" }); return; }
 
     // A JWT is dot-separated base64url. Anything else is malformed AND unsafe to forward in an
     // outbound Authorization header (a body-supplied token with an embedded newline would make
