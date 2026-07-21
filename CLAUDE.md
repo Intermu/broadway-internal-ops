@@ -103,10 +103,11 @@ The AI userscript's connector POSTs to the SWA over `GM_xmlhttpRequest` (the one
 Umbrava Auth0 access token; the SWA resolves the caller's Umbrava identity/role (`api/user-role`).
 
 **Umbrava token verification [RECONCILED 2026-07-21]:** Umbrava access tokens are **RS256** (kid
-present). Earlier "HS256 Umbrava token" observations were a misread: the Auth0 cache slot the
-userscripts read transiently holds an **Azure Functions/SCM runtime token** (iss
-`*.scm.azurewebsites.net`, HS256), and first-match key picking sent it to the SWA; AI v1.37.2 /
-Bid-Out v0.21.2 pick by issuer content instead. The SWA never verifies the signature locally
+present). Every "HS256 Umbrava token" observation was a misread of the SAME root cause: the SWA
+edge REPLACES the Authorization header with its own platform token (see Environment limits), so
+the function only ever saw the platform's `*.scm.azurewebsites.net` token, never the client's.
+Fix: the userscript sends the Umbrava token in the JSON body (`{ token }`, AI v1.37.4+) and
+`api/user-role` reads body-first (`9b90bb4`). The SWA never verifies the signature locally
 (no JWKS, no shared secret), which makes it rotation-proof regardless. Instead
 it PROVES the token by POSTing it to Umbrava's own GraphQL current-user query: if Umbrava returns
 the caller's user, the token is valid, and identity (email in `https://umbrava.com/email`, tenant
@@ -137,6 +138,11 @@ was never the implementation.)
 
 ## Environment limits (always assume)
 
+- **The SWA edge OVERWRITES the `Authorization` header** on every `/api/*` request with its own
+  freshly-minted platform token (iss `*.scm.azurewebsites.net`, HS256) before it reaches the
+  managed Function - even when the caller sent no Authorization at all (proven 2026-07-21 via
+  probe-issuer curls). A client bearer token can NEVER be read from the Authorization header in
+  api/ Functions - carry caller tokens in the JSON body (`{ token: ... }`) or a custom header.
 - The SWA-managed Node runtime does NOT reliably expose global `fetch()` -> Functions use the
   **`https`** module.
 - Userscripts run inside a third-party SPA: **ES5-safe**, egress only via `GM_xmlhttpRequest`
