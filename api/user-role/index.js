@@ -151,10 +151,17 @@ module.exports = async function (context, req) {
     const key = req.headers && (req.headers["x-bwn-key"] || req.headers["X-BWN-KEY"]);
     const keyed = !!key && key === expected;
 
-    // The Umbrava access token (may be empty on keyless debug probes).
+    // The Umbrava access token - BODY FIRST. The SWA edge OVERWRITES the Authorization header
+    // with its own freshly-minted platform token (iss *.scm.azurewebsites.net, HS256) when
+    // proxying /api/* to the managed Functions backend - verified 2026-07-21 by curling a
+    // probe.local dummy bearer and receiving an SCM token instead. A client bearer can NEVER
+    // reach this code, so clients send the token in the JSON body ({ token: ... }); the
+    // header parse remains only as a fallback for non-proxied contexts.
     const authz = req.headers && (req.headers["authorization"] || req.headers["Authorization"] || "");
     const m = /^Bearer\s+(.+)$/i.exec(String(authz).trim());
-    const token = m ? m[1] : ((req.body && req.body.token) || "");
+    const bodyTok = String((req.body && req.body.token) || "");
+    const token = bodyTok || (m ? m[1] : "");
+    const tokenSource = bodyTok ? "body" : (m ? "auth-header" : "none");
 
     // TEMP diagnostic: echo header alg/kid/typ + the CLAIMS the pre-checks test (iss/aud/exp),
     // NEVER the signature. Runs BEFORE the key gate so an in-flight header-rewrite (extension /
@@ -169,7 +176,8 @@ module.exports = async function (context, req) {
       let dExp = null;   // guarded: a crafted out-of-range exp must not 500 the debug echo
       try { if (dc && typeof dc.exp === "number" && isFinite(dc.exp)) dExp = new Date(dc.exp * 1000).toISOString(); } catch (e) { }
       const echo = {
-        debug: true, keyed: keyed, authPrefix: String(authz).slice(0, 14), tokenParts: dp.length,
+        debug: true, keyed: keyed, tokenSource: tokenSource,
+        authPrefix: String(authz).slice(0, 14), tokenParts: dp.length,
         recvAlg: dh && dh.alg, recvKid: dh && dh.kid, recvTyp: dh && dh.typ,
         recvIss: (dc && dc.iss) || null, recvAud: (dc && dc.aud) || null, recvExp: dExp,
       };
