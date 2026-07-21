@@ -102,21 +102,32 @@ The AI userscript's connector POSTs to the SWA over `GM_xmlhttpRequest` (the one
 `WO_INGEST_KEY`), queued and eventually-consistent. Per-user auth: the userscript sends the
 Umbrava Auth0 access token; the SWA resolves the caller's Umbrava identity/role (`api/user-role`).
 
-**Umbrava token verification [RECONCILED]:** Umbrava access tokens are **HS256 (symmetric)** - a
-third party cannot verify the signature without Umbrava's secret, so the SWA does NOT verify it
-locally and does NOT use JWKS/RS256. Instead it PROVES the token by POSTing it to Umbrava's own
-GraphQL current-user query: if Umbrava returns the caller's user, the token is valid, and identity
-(email in `https://umbrava.com/email`, tenant in `https://umbrava.com/tenantid`, `sub`) is read
-from the token's own claims. (Earlier docs said "JWKS / RS256" - that was never the implementation.)
+**Umbrava token verification [RECONCILED 2026-07-21]:** Umbrava ROTATES its token signing - HS256
+(symmetric, no kid) observed early 2026-07, RS256 (kid present) observed 2026-07-21. The SWA never
+verifies the signature locally (no JWKS, no shared secret), which makes it rotation-proof. Instead
+it PROVES the token by POSTing it to Umbrava's own GraphQL current-user query: if Umbrava returns
+the caller's user, the token is valid, and identity (email in `https://umbrava.com/email`, tenant
+in `https://umbrava.com/tenantid`, `sub`) is read from the token's own claims. The current-user
+query is schema-verified (2026-07-21): `{ me { id tenantId profile { id role { id name } } } }` -
+there is NO top-level `currentUser`/`viewer`/`currentMember`, bare `user` requires `id: ID!`, and
+the role is an object at `me.profile.role` with a free-text `name`. Issuer/audience pre-checks
+accept BOTH Umbrava issuers (`https://login.umbrava.com/` and `https://umbrava.us.auth0.com/`),
+trimmed + trailing-slash tolerant; the CSV app settings `UMBRAVA_ISS` / `UMBRAVA_AUD` EXTEND the
+baked-in defaults, never replace them. Umbrava wraps GraphQL auth failures as **HTTP 500 +
+errors[].extensions.code UNAUTHENTICATED** (verified live with a garbage token) - classify vouch
+responses by error content first, HTTP status second. (Earlier docs said "JWKS / RS256" - that
+was never the implementation.)
 
 ## Key external systems
 
-- **Umbrava**: Auth0 (`iss https://login.umbrava.com/`; `aud` is an ARRAY that includes
+- **Umbrava**: Auth0 (`iss https://login.umbrava.com/`, though the raw tenant domain
+  `https://umbrava.us.auth0.com/` has also been observed; `aud` is an ARRAY that includes
   `https://app.umbrava.com/api`; email in the namespaced claim `https://umbrava.com/email`;
-  tenant in `https://umbrava.com/tenantid`; **HS256**, proven via the GraphQL current-user, see
-  above). GraphQL at `/api/graphql`. Free-text member roles (e.g. "National Account Manager",
-  "Operations Coordinator"). A typed Umbrava read-API MCP is connected on the Claude side - use it
-  to VERIFY selector / field shapes.
+  tenant in `https://umbrava.com/tenantid`; **signing alg rotates** - HS256 seen early 2026-07,
+  RS256 seen 2026-07-21 - proven via the GraphQL current-user vouch, see above). GraphQL at
+  `/api/graphql`. Free-text member roles (e.g. "National Account Manager", "Operations
+  Coordinator"). A typed Umbrava read-API MCP is connected on the Claude side - use it to VERIFY
+  selector / field shapes.
 - **Anthropic** (drafts, agent audit), **Google Places** (vendor leads), **ZoomInfo** (contact
   enrichment - shared credit pool), **Microsoft Graph** (bid sending).
 
