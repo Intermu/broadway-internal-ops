@@ -24,6 +24,10 @@
     "allowedRoles": ["anonymous"]
   },
   {
+    "route": "/api/cc-purchase",
+    "allowedRoles": ["anonymous"]
+  },
+  {
     "route": "/api/scrape-contacts",
     "allowedRoles": ["anonymous"]
   },
