@@ -117,7 +117,10 @@ const VOUCH_QUERY = "{ me { id tenantId profile { id role { id name } } } }";
 async function umbravaVouch(bearer) {
   let r;
   try { r = await httpsJson("POST", GRAPHQL_URL, { "Authorization": "Bearer " + bearer }, { query: VOUCH_QUERY }); }
-  catch (e) { throw new Error("upstream"); }
+  catch (e) {
+    // bad-url = an unparseable UMBRAVA_GRAPHQL app setting - a config fault, not an outage.
+    throw new Error(String((e && e.message) || "") === "bad-url" ? "config" : "upstream");
+  }
   const me = r.json && r.json.data && r.json.data.me;
   if (me && me.id) {
     const role = (me.profile && me.profile.role && me.profile.role.name) || null;
@@ -172,6 +175,13 @@ module.exports = async function (context, req) {
       return;
     }
 
+    // A JWT is dot-separated base64url. Anything else is malformed AND unsafe to forward in an
+    // outbound Authorization header (a body-supplied token with an embedded newline would make
+    // https.request throw ERR_INVALID_CHAR and misread a client fault as an Umbrava outage).
+    if (!/^[A-Za-z0-9_.-]+$/.test(token)) {
+      context.res = json(401, { error: "invalid token", code: "malformed" }); return;
+    }
+
     let claims;
     try { claims = decodeClaims(token); }
     catch (e) {
@@ -184,8 +194,11 @@ module.exports = async function (context, req) {
     let vouch;
     try { vouch = await umbravaVouch(token); }
     catch (e) {
-      const drift = String((e && e.message) || "") === "vouch-query";
-      context.res = json(503, { error: "identity provider unavailable", code: drift ? "VOUCH_QUERY_DRIFT" : "UMBRAVA_UNAVAILABLE" });
+      const why = String((e && e.message) || "");
+      context.res = json(503, {
+        error: "identity provider unavailable",
+        code: why === "vouch-query" ? "VOUCH_QUERY_DRIFT" : why === "config" ? "BAD_UMBRAVA_GRAPHQL_URL" : "UMBRAVA_UNAVAILABLE",
+      });
       return;
     }
     if (!vouch.ok) { context.res = json(401, { error: "token not accepted by Umbrava", code: "not-vouched" }); return; }
