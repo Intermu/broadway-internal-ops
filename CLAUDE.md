@@ -102,9 +102,12 @@ The AI userscript's connector POSTs to the SWA over `GM_xmlhttpRequest` (the one
 `WO_INGEST_KEY`), queued and eventually-consistent. Per-user auth: the userscript sends the
 Umbrava Auth0 access token; the SWA resolves the caller's Umbrava identity/role (`api/user-role`).
 
-**Umbrava token verification [RECONCILED 2026-07-21]:** Umbrava ROTATES its token signing - HS256
-(symmetric, no kid) observed early 2026-07, RS256 (kid present) observed 2026-07-21. The SWA never
-verifies the signature locally (no JWKS, no shared secret), which makes it rotation-proof. Instead
+**Umbrava token verification [RECONCILED 2026-07-21]:** Umbrava access tokens are **RS256** (kid
+present). Earlier "HS256 Umbrava token" observations were a misread: the Auth0 cache slot the
+userscripts read transiently holds an **Azure Functions/SCM runtime token** (iss
+`*.scm.azurewebsites.net`, HS256), and first-match key picking sent it to the SWA; AI v1.37.2 /
+Bid-Out v0.21.2 pick by issuer content instead. The SWA never verifies the signature locally
+(no JWKS, no shared secret), which makes it rotation-proof regardless. Instead
 it PROVES the token by POSTing it to Umbrava's own GraphQL current-user query: if Umbrava returns
 the caller's user, the token is valid, and identity (email in `https://umbrava.com/email`, tenant
 in `https://umbrava.com/tenantid`, `sub`) is read from the token's own claims. The current-user
@@ -123,8 +126,9 @@ was never the implementation.)
 - **Umbrava**: Auth0 (`iss https://login.umbrava.com/`, though the raw tenant domain
   `https://umbrava.us.auth0.com/` has also been observed; `aud` is an ARRAY that includes
   `https://app.umbrava.com/api`; email in the namespaced claim `https://umbrava.com/email`;
-  tenant in `https://umbrava.com/tenantid`; **signing alg rotates** - HS256 seen early 2026-07,
-  RS256 seen 2026-07-21 - proven via the GraphQL current-user vouch, see above). GraphQL at
+  tenant in `https://umbrava.com/tenantid`; **RS256** - the HS256 sightings were a foreign
+  Azure SCM token in the same cache slot - proven via the GraphQL current-user vouch, see
+  above). GraphQL at
   `/api/graphql`. Free-text member roles (e.g. "National Account Manager", "Operations
   Coordinator"). A typed Umbrava read-API MCP is connected on the Claude side - use it to VERIFY
   selector / field shapes.

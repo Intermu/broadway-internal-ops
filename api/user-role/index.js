@@ -23,9 +23,12 @@ function httpsJson(method, urlStr, headers, body) {
 // Resolves the caller's Umbrava ROLE from the Umbrava access token a userscript sends, so
 // role-based access can be TRULY enforced.
 //
-// Umbrava ROTATES its token signing: HS256 (symmetric, no kid) observed early 2026-07, RS256
-// (kid present) observed 2026-07-21. We never verify the signature locally (no JWKS, no shared
-// secret - Hard Rule 2), which also makes this function alg-rotation-proof. Instead the token is
+// Umbrava access tokens are RS256 (kid present). The HS256 tokens this endpoint received on
+// 2026-07-19/21 were NOT Umbrava's: they were an Azure Functions/SCM runtime token (iss
+// *.scm.azurewebsites.net) that Umbrava's SPA transiently parks in the same Auth0 cache slot
+// the userscripts read - a client-side token-pick bug, fixed in AI v1.37.2 / Bid-Out v0.21.2
+// (pick by issuer content, not first key). We STILL never verify the signature locally (no
+// JWKS, no shared secret - Hard Rule 2), which keeps this alg-rotation-proof. Instead the token is
 // PROVEN by asking Umbrava's OWN API to identify the caller: we POST the token to Umbrava's
 // GraphQL current-user query. If Umbrava returns the caller's user, the token is valid (Umbrava
 // verified the signature it owns); a forged / tampered / expired token is rejected by Umbrava
