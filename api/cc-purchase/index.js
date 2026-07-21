@@ -1,5 +1,6 @@
 const https = require("https");
 const { URL } = require("url");
+const AUTH = require("../shared/umbrava-auth.js");
 
 // CC Purchase proxy for the BWN userscript connector (forms-to-userscripts pilot).
 //
@@ -18,14 +19,23 @@ const { URL } = require("url");
 // Credit Card Tracker.xlsx (tbl_Card_Log) + emails Mike, identically to the old Forms flow.
 //
 //   POST /api/cc-purchase   header x-bwn-key: <WO_INGEST_KEY>
-//        body { actor?, Date, CardUser, CardUsed, SupplierName, Subtotal, TaxAmount,
-//               TotalAmount, LineItemDescription, PurchaseLink, WorkOrderNumber }
+//        body { userToken, actor?, Date, CardUser, CardUsed, SupplierName, Subtotal,
+//               TaxAmount, TotalAmount, LineItemDescription, PurchaseLink, WorkOrderNumber }
 //        -> { ok:true } on a 2xx from the flow
 //
-// Fails CLOSED: 503 if the key or the flow URL is not configured, 403 on a missing/wrong key
-// (NOT 401 - staticwebapp.config.json's responseOverrides rewrite 401s into a login redirect,
-// which a client chasing redirects would misread as a 200 success), 400 on invalid input,
-// 502 if the flow itself rejects the forward.
+// ROLE ENFORCEMENT (2026-07-21): logging a card purchase is a Supervisor+ action (Mike's
+// scope call - coordinators REQUEST via the separate CC Authorization form; management buys
+// and logs). The caller therefore sends their Umbrava access token as `userToken` in the
+// BODY (the SWA edge overwrites the Authorization header - repo CLAUDE.md); the shared
+// module vouches it with Umbrava's own current-user API and the request is rejected with
+// 403 ROLE_REQUIRED unless the vouched role ranks supervisor or above. The verified email
+// (not the client-supplied `actor`) is what gets logged + rate-limited.
+//
+// Fails CLOSED: 503 if the key or the flow URL is not configured (or Umbrava is unreachable
+// for the vouch), 403 on a missing/wrong key or an insufficient role (NOT 401 for the key -
+// staticwebapp.config.json's responseOverrides rewrite 401s into a login redirect, which a
+// client chasing redirects would misread as a 200 success; token faults do return 401 with
+// a stable `code`), 400 on invalid input, 502 if the flow itself rejects the forward.
 
 // CORS is belt-and-suspenders: Tampermonkey's GM_xmlhttpRequest bypasses same-origin (that's
 // what @connect authorizes), so these aren't strictly needed - but they scope any normal-fetch
@@ -124,12 +134,24 @@ module.exports = async function (context, req) {
     const key = req.headers && (req.headers["x-bwn-key"] || req.headers["X-BWN-KEY"]);
     if (!key || key !== expected) { context.res = json(403, { error: "unauthorized" }); return; }
 
+    // -- Identity + role gate (the REAL boundary; the key above is coarse) -------
+    // Vouched with Umbrava via the shared module; requires supervisor+ (see header).
+    const auth = await AUTH.resolveUmbravaUser(req);
+    if (!auth.ok) { context.res = json(auth.status, auth.body); return; }
+    if (auth.user.rank < AUTH.RANK.SUPERVISOR) {
+      context.log.warn("cc-purchase role denied", auth.user.email, auth.user.role);
+      context.res = json(403, AUTH.roleDeniedBody(auth.user, AUTH.RANK.SUPERVISOR));
+      return;
+    }
+
     // -- Flow URL must be present (fail closed) ---------------------------------
     const flowUrl = process.env.CC_PURCHASE_FLOW_URL;
     if (!flowUrl) { context.res = json(503, { error: "flow endpoint not configured" }); return; }
 
     const body = (req.body && typeof req.body === "object") ? req.body : {};
-    const actor = body.actor ? String(body.actor).slice(0, 128) : "unknown";
+    // The VERIFIED identity is the actor. Never the client-supplied `actor` (spoofable) -
+    // a vouched token without an email claim logs as its sub instead.
+    const actor = auth.user.email || auth.user.sub || "verified-unknown";
     if (rateLimited(actor)) { context.res = json(429, { error: "rate limited; slow down" }); return; }
 
     // -- Validate + whitelist the 10 fields -------------------------------------

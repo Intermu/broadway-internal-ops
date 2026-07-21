@@ -1,4 +1,5 @@
 const https = require("https");
+const AUTH = require("../shared/umbrava-auth.js");
 
 // CC Receipt upload for the BWN CC-Purchase modal (forms-to-userscripts pilot, v2 receipt).
 //
@@ -10,12 +11,19 @@ const https = require("https");
 // POST as `ReceiptLink`, and the flow writes the Receipt HYPERLINK cell.
 //
 //   POST /api/cc-receipt   header x-bwn-key: <WO_INGEST_KEY>
-//        body { actor?, filename, contentType, dataB64, woNumber? }
+//        body { userToken, actor?, filename, contentType, dataB64, woNumber? }
 //        -> { ok:true, link, name }
 //
+// ROLE ENFORCEMENT (2026-07-21): same supervisor+ gate as api/cc-purchase (this endpoint is
+// step 1 of the same Log-CC-Purchase action, and it writes into the shared SharePoint
+// receipts folder). Umbrava token in the BODY as `userToken` (the SWA edge overwrites the
+// Authorization header), vouched via ../shared/umbrava-auth.js; 403 ROLE_REQUIRED below
+// supervisor rank. The verified email is the logged actor.
+//
 // Fails CLOSED: 503 if the key, the Graph app registration, or CC_RECEIPT_FOLDER_URL is not
-// configured; 403 on a missing/wrong key; 400 on an invalid/oversized/unsupported file; 502
-// if Graph rejects the upload.
+// configured (or Umbrava is unreachable for the vouch); 403 on a missing/wrong key or an
+// insufficient role; 401 (stable `code`) on token faults; 400 on an invalid/oversized/
+// unsupported file; 502 if Graph rejects the upload.
 //
 // REQUIRES a Graph APPLICATION permission the send-bid app does NOT already have:
 //   Files.ReadWrite.All (Application) + admin consent on the AAD app registration named by
@@ -112,6 +120,15 @@ module.exports = async function (context, req) {
     const key = req.headers && (req.headers["x-bwn-key"] || req.headers["X-BWN-KEY"]);
     if (!key || key !== expected) { context.res = json(403, { error: "unauthorized" }); return; }
 
+    // -- Identity + role gate (supervisor+, same boundary as cc-purchase) --------
+    const auth = await AUTH.resolveUmbravaUser(req);
+    if (!auth.ok) { context.res = json(auth.status, auth.body); return; }
+    if (auth.user.rank < AUTH.RANK.SUPERVISOR) {
+      context.log.warn("cc-receipt role denied", auth.user.email, auth.user.role);
+      context.res = json(403, AUTH.roleDeniedBody(auth.user, AUTH.RANK.SUPERVISOR));
+      return;
+    }
+
     // -- Graph app + target folder must be configured (fail closed) --------------
     const tenant = process.env.BID_TENANT_ID || process.env.AAD_TENANT_ID;
     const clientId = process.env.BID_CLIENT_ID || process.env.AAD_CLIENT_ID;
@@ -121,7 +138,9 @@ module.exports = async function (context, req) {
     if (!folderUrl) { context.res = json(503, { error: "receipt folder not configured" }); return; }
 
     const body = (req.body && typeof req.body === "object") ? req.body : {};
-    const actor = body.actor ? String(body.actor).slice(0, 128) : "unknown";
+    // The VERIFIED identity is the actor. Never the client-supplied `actor` (spoofable) -
+    // a vouched token without an email claim logs as its sub instead.
+    const actor = auth.user.email || auth.user.sub || "verified-unknown";
     const contentType = String(body.contentType || "").toLowerCase().trim();
     if (OK_TYPES.indexOf(contentType) === -1) { context.res = json(400, { error: "unsupported file type (allowed: images or PDF)" }); return; }
     let bytes;

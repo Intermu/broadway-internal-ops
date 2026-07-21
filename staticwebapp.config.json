@@ -48,6 +48,10 @@
     "allowedRoles": ["anonymous"]
   },
   {
+    "route": "/api/hvac-benchmark",
+    "allowedRoles": ["anonymous"]
+  },
+  {
     "route": "/api/send-bid",
     "allowedRoles": ["anonymous"]
   },

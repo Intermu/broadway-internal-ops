@@ -1,6 +1,7 @@
 const https = require("https");
 const crypto = require("crypto");
 const { BlobServiceClient } = require("@azure/storage-blob");
+const AUTH = require("../shared/umbrava-auth.js");
 
 // Graph send for the BWN Bid-Out userscript (Phase B - one-click styled RFP email).
 //
@@ -11,16 +12,28 @@ const { BlobServiceClient } = require("@azure/storage-blob");
 // mailbox - it lands in their Sent Items and replies come back to them.
 //
 //   POST /api/send-bid   header x-bwn-key: <WO_INGEST_KEY>
-//        body { from, bcc:[emails], subject, html, tracking? }
+//        body { userToken, from, bcc:[emails], subject, html, tracking? }
 //        → { ok:true, sent:N }
 //
 // Reached ANONYMOUSLY at the SWA route layer and gated by the SAME shared function key as
-// wo-ingest/scrape-contacts (x-bwn-key vs WO_INGEST_KEY). Fails CLOSED at every layer:
+// wo-ingest/scrape-contacts (x-bwn-key vs WO_INGEST_KEY), PLUS - since 2026-07-21, added
+// while the endpoint is still deploy-dark - a VOUCHED Umbrava identity: the caller sends
+// their Umbrava access token as `userToken` in the body (the SWA edge overwrites the
+// Authorization header) and ../shared/umbrava-auth.js proves it with Umbrava's own
+// current-user query + the Broadway tenant gate. Sending external email is the suite's most
+// sensitive action; a leaked shared key alone can no longer drive it. Any staff rank may
+// send (Bid-Out is a coordinator tool) - the point is a real, named identity in the audit
+// log, not a ladder gate. The vouched email is recorded alongside `from`; a mismatch is
+// logged (not rejected: shared/team mailboxes on the from-allowlist stay legitimate).
+//
+// Fails CLOSED at every layer:
 //   503 - WO_INGEST_KEY unset, or the Graph app registration isn't configured yet
 //         (client id/secret absent - from BID_CLIENT_ID/BID_CLIENT_SECRET or, for the
 //         reuse-the-existing-app path, the SWA's AAD_CLIENT_ID/AAD_CLIENT_SECRET - or no
-//         tenant, or NEITHER BID_FROM_ALLOWED nor BID_FROM_DOMAIN set → endpoint stays dark);
-//   403 - wrong key, or `from` not permitted by the allowlist/allowed-domain.
+//         tenant, or NEITHER BID_FROM_ALLOWED nor BID_FROM_DOMAIN set → endpoint stays dark;
+//         also if Umbrava is unreachable for the identity vouch);
+//   403 - wrong key, or `from` not permitted by the allowlist/allowed-domain;
+//   401 - missing/invalid/unvouched userToken (stable `code`, e.g. NO_TOKEN / not-vouched).
 //
 // Abuse limits (this endpoint can EMAIL EXTERNAL PARTIES, so it is deliberately narrow):
 //   • `from` must match the server-side allowlist - either an exact address in
@@ -292,6 +305,13 @@ module.exports = async function (context, req) {
     // single-BCC send rather than emitting a dead/blocked pixel.
     const perVendor = /^https:\/\//i.test(TRACK_BASE);
 
+    // ── Identity gate (vouched Umbrava caller; see header) ──────────────────────
+    // After the config gates so the endpoint stays a plain 503 while deploy-dark (no point
+    // vouching for a send that cannot happen), before any validation or budget work.
+    const auth = await AUTH.resolveUmbravaUser(req);
+    if (!auth.ok) { context.res = json(auth.status, auth.body); return; }
+    const vouchedBy = auth.user.email || auth.user.sub || "";
+
     // ── Validate the request ────────────────────────────────────────────────────
     const body = req.body || {};
     const from = String(body.from || "").trim().toLowerCase();
@@ -405,7 +425,11 @@ module.exports = async function (context, req) {
         context.res = json(429, { error: "daily send ceiling reached (" + DAILY_RECIPIENTS + " recipients/day)" });
         return;
       }
-      const entry = { id: entryId, ts: new Date().toISOString(), from, bcc: bcc.length, subject: subject.slice(0, 120), tracking, idem: idem, done: false, tracked: perVendor };
+      // `by` = the VOUCHED Umbrava identity (who actually drove the send); `from` = the
+      // mailbox it goes out as. Usually equal; a mismatch is legitimate for shared/team
+      // mailboxes on the allowlist, so it is recorded, not rejected.
+      if (vouchedBy && vouchedBy !== from) context.log.warn("send-bid from/identity mismatch", vouchedBy, from);
+      const entry = { id: entryId, ts: new Date().toISOString(), from, by: vouchedBy, bcc: bcc.length, subject: subject.slice(0, 120), tracking, idem: idem, done: false, tracked: perVendor };
       // Retention by DATE, then a count backstop. Pruning by date first guarantees TODAY's
       // entries are never evicted, so sentToday can't under-count and let the ceiling be
       // bypassed (a pure count cap could drop today's sends behind a wall of old/voided ones).

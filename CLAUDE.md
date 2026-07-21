@@ -122,6 +122,26 @@ errors[].extensions.code UNAUTHENTICATED** (verified live with a garbage token) 
 responses by error content first, HTTP status second. (Earlier docs said "JWKS / RS256" - that
 was never the implementation.)
 
+**Role enforcement (2026-07-21):** the vouch chain lives ONCE in `api/shared/umbrava-auth.js`
+(token extraction body-first, iss/aud/exp pre-checks, Umbrava vouch, case-insensitive
+fail-closed tenant gate) plus a role-rank ladder mapping Umbrava's free-text role names to
+ranks 1 staff / 2 lead / 3 supervisor / 4 manager / 5 director (exact map built from the live
+member directory; keyword fallback checked to never over-rank a current title; extend or
+override via the CSV app setting `UMBRAVA_ROLE_RANKS`, e.g. `Some Role=3`). Consumers:
+`user-role` (returns rank/tier for client UX gating), `cc-purchase` + `cc-receipt` (REQUIRE
+rank >= 3 supervisor - body `userToken`, 403 `ROLE_REQUIRED` below), `send-bid` (REQUIRES a
+vouched identity, any rank; vouched email recorded as `by` in the audit entry),
+`hvac-benchmark` (its old self-contained identity code read Authorization-header-first and
+used guessed vouch queries, so it could never work through the SWA - now on the shared module;
+reads are POST `?action=read` because a GET cannot carry the body token; the route also had to
+be added to staticwebapp.config.json's anonymous list). Test suite:
+`scripts/test-role-auth.js` (bundled node; real handlers, stubbed `https` + storage-blob).
+Client half: AI userscript v1.39.0 passes rank/tier on the `bwn:role` bus event +
+`localStorage['bwn:role:last']`; bwn-cc-purchase v0.5.0 shows its launcher only at rank >= 3
+(server still the boundary); bwn-bid-out v0.22.0 sends body tokens to hvac-benchmark and
+send-bid. Deploy ordering: userscripts BEFORE the SWA push - the new cc endpoints reject
+tokenless (pre-0.5.0) submissions.
+
 ## Key external systems
 
 - **Umbrava**: Auth0 (`iss https://login.umbrava.com/`, though the raw tenant domain
