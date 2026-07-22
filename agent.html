@@ -1402,6 +1402,7 @@ let _woLastFilename = '';
 // upload by maybeInferSchema() and consulted first.
 const WO_ALIASES = {
   "Job ID": ["Source Job #","Job ID"],
+  "WO #": ["WO #","WO#","Work Order #"],
   "Status": ["Status"],
   "City": ["City"],
   "State": ["State"],
@@ -1562,6 +1563,10 @@ function processData(raw,fname){
       // path reaches parity with the xlsx path. Additive: not emitted to the workbook
       // sheet (OPS_COLS is fixed), only serialized into the wo-dataset rows.
       "Total Vendor NTE":parseFloat(String(getField(r,"Total Vendor NTE")||0).replace(/[$,]/g,""))||0,
+      // Umbrava work-order number (audit "WO #" col). Carried so the workbook Job ID
+      // hyperlinks resolve to /work-orders/<WO#> (the route is keyed on the WO number,
+      // NOT the Source Job # that populates the visible Job ID cell).
+      "WO #":String(getField(r,"WO #")||"").trim(),
       "WO Date":fmtDate(getField(r,"WO Date")),
       "First Trip Date":fmtDate(getField(r,"First Trip Date")),
       "Escalation Priority":String(getField(r,"Escalation Priority")||"").trim(),
@@ -2403,11 +2408,22 @@ async function generateExcel(opts){
     // (which contain spaces) and aggregate cells are skipped, so nothing is
     // mis-linked. Overwriting a table cell's value post-addTable follows the same
     // pattern the Raw Data G:J formulas already use.
-    function woUrl(id){
-      const digits=String(id).replace(/\D/g,"");
+    // The link TARGET is the Umbrava work-order number (audit "WO #" col), NOT the
+    // Source Job # that fills the visible Job ID cell - the /work-orders/<num> route
+    // is keyed on the WO number. Map each padded Job ID to its row's WO # digits so
+    // the cell keeps showing the Job ID while the hyperlink resolves the right WO.
+    // A row with no usable WO # is left unlinked (a wrong link is worse than none).
+    function woUrl(woRaw){
+      const digits=String(woRaw==null?"":woRaw).replace(/\D/g,"");
       return digits.length>=3?`https://app.umbrava.com/work-orders/${digits}`:null;
     }
+    const jobIdToWoUrl={};
+    (d.df||[]).forEach(r=>{
+      const url=woUrl(r["WO #"]);
+      if(url) jobIdToWoUrl[String(r["Job ID"]).trim()]=url;
+    });
     const LINK_FONT={name:'Arial',size:9,color:{argb:'FF1A5F3E'},underline:true};
+    let _linked=0,_noWo=0;
     wb.worksheets.forEach(ws=>{
       const jidCols=new Set();
       ws.eachRow({includeEmpty:false},row=>{
@@ -2419,13 +2435,15 @@ async function generateExcel(opts){
           const cell=row.getCell(col);const v=cell.value;
           if(v==null||v==="Job ID"||typeof v==="object")return;
           const sv=String(v);if(/\s/.test(sv))return;
-          const url=woUrl(sv);if(!url)return;
+          const url=jobIdToWoUrl[sv.trim()];
+          if(!url){_noWo++;return;}
           cell.value={text:sv,hyperlink:url};
           cell.font=LINK_FONT;
+          _linked++;
         });
       });
     });
-    log("✅ Job ID cells linked to Umbrava");
+    log(`✅ Job ID cells linked to Umbrava by WO # (${_linked} linked${_noWo?`, ${_noWo} skipped - no WO #`:""})`);
 
     // ── Download ─────────────────────────────────────────────────────────────
     const buffer=await wb.xlsx.writeBuffer();
