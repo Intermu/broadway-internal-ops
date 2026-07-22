@@ -4726,24 +4726,14 @@ function _injectWbHealth(mc){
   mc.insertAdjacentHTML("afterbegin", wbHealthHtml(window._wbHealth));
 }
 
-function handleFile(file) {
-  if(!file) return;
-  setDashState('processing');
-  const reader = new FileReader();
-  reader.onload = e => {
-    try {
-      LAST_RAW_BUFFER = e.target.result;
-      const wb = XLSX.read(e.target.result, {type:'binary',cellDates:true});
-      // Find the data sheet - support both "Raw Data" (Ops workbook) and any sheet
-      // starting with "WO Audit" (Audit sheet). Fall back to first sheet.
-      let sheetName = wb.SheetNames.find(n => n === 'Raw Data')
-                   || wb.SheetNames.find(n => n.startsWith('WO Audit'))
-                   || wb.SheetNames[0];
-      if(!sheetName) { setDashState('error', "This file doesn't have any sheets we can read", "Try re-exporting from the Ops Agent"); return; }
-      LAST_SHEET_NAME = sheetName;
-      const raw = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], {defval:'',raw:false});
-      CURRENT_FILE = file.name;
-      JOBS = raw.map(r=>{
+// Map source rows -> JOBS. Consumed by BOTH the xlsx upload path (handleFile, rows
+// from the workbook "Raw Data"/"WO Audit" sheet) and the JSON auto-load path
+// (autoLoadWorkbook, rows from the wo-dataset slot = the Ops Agent's normalized df).
+// getCol is alias-tolerant so the two column vocabularies both resolve: the sheet
+// uses "Aged (Days)"/"Time in Status (hrs.)"/"Status Category", the df uses the
+// shorter "Aged"/"Status Hrs"/"Status" - both are listed.
+function rowsToJobs(raw){
+  return (raw||[]).map(r=>{
         const ids = bnIds(r);
         // Approved Amount: the Ops Agent pre-computes Approved_Amount (placeholders already
         // zeroed by its formula) - trust that column when present. Only when falling back to a
@@ -4776,8 +4766,8 @@ function handleFile(file) {
           coordinator: String(getCol(r,'Assigned To')||'').trim(),
           status: String(getCol(r,'Status Category','Status')||'').trim(),
           amount: round2(amt),
-          aged: parseInt(getCol(r,'Aged (Days)','# Days'))||0,
-          statusHrs: parseFloat(getCol(r,'Time in Status (hrs.)','Status Hrs.','Status (hrs.)'))||0,
+          aged: parseInt(getCol(r,'Aged (Days)','# Days','Aged'))||0,
+          statusHrs: parseFloat(getCol(r,'Time in Status (hrs.)','Status Hrs.','Status (hrs.)','Status Hrs'))||0,
           risk: String(getCol(r,'Risk Flag')||'OK').trim(),
           fm: String(getCol(r,'FM')||'').trim(),
           location: String(getCol(r,'Location','Location #')||'').trim(),
@@ -4802,14 +4792,70 @@ function handleFile(file) {
           expectedCompletion: parseExcelDate(getCol(r,'Expected Completion Date','Expected Completion'))
         };
       }).filter(j=>j.jobId);
-      buildAlias(JOBS);
-      migrateAuthoredKeys();
-      loadLiveJobs();   // overlay any live userscript-pushed facts over the fresh workbook
-      window._wbHealth = buildWbHealth(raw, sheetName, file.name, JOBS.length);
-      // Apply any mgmt-notes edits persisted in this session
-      applyEditsToJobs();
-      // Capture Drilldown Note history (archives prior status notes that changed this upload)
-      captureStatusHistory();
+}
+
+// Shared post-parse tail for BOTH load paths (xlsx upload + wo-dataset JSON auto-load).
+// JOBS and KPI_METRICS/KPI_PERIOD/YTD_TABLE must already be set by the caller; this
+// wires the alias index, live overlays, health, session edits, report date, and drives
+// the UI/render/snapshot. healthRaw/healthSheet feed buildWbHealth (the source rows +
+// a label); on the JSON path pass the dataset rows and its date.
+function finishIngest(fileName, reportDate, healthRaw, healthSheet){
+  CURRENT_FILE = fileName;
+  buildAlias(JOBS);
+  migrateAuthoredKeys();
+  loadLiveJobs();   // overlay any live userscript-pushed facts over the fresh data
+  window._wbHealth = buildWbHealth(healthRaw||[], healthSheet||'', fileName, JOBS.length);
+  applyEditsToJobs();          // re-apply any mgmt-notes edits persisted this session
+  captureStatusHistory();      // archive prior status notes that changed this upload
+  // Machine-readable copies for the over-30 history system: snapshots key on the AUDIT
+  // date (not the day the tool is opened), and only real uploads save.
+  window._reportDate = reportDate;
+  window._realData = true;
+  window._o30History = null;   // force trend re-fetch against fresh data
+  const longDate = reportDate.toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+  const shortDate = reportDate.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'2-digit',year:'numeric'});
+  const slot = document.getElementById('slotCurr');
+  if(slot){
+    slot.className = 'upload-slot has-data';
+    // fileName is user-controlled (upload filename / dataset filename) and gets baked
+    // into the saved snapshot via saveDashboard's slotCurr.innerHTML capture. Escape
+    // here so a maliciously named file cannot inject when the snapshot is opened.
+    slot.innerHTML=`<div class="us-label">✅ Loaded File</div><div class="us-file">${escapeHtml(fileName)}</div><div style="font-size:10px;color:var(--muted);">${escapeHtml(shortDate)} · ${JOBS.length} jobs</div><button class="us-swap" onclick="event.stopPropagation();document.getElementById('fileInput').click();" title="Swap to a different file">↻ Swap</button>`;
+  }
+  const rdl = document.getElementById('reportDateLabel'); if(rdl) rdl.textContent=longDate;
+  const badge = document.getElementById('dataModeBadge');
+  if(badge){ badge.className = 'data-mode-badge real'; badge.textContent = '✅ Real Data'; }
+  setDashState('success', fileName, `${shortDate} · ${JOBS.length} jobs · loaded just now`);
+  initCounts(); render(currentView);
+  _applyInitialView();
+  toast(`✅ Loaded ${JOBS.length} jobs from ${fileName}`);
+  saveOver30Snapshot(); // fire-and-forget: upsert this audit date into blob history
+  // GLOBAL SEARCH BRIDGE: a hub query may have arrived before the auto-load finished
+  // (and rendered a stale "No matches") - replay it now.
+  if(document.documentElement.classList.contains('embedded')){
+    const gi=document.getElementById('gsearch-input');
+    if(gi && gi.value.trim()) _gsearchRun(gi.value);
+  }
+}
+
+function handleFile(file) {
+  if(!file) return;
+  setDashState('processing');
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      LAST_RAW_BUFFER = e.target.result;
+      const wb = XLSX.read(e.target.result, {type:'binary',cellDates:true});
+      // Find the data sheet - support both "Raw Data" (Ops workbook) and any sheet
+      // starting with "WO Audit" (Audit sheet). Fall back to first sheet.
+      let sheetName = wb.SheetNames.find(n => n === 'Raw Data')
+                   || wb.SheetNames.find(n => n.startsWith('WO Audit'))
+                   || wb.SheetNames[0];
+      if(!sheetName) { setDashState('error', "This file doesn't have any sheets we can read", "Try re-exporting from the Ops Agent"); return; }
+      LAST_SHEET_NAME = sheetName;
+      const raw = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], {defval:'',raw:false});
+      CURRENT_FILE = file.name;
+      JOBS = rowsToJobs(raw);
       // Try to load YTD from KPI sheet
       if(wb.SheetNames.includes('KPI Dashboard')) {
         const kpiRaw = XLSX.utils.sheet_to_json(wb.Sheets['KPI Dashboard'], {header:1,defval:''});
@@ -4843,38 +4889,11 @@ function handleFile(file) {
         });
         if(newYtd.length && !window._ytdFromRevenue) YTD_TABLE=newYtd;
       }
-      // Derive the report date from the workbook itself (sheet name carries
-      // the audit date, e.g. "WO Audit 04.23.26"), then filename, else today.
+      // Derive the report date from the workbook itself (sheet name carries the audit
+      // date, e.g. "WO Audit 04.23.26"), then filename, else today. The shared tail
+      // (finishIngest) then runs identically for the xlsx and JSON (wo-dataset) paths.
       const reportDate = extractReportDate(sheetName, file.name);
-      // Machine-readable copies for the over-30 history system: snapshots key on
-      // the AUDIT date (not the day the tool is opened), and only real uploads save.
-      window._reportDate = reportDate;
-      window._realData = true;
-      window._o30History = null; // force trend re-fetch against fresh data
-      const longDate = reportDate.toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
-      const shortDate = reportDate.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'2-digit',year:'numeric'});
-      document.getElementById('slotCurr').className = 'upload-slot has-data';
-      // file.name is user-controlled (the upload's filename) and gets baked into
-      // the saved snapshot via saveDashboard's slotCurr.innerHTML capture. Escape
-      // here so a maliciously named .xlsx ("<img onerror>.xlsx") cannot inject
-      // anything when the snapshot is opened by anyone in the org.
-      document.getElementById('slotCurr').innerHTML=`<div class="us-label">✅ Loaded File</div><div class="us-file">${escapeHtml(file.name)}</div><div style="font-size:10px;color:var(--muted);">${escapeHtml(shortDate)} · ${JOBS.length} jobs</div><button class="us-swap" onclick="event.stopPropagation();document.getElementById('fileInput').click();" title="Swap to a different file">↻ Swap</button>`;
-      document.getElementById('reportDateLabel').textContent=longDate;
-      // Update data mode badge to "real" (legacy hidden element kept for compat with saveDashboard)
-      const badge = document.getElementById('dataModeBadge');
-      if(badge){ badge.className = 'data-mode-badge real'; badge.textContent = '✅ Real Data'; }
-      // Drive the new upload panel UI: success state + auto-collapse to slim strip
-      setDashState('success', file.name, `${shortDate} · ${JOBS.length} jobs · loaded just now`);
-      initCounts(); render(currentView);
-      _applyInitialView();
-      toast(`✅ Loaded ${JOBS.length} jobs from ${file.name}`);
-      saveOver30Snapshot(); // fire-and-forget: upsert this audit date into blob history
-      // GLOBAL SEARCH BRIDGE: a hub query may have arrived before the workbook
-      // auto-load finished (and rendered a stale "No matches") - replay it now.
-      if(document.documentElement.classList.contains('embedded')){
-        const gi=document.getElementById('gsearch-input');
-        if(gi && gi.value.trim()) _gsearchRun(gi.value);
-      }
+      finishIngest(file.name, reportDate, raw, sheetName);
     } catch(err) {
       setDashState('error', "Couldn't read this workbook", err.message || "Unexpected error parsing the file");
       toast('❌ '+err.message);
@@ -6059,6 +6078,40 @@ function base64ToFile(b64, filename){
 // store (Azure Blob via /api/data-store).
 // If found, run it through the same handleFile pipeline as a manual upload.
 (async function autoLoadWorkbook(){
+  // ── Contract flip: prefer the canonical wo-dataset JSON slot ──────────────
+  // The Ops Agent writes a normalized dataset (rows + KPI scorecard + YTD) to the
+  // "wo-dataset" slot. Read that directly instead of downloading and re-parsing the
+  // xlsx blob. Fall back to the workbook blob (below) whenever the dataset is absent,
+  // empty, or unreadable, so this can never be worse than the old path. Agent +
+  // Dashboard ship in one push, so the dataset is present once this is live.
+  try{
+    const ds = await bnClientGet("wo-dataset");
+    if(ds && ds.exists && ds.data && Array.isArray(ds.data.rows) && ds.data.rows.length){
+      const data = ds.data;
+      JOBS = rowsToJobs(data.rows);
+      if(JOBS.length){
+        if(data.kpi && data.kpi.metrics && Object.keys(data.kpi.metrics).length){
+          KPI_METRICS = data.kpi.metrics;
+          if(data.kpi.period) KPI_PERIOD = data.kpi.period;
+        }
+        // Revenue-slot YTD still wins (matches the xlsx path's !_ytdFromRevenue guard).
+        if(Array.isArray(data.ytd) && data.ytd.length && !window._ytdFromRevenue) YTD_TABLE = data.ytd;
+        const filename = data.filename || "Broadway_Unified_Ops.xlsx";
+        let reportDate = new Date();
+        if(data.dateStr){ const d = new Date(data.dateStr + "T00:00:00"); if(!isNaN(d)) reportDate = d; }
+        const sub = document.getElementById("panel-sub");
+        if(sub){
+          const gen = (ds.metadata && ds.metadata.generatedAt) || data.generatedAt;
+          const when = gen ? new Date(gen).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}) : "recently";
+          sub.innerHTML = `<span style="color:#16a34a;font-weight:500;">● Synced from data store</span> · generated ${when}`;
+        }
+        finishIngest(filename, reportDate, data.rows, data.dateStr || "wo-dataset");
+        return;
+      }
+    }
+  }catch(err){
+    console.warn("wo-dataset auto-load failed; falling back to workbook blob:", err);
+  }
   const result = await bnClientGet("workbook");
   if(!result || !result.exists || !result.data || !result.data.base64) return;
   try{

@@ -622,6 +622,34 @@ async function bnClientDelete(slot){
 // trend record, which needs calendar days to build up. Failures only log - the
 // existing workbook sync is unaffected.
 const SNAP_HISTORY_MAX_DAYS=60;
+// KPI scorecard for the canonical dataset - mirrors the Excel "KPI Dashboard" sheet
+// rows (label -> {goal,target,current,status}) plus the YTD period, so the Dashboard's
+// JSON load path can set KPI_METRICS/KPI_PERIOD identically to the xlsx parse.
+function buildKpiMetrics(d){
+  const G=window._opsConfig.kpiGoals;
+  const period=window._ytdPeriod||YTD_PERIOD;
+  const gpp=(window._ytdTotal&&window._ytdTotal.gpp)||YTD_TOTAL_GP_PCT;
+  const pt=(window._ytdTotal&&window._ytdTotal.pt)||YTD_PROP_TURNOVER;
+  const total=d.total,hr=d.highRisk.length,over30=d.over30,over30Pct=d.over30Pct,metSlaPct=d.metSlaPct;
+  const m={};
+  m["Met SLA"]={goal:`${G.metSlaGoal}%`,target:`${G.metSlaMin}% min`,current:metSlaPct===null?"N/A":metSlaPct.toFixed(1)+"%",status:metSlaPct===null?"-":kpiStatus(metSlaPct,G.metSlaGoal,G.metSlaMin)};
+  m["Over 30 Days"]={goal:`≤${G.over30Target}%`,target:`≤${G.over30Max}%`,current:`${over30Pct.toFixed(1)}% (${over30})`,status:kpiStatus(over30Pct,G.over30Target,G.over30Max,false)};
+  m["HIGH RISK Jobs"]={goal:"0",target:"<5%",current:`${hr} (${total?((hr/total)*100).toFixed(1):0}%)`,status:hr===0?"✅ MET GOAL":hr/total<0.05?"⚠ AT TARGET":"🔴 EXCEEDS TARGET"};
+  m[`GP % (${period})`]={goal:`${G.gpGoal}%`,target:`${G.gpMin}% min`,current:`${gpp.toFixed(2)}%`,status:kpiStatus(gpp,G.gpGoal,G.gpMin)};
+  m["Proposal Turnover"]={goal:"5 Days",target:"7 Days",current:`${pt.toFixed(1)}d YTD`,status:kpiStatus(pt,5,7,false)};
+  return {period,metrics:m};
+}
+// Coordinator YTD financials for the canonical dataset - matches the Dashboard's
+// YTD_TABLE row shape. Same source the workbook KPI sheet uses (live YTD upload if
+// present, else the offline constants). The Dashboard still lets the revenue slot win.
+function buildYtdTable(){
+  const G=window._opsConfig.kpiGoals;
+  const rows=window._ytdCoordData||YTD_COORD_DATA;
+  return rows.map(([name,rev,gpd,gpp,pt])=>({
+    name,revenue:rev,gp:gpd,gpPct:`${gpp.toFixed(2)}%`,propTurnover:`${pt.toFixed(1)}d`,
+    vsGoal:gpp>=G.gpGoal?`✅ ${gpp.toFixed(2)}%`:gpp>=G.gpMin?`⚠ ${gpp.toFixed(2)}%`:`🔴 ${gpp.toFixed(2)}%`,
+  }));
+}
 async function syncCanonicalDataset(d,coords,dateKey){
   const agg={
     total:d.total,svc:d.svc.length,wifi:d.wifi.length,rf:d.rf.length,
@@ -635,7 +663,7 @@ async function syncCanonicalDataset(d,coords,dateKey){
     highRisk:d.highRisk.length,highRiskVal:parseFloat(sum(d.highRisk).toFixed(2)),
     watch:d.watch.length,ok:d.ok.length,
   };
-  const payload={schemaVersion:1,generatedAt:new Date().toISOString(),dateStr:TODAY_STR,dateKey,filename:d.fname,client:PILOT_CLIENT,aggregates:agg,coords,rows:d.df};
+  const payload={schemaVersion:1,generatedAt:new Date().toISOString(),dateStr:TODAY_STR,dateKey,filename:d.fname,client:PILOT_CLIENT,aggregates:agg,coords,kpi:buildKpiMetrics(d),ytd:buildYtdTable(),rows:d.df};
   const res=await bnClientPost("wo-dataset",payload,{dateStr:TODAY_STR,dateKey,rows:d.df.length,schemaVersion:1});
   if(res&&res.ok)log("☁ Canonical dataset synced ("+d.df.length+" rows).");
   else log("⚠ Canonical dataset sync failed (workbook sync unaffected).");
@@ -1511,6 +1539,12 @@ function processData(raw,fname){
       "Last Note Date":fmtDate(getField(r,"Last Note Date")),
       "Next Onsite Date":fmtDate(getField(r,"Next Onsite Date")),
       "Expected Completion Date":fmtDate(getField(r,"Expected Completion Date")),
+      // Carried for the canonical dataset (Dashboard JSON cutover) so the JSON load
+      // path reaches parity with the xlsx path. Additive: not emitted to the workbook
+      // sheet (OPS_COLS is fixed), only serialized into the wo-dataset rows.
+      "Total Vendor NTE":parseFloat(String(getField(r,"Total Vendor NTE")||0).replace(/[$,]/g,""))||0,
+      "WO Date":fmtDate(getField(r,"WO Date")),
+      "First Trip Date":fmtDate(getField(r,"First Trip Date")),
       "Escalation Priority":String(getField(r,"Escalation Priority")||"").trim(),
       "Project Type":String(getField(r,"Project Type")||"").trim(),
       "Days Since Update":dsuNum,
