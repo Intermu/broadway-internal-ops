@@ -4,7 +4,7 @@ const CONTAINER_NAME = "broadway-data";
 
 // SLOTS are types of data. Same set for every client.
 // Adding a slot = ship code. Adding a client = edit VALID_CLIENTS below.
-const VALID_SLOTS = ["revenue", "revenue-gp", "wo-snapshot-today", "wo-snapshot-previous", "workbook", "over30-history", "job-notes", "config", "checkin", "om-bonus", "wo-audit", "exception-queue", "o30-lines", "job-plans", "live-jobs", "job-divisions"];
+const VALID_SLOTS = ["revenue", "revenue-gp", "wo-snapshot-today", "wo-snapshot-previous", "workbook", "wo-dataset", "wo-snapshot-history", "over30-history", "job-notes", "config", "checkin", "om-bonus", "wo-audit", "exception-queue", "o30-lines", "job-plans", "live-jobs", "job-divisions"];
 // "o30-lines": per-client Over-30 audit lines + board trend, WRITTEN by the userscript
 // connector via /api/wo-ingest (key-gated); the dashboard READS it here (AAD gate):
 //   { v:1, items:{ "<tracking>": { line, ts, by, prev:[{line,ts,by}×≤4] } },
@@ -22,6 +22,13 @@ const VALID_SLOTS = ["revenue", "revenue-gp", "wo-snapshot-today", "wo-snapshot-
 // { v:1, items: { "<tracking>": { tracking, wo, title, sub, base:{text,ts}|null, updates:[{text,ts,win}] } } }.
 // WO Audit notes set .base (full case file); Recent Update notes append to .updates[].
 // Not financial -> stays at the broadway_employee gate (coordinators can read/write).
+// "wo-dataset": the canonical normalized WO dataset the Ops Agent produces each upload
+// { schemaVersion, generatedAt, dateStr, dateKey, filename, client, aggregates, coords,
+//   rows:[...normalized WO rows] }. Overwrite-in-place (today only). Additive: the
+// Dashboard still reads "workbook" until its reader is cut over to this slot. Not financial.
+// "wo-snapshot-history": rolling date-keyed trend store, one blob per client
+// { v:1, days: { "YYYY-MM-DD": <daily snapshot incl. per-coordinator rollup> } }, pruned
+// to the most recent ~60 days, written with If-Match merge. Not financial.
 
 // Each onboarded client gets one string here. Onboarding Wendy's = add "wendys".
 const VALID_CLIENTS = ["pilot"];

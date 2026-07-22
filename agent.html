@@ -615,6 +615,53 @@ async function bnClientDelete(slot){
   try{await fetch(`${DATA_API}?key=${encodeURIComponent(slot)}&client=${PILOT_CLIENT}`,{method:"DELETE"});return true;}catch(_){return false;}
 }
 
+// ── Phase 1: canonical dataset + rolling snapshot history ───────────────────
+// Additive writes alongside the existing workbook/snapshot sync. Nothing consumes
+// these yet (the Dashboard still reads the "workbook" blob); writing them now lets
+// the JSON shape be verified in the store before cutover and starts accumulating the
+// trend record, which needs calendar days to build up. Failures only log - the
+// existing workbook sync is unaffected.
+const SNAP_HISTORY_MAX_DAYS=60;
+async function syncCanonicalDataset(d,coords,dateKey){
+  const agg={
+    total:d.total,svc:d.svc.length,wifi:d.wifi.length,rf:d.rf.length,
+    metSlaPct:d.metSlaPct===null?null:parseFloat(d.metSlaPct.toFixed(1)),
+    over30:d.over30,over30Pct:parseFloat(d.over30Pct.toFixed(1)),
+    turningTmrw:d.turningTmrw,atRiskWeek:d.atRiskWeek,
+    validatesVal:parseFloat(sum(d.valAll).toFixed(2)),validatesCount:d.valAll.length,
+    materialVal:parseFloat(sum(d.matAll).toFixed(2)),materialCount:d.matAll.length,
+    proposalVal:parseFloat(sum(d.propPipe).toFixed(2)),proposalCount:d.propPipe.length,
+    cipCount:d.cipAll.length,propTurnoverLive:parseFloat(d.propTurnoverLive.toFixed(1)),
+    highRisk:d.highRisk.length,highRiskVal:parseFloat(sum(d.highRisk).toFixed(2)),
+    watch:d.watch.length,ok:d.ok.length,
+  };
+  const payload={schemaVersion:1,generatedAt:new Date().toISOString(),dateStr:TODAY_STR,dateKey,filename:d.fname,client:PILOT_CLIENT,aggregates:agg,coords,rows:d.df};
+  const res=await bnClientPost("wo-dataset",payload,{dateStr:TODAY_STR,dateKey,rows:d.df.length,schemaVersion:1});
+  if(res&&res.ok)log("☁ Canonical dataset synced ("+d.df.length+" rows).");
+  else log("⚠ Canonical dataset sync failed (workbook sync unaffected).");
+}
+async function appendSnapshotHistory(daySnap){
+  const key=daySnap.dateKey;if(!key)return;
+  for(let attempt=0;attempt<2;attempt++){
+    let cur=null,etag=null;
+    const g=await bnClientGet("wo-snapshot-history");
+    if(g&&g.exists){cur=g.data;etag=g.etag;}
+    const store=(cur&&cur.days)?cur:{v:1,days:{}};
+    store.days[key]=daySnap;
+    const keys=Object.keys(store.days).sort();
+    while(keys.length>SNAP_HISTORY_MAX_DAYS)delete store.days[keys.shift()];
+    try{
+      const body={data:store,metadata:{days:Object.keys(store.days).length,latest:key}};
+      if(etag)body.ifMatch=etag;
+      const r=await fetch(`${DATA_API}?key=wo-snapshot-history&client=${PILOT_CLIENT}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+      if(r.ok){log("☁ Snapshot history updated ("+Object.keys(store.days).length+" days).");return;}
+      if(r.status===412)continue;   // concurrent writer landed first - re-read + merge
+      break;
+    }catch(_){break;}
+  }
+  log("⚠ Snapshot history update skipped.");
+}
+
 // ── Snapshot UI helpers ───────────────────────────────────────────────────────
 function setSnapBadge(state, text){
   const badge=document.getElementById("snap-badge");
@@ -901,6 +948,8 @@ function handleYtdFile(file){
 
 const TODAY=new Date();
 const TODAY_STR=TODAY.toLocaleDateString("en-US",{weekday:"long",month:"2-digit",day:"2-digit",year:"numeric"}).replace(",","");
+// Sortable local-date key (YYYY-MM-DD) for the rolling snapshot history slot.
+const TODAY_KEY=`${TODAY.getFullYear()}-${String(TODAY.getMonth()+1).padStart(2,"0")}-${String(TODAY.getDate()).padStart(2,"0")}`;
 
 // ── Unattended snapshot capture ───────────────────────────────────────
 // If a fresh workbook (generated today) is sitting in the data store but
@@ -940,7 +989,7 @@ const DATE_STR=TODAY.toLocaleDateString("en-US",{month:"2-digit",day:"2-digit",y
 document.getElementById("ts").textContent=`Today: ${DAY_STR}, ${DATE_STR}`;
 
 // ── Constants ─────────────────────────────────────────────────────────────────
-const YTD_PERIOD="Jan–Feb 2026",YTD_TOTAL_REV=1356909.72,YTD_TOTAL_GP_DOL=438902.21,YTD_TOTAL_GP_PCT=32.35,YTD_PROP_TURNOVER=13.53;
+const YTD_PERIOD="Jan-Feb 2026",YTD_TOTAL_REV=1356909.72,YTD_TOTAL_GP_DOL=438902.21,YTD_TOTAL_GP_PCT=32.35,YTD_PROP_TURNOVER=13.53;
 const YTD_COORD_DATA=[["Dalton Burger",93478.51,31830.85,34.05,27.71],["Daniel Russell",271278.35,90199.41,33.25,17.63],["Erick Nieves-Cruz",265734.26,83327.91,31.36,12.39],["Glenn Kohlmann",94000.47,28194.06,29.99,12.78],["Lisa Porzelt",372120.54,118951.78,31.97,10.44],["Matthew Zozimo",86750.99,34077.45,39.28,11.84],["Mike Najarro",1018.00,431.84,42.42,0.00],["Robert Del Vicario",169710.86,50947.41,30.02,12.38],["Ronny Sharp",2817.74,941.50,33.41,36.00]];
 const STATUS_GROUPS={"Pending Schedule":"🔵 Active","Vendor Proposal Required":"🔵 Active","Scheduled":"🔵 Active","Need Material":"🟡 Material","Material Ordered":"🟡 Material","Pending Materials Supplier":"🟡 Material","Pending Materials Client":"🟡 Material","Awaiting Supplier":"🟡 Material","Fabrication":"🟡 Material","Proposed":"🟣 Proposal","Proposal Approved":"🟣 Proposal","Preparing Client Proposal":"🟣 Proposal","Vendor Proposal Received":"🟣 Proposal","Internal Proposal Approved":"🟣 Proposal","Internal Proposal Rejected":"🟣 Proposal","Clocked Out: Complete":"🟢 Validates","ATF Prep":"🟢 Validates","ATF Submitted":"🟢 Validates","Clocked Out: In Progress":"🔴 Critical","Pending Trade Specialist":"⚪ Other","Client Action Required":"⚪ Other","Awaiting 3rd Party":"⚪ Other","On-Site":"⚪ Other","Pending Dispatch":"⚪ Other"};
 const STATUS_SLA_HRS={"Pending Dispatch":8,"Recruiting Vendor":48,"Vendor Compliance":48,"Pending Schedule":48,"Clocked Out: Complete":24,"Vendor Proposal Required":48,"Supplier Proposal Pending":48,"Vendor Proposal Received":8,"Pending Proposal Review":4,"Internal Proposal Approved":2,"Internal Proposal Rejected":8,"Preparing Client Proposal":8,"Proposal Approved":2,"Proposal Rejected":24,"Need Material":120,"Material Ordered":120,"Pending Materials Supplier":120,"Pending Materials Client":120,"Awaiting Supplier":120,"Fabrication":120,"Clocked Out: In Progress":8,"Recall":8,"ATF Prep":8,"ATF Submitted":8};
@@ -1474,6 +1523,23 @@ function processData(raw,fname){
   const watch=df.filter(r=>r["Risk Flag"]==="WATCH");
   const ok=df.filter(r=>r["Risk Flag"]==="OK");
 
+  // Per-coordinator rollup (jobs / high-risk / over-30 / SLA violations / validates $ /
+  // CIP / oldest job). Computed once here so the canonical dataset, snapshot history, and
+  // (Phase 2) the email + workbook per-coordinator sections all read the same numbers.
+  const coordAgg={};
+  df.forEach(r=>{
+    const c=r["Assigned To"]||"(unassigned)";
+    const a=coordAgg[c]||(coordAgg[c]={jobs:0,highRisk:0,over30:0,slaViol:0,validatesVal:0,cip:0,oldest:0});
+    a.jobs++;
+    if(r["Risk Flag"]==="HIGH RISK")a.highRisk++;
+    if(r["Aged"]>30)a.over30++;
+    const _sla=STATUS_SLA_HRS[r["Status"]];if(_sla!==undefined&&r["Status Hrs"]>_sla)a.slaViol++;
+    if(VALIDATES_STATUSES.has(r["Status"]))a.validatesVal+=(r["Approved_Amount"]||0);
+    if(r["Status"]===CIP_STATUS)a.cip++;
+    if(r["Aged"]>a.oldest)a.oldest=r["Aged"];
+  });
+  Object.values(coordAgg).forEach(a=>{a.validatesVal=parseFloat(a.validatesVal.toFixed(2));});
+
   document.getElementById("stats").innerHTML=`
     <div class="stat"><label>Total Jobs</label><div class="val">${total}</div></div>
     <div class="stat"><label>Service</label><div class="val">${svc.length}</div></div>
@@ -1556,7 +1622,12 @@ function processData(raw,fname){
     }
   });
 
-  window._td={df,wifi,rf,svc,total,metSlaPct,over30,over30Pct,turningTmrw,atRiskWeek,valAll,matAll,matNeedMaterial,matOrdered,matPendingSupplier,matPendingClient,matFabrication,matNeedsReview,propPipe,cipAll,propTurnoverLive,highRisk,watch,ok,fname,prevSnap,todaySnap};
+  window._td={df,wifi,rf,svc,total,metSlaPct,over30,over30Pct,turningTmrw,atRiskWeek,valAll,matAll,matNeedMaterial,matOrdered,matPendingSupplier,matPendingClient,matFabrication,matNeedsReview,propPipe,cipAll,propTurnoverLive,highRisk,watch,ok,coords:coordAgg,fname,prevSnap,todaySnap};
+
+  // Phase 1 additive sync: canonical normalized dataset + rolling trend history.
+  // Fire-and-forget - the workbook sync below (Dashboard's current source) is unchanged.
+  syncCanonicalDataset(window._td,coordAgg,TODAY_KEY).catch(err=>log("⚠ dataset sync error: "+err.message));
+  appendSnapshotHistory({...todaySnap,dateKey:TODAY_KEY,coords:coordAgg,highRisk:highRisk.length,watch:watch.length,ok:ok.length,cipCount:cipAll.length,propTurnoverLive:parseFloat(propTurnoverLive.toFixed(1))}).catch(err=>log("⚠ history sync error: "+err.message));
 
   // Auto-build + sync the workbook to the data store so the Dashboard
   // refreshes on upload alone - no Download click needed. Silent mode
@@ -1946,7 +2017,7 @@ async function generateExcel(opts){
        fv(`=SUMIFS(OpsData[Approved_Amount],OpsData[Status Category],${statusCell})`,appr),
        sla!==null?sla:"N/A",
        within!==null?fv(`=COUNTIFS(OpsData[Status Category],"${status}",OpsData[Status Hrs.],"<=${sla}")`,within):"N/A",
-       missed!==null?fv(`=COUNTIFS(OpsData[Status Category],"${status}",OpsData[Status Hrs.],">=${sla}")`,missed):"N/A",
+       missed!==null?fv(`=COUNTIFS(OpsData[Status Category],"${status}",OpsData[Status Hrs.],">${sla}")`,missed):"N/A",
        pct!==null?fv(`=IFERROR(COUNTIFS(OpsData[Status Category],"${status}",OpsData[Status Hrs.],"<=${sla}")/COUNTIF(OpsData[Status Category],"${status}"),0)`,pct):"N/A"
       ].forEach((v,ci)=>{
         const cell=wsD.getRow(dr).getCell(ci+1);cell.value=v;
@@ -2184,7 +2255,7 @@ async function generateExcel(opts){
     // Also push the workbook to Blobs so the Dashboard can auto-load it.
     try{
       const u8=new Uint8Array(buffer);
-      let bin="";for(let i=0;i<u8.length;i++)bin+=String.fromCharCode(u8[i]);
+      let bin="";const CHUNK=0x8000;for(let i=0;i<u8.length;i+=CHUNK){bin+=String.fromCharCode.apply(null,u8.subarray(i,i+CHUNK));}
       const b64=btoa(bin);
       bnClientPost("workbook",{base64:b64,filename:wbFilename},{
         filename:wbFilename,
@@ -2265,19 +2336,26 @@ Write a short morning intro for the daily ops email. 3 paragraphs max, using <p>
 - Do NOT use any formatting other than <p> tags`;
 
   async function attempt(){
-    const fetchPromise=fetch("/api/generate",{
-      method:"POST",
-      headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({prompt})
-    }).then(async res=>{
+    const ctrl=new AbortController();
+    const timer=setTimeout(()=>ctrl.abort(),30000);
+    try{
+      const res=await fetch("/api/generate",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({prompt}),
+        signal:ctrl.signal
+      });
       if(!res.ok){const errText=await res.text().catch(()=>"(no body)");throw new Error(`HTTP ${res.status} - ${errText.slice(0,120)}`);}
       const data=await res.json();
       if(data.error)throw new Error(data.error);
       if(!data.text)throw new Error("Empty response from function");
       return data.text;
-    });
-    const timeoutPromise=new Promise((_,rej)=>setTimeout(()=>rej(new Error("Request timed out after 30s")),30000));
-    return Promise.race([fetchPromise,timeoutPromise]);
+    }catch(err){
+      if(err.name==="AbortError")throw new Error("Request timed out after 30s");
+      throw err;
+    }finally{
+      clearTimeout(timer);
+    }
   }
 
   for(let i=1;i<=3;i++){
@@ -2448,7 +2526,7 @@ function buildEmail(d, introHtml) {
 
   // ── KPI rows ───────────────────────────────────────────────────────────────
   const kpiRows = [
-    ["Met SLA ⭐", "90%", "80% min", metSlaPct === null ? "N/A" : metSlaPct.toFixed(1) + "%", metSlaPct === null ? "-" : kpiStatus(metSlaPct, 90, 80), metSlaPct && metSlaPct >= 90 ? "#dcfce7" : metSlaPct && metSlaPct >= 80 ? "#fef9c3" : "#fee2e2", metSlaPct && metSlaPct >= 90 ? "#166534" : metSlaPct && metSlaPct >= 80 ? "#854d0e" : "#991b1b"],
+    ["Met SLA ⭐", "90%", "80% min", metSlaPct === null ? "N/A" : metSlaPct.toFixed(1) + "%", metSlaPct === null ? "-" : kpiStatus(metSlaPct, 90, 80), metSlaPct === null ? "#f8f9fb" : metSlaPct >= 90 ? "#dcfce7" : metSlaPct >= 80 ? "#fef9c3" : "#fee2e2", metSlaPct === null ? "#374151" : metSlaPct >= 90 ? "#166534" : metSlaPct >= 80 ? "#854d0e" : "#991b1b"],
     ["Over 30 Days", "≤10%", "≤15%", over30Pct.toFixed(1) + "% (" + over30 + " jobs)", kpiStatus(over30Pct, 10, 15, false), over30Pct <= 10 ? "#dcfce7" : over30Pct <= 15 ? "#fef9c3" : "#fee2e2", over30Pct <= 10 ? "#166534" : over30Pct <= 15 ? "#854d0e" : "#991b1b"],
     (()=>{const p=window._ytdPeriod||YTD_PERIOD;const gpp=(window._ytdTotal&&window._ytdTotal.gpp)||YTD_TOTAL_GP_PCT;return ["GP % (" + p + ")", "35%", "33% min", gpp.toFixed(2) + "%", kpiStatus(gpp, 35, 33), gpp >= 35 ? "#dcfce7" : gpp >= 33 ? "#fef9c3" : "#fee2e2", gpp >= 35 ? "#166534" : gpp >= 33 ? "#854d0e" : "#991b1b"];})(),
     ["Volume", "-", "-", "Total " + total + " | Svc " + svc.length + " | WIFI " + wifi.length + " | RF " + rf.length, "-", "#f8f9fb", "#374151"],
@@ -2473,6 +2551,7 @@ function buildEmail(d, introHtml) {
   const _ytdCoords = window._ytdCoordData || YTD_COORD_DATA;
   const _ytdPeriod = window._ytdPeriod || YTD_PERIOD;
   const _ytdTotal = window._ytdTotal || { rev: YTD_TOTAL_REV, gpd: YTD_TOTAL_GP_DOL, gpp: YTD_TOTAL_GP_PCT, pt: YTD_PROP_TURNOVER };
+  const _ytdFallback = !window._ytdCoordData;
 
   const thY = "padding:7px 10px;text-align:left;background:#1a5f3e;color:#ffffff;font-size:11px;font-family:-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"Helvetica Neue\", Arial, sans-serif;font-weight:600;border-bottom:2px solid #2ECC71;";
   const ytdHdr = ["Coordinator", "Inv Revenue", "GP $", "GP %", "Prop Turnover", "vs Goal"].map(h => `<th style='${thY}'>${h}</th>`).join("");
@@ -2503,7 +2582,8 @@ function buildEmail(d, introHtml) {
     <td style='${tdTot}text-align:center;'>${_ytdTotal.pt.toFixed(1)}d</td>
     <td style='${tdTot}text-align:center;background:${totGpBg};color:${totGpFc};'>${_ytdTotal.gpp >= 35 ? "✅ Met" : _ytdTotal.gpp >= 33 ? "⚠ Near" : "🔴 Below"}</td>
   </tr>`;
-  const ytdSection = `<p style='font-size:10px;font-weight:600;color:#6b7280;text-transform:none;letter-spacing:normal;font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;margin:16px 0 6px 0;'>${_ytdPeriod} YTD Performance</p>
+  const ytdStaleNote = _ytdFallback ? `<p style='font-size:10px;font-weight:600;color:#991b1b;background:#fee2e2;border:1px solid #fca5a5;padding:6px 10px;text-transform:none;letter-spacing:normal;font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;margin:16px 0 0 0;'>These YTD figures are from the ${_ytdPeriod} upload and may be out of date. Upload the current Pilot Revenue (GP) file to refresh them.</p>` : "";
+  const ytdSection = ytdStaleNote + `<p style='font-size:10px;font-weight:600;color:#6b7280;text-transform:none;letter-spacing:normal;font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;margin:16px 0 6px 0;'>${_ytdPeriod} YTD Performance</p>
     <table style='border-collapse:collapse;width:100%;border:1px solid #e5e7eb;'><thead><tr>${ytdHdr}</tr></thead><tbody>${ytdBody}${ytdTotalRow}</tbody></table>`;
 
   // ── Stalled jobs ───────────────────────────────────────────────────────────
@@ -2534,7 +2614,8 @@ function buildEmail(d, introHtml) {
   const snapFc = { "🔵 Active": "#1e40af", "🟡 Material": "#92400e", "🟣 Proposal": "#6b21a8", "🟢 Validates": "#166534", "🔴 Critical": "#9f1239", "⚪ Other": "#374151" };
   const thSn = "padding:7px 10px;text-align:left;background:#1a5f3e;color:#ffffff;font-size:11px;font-family:-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"Helvetica Neue\", Arial, sans-serif;font-weight:600;border-bottom:2px solid #2ECC71;";
   const snapHdr = ["Status", "Group", "Count", "Total Value", "Avg Age", "Avg Hrs"].map(h => `<th style='${thSn}'>${h}</th>`).join("");
-  const snapBody = STATUS_ORDER_EMAIL.map(s => {
+  const snapExtra = [...new Set(df.map(r => r["Status"]))].filter(x => x && STATUS_ORDER_EMAIL.indexOf(x) === -1).sort();
+  const snapBody = STATUS_ORDER_EMAIL.concat(snapExtra).map(s => {
     const sub = df.filter(r => r["Status"] === s); if (!sub.length) return "";
     const grp = STATUS_GROUPS[s] || "⚪ Other";
     const bg = snapFills[grp] || "#f8f9fb";
@@ -2561,7 +2642,7 @@ function buildEmail(d, introHtml) {
 
   // ── Day-over-Day ───────────────────────────────────────────────────────────
   function dodChange(prev, curr, fmtFn, lowerBetter = false) {
-    if (prev === null || prev === undefined) return "<span style='color:#9ca3af;'>-</span>";
+    if (prev === null || prev === undefined || curr === null || curr === undefined) return "<span style='color:#9ca3af;'>-</span>";
     const diff = curr - prev; if (diff === 0) return "<span style='color:#9ca3af;'>-</span>";
     const better = lowerBetter ? diff < 0 : diff > 0;
     const arrow = diff > 0 ? "▲" : "▼";
@@ -2575,7 +2656,7 @@ function buildEmail(d, introHtml) {
     return `<tr style='background:#ffffff;'>
       <td style='${tdM}${indent}'>${subrow ? "↳ " : ""}${label}</td>
       <td style='${tdM}text-align:center;color:#9ca3af;'>${p !== null && p !== undefined ? fmtFn(p) : "<span style='color:#d1d5db;font-style:italic;'>-</span>"}</td>
-      <td style='${tdM}text-align:center;font-weight:600;color:#1a5f3e;'>${fmtFn(todayVal)}</td>
+      <td style='${tdM}text-align:center;font-weight:600;color:#1a5f3e;'>${todayVal !== null && todayVal !== undefined ? fmtFn(todayVal) : "<span style='color:#d1d5db;font-style:italic;'>-</span>"}</td>
       <td style='${tdM}text-align:center;'>${dodChange(p, todayVal, fmtFn, lowerBetter)}</td>
     </tr>`;
   }
@@ -2613,7 +2694,7 @@ function buildEmail(d, introHtml) {
     dodRow("Service", p?.svc, svc.length, cnt, false, true),
     dodRow("WIFI", p?.wifi, wifi.length, cnt, false, true),
     dodRow("Retrofit Projects", p?.rf, rf.length, cnt, false, true),
-    dodRow("Met SLA", p?.metSlaPct, metSlaPct === null ? 0 : metSlaPct, pct, false),
+    dodRow("Met SLA", p?.metSlaPct, metSlaPct, pct, false),
     dodRow("Over 30 Days %", p?.over30Pct, over30Pct, pct, true),
     dodRow("Over 30 Days (Count)", p?.over30, over30, cnt, true),
     dodRow("Turning 30 Tomorrow", p?.turningTmrw, d.turningTmrw, cnt, true),
@@ -2624,7 +2705,7 @@ function buildEmail(d, introHtml) {
     pipeRow("Pending Materials Supplier", p?.matSupVal, p?.matSupCount, sum(matPendingSupplier), matPendingSupplier.length, true),
     pipeRow("Pending Materials Client", p?.matCliVal, p?.matCliCount, sum(matPendingClient), matPendingClient.length, true),
     pipeRow("Fabrication", p?.matFabVal, p?.matFabCount, sum(matFabrication), matFabrication.length, true),
-    pipeRow("Needs Status Review", p?.matRevCount, null, matNeedsReview.length, matNeedsReview.length),
+    dodRow("Needs Status Review", p?.matRevCount, matNeedsReview.length, cnt, true, true),
     pipeRow("Proposal Pipeline", p?.propVal, p?.propCount, sum(propPipe), propPipe.length),
     pipeRow("Validates", p?.valVal, p?.valCount, sum(valAll), valAll.length),
   ].join("");

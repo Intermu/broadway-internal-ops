@@ -4745,12 +4745,15 @@ function handleFile(file) {
       CURRENT_FILE = file.name;
       JOBS = raw.map(r=>{
         const ids = bnIds(r);
-        // Approved Amount: prefer an explicit Approved/Amount column, else use Client DNE.
-        // Placeholder/default figures are treated as "not a real approval" and excluded from
-        // approved-dollar totals (matches the original dashboard logic).
+        // Approved Amount: the Ops Agent pre-computes Approved_Amount (placeholders already
+        // zeroed by its formula) - trust that column when present. Only when falling back to a
+        // raw amount column (Amount / Client DNE) do we zero placeholders here, using the SAME
+        // list as the Ops Agent's PLACEHOLDER_AMTS so both surfaces agree on approved dollars.
+        const hasApproved = (r['Approved_Amount'] !== undefined && r['Approved_Amount'] !== '')
+                         || (r['Approved Amount'] !== undefined && r['Approved Amount'] !== '');
         const amtRaw = getCol(r,'Approved_Amount','Approved Amount','Amount','Client DNE','Client DNE ($)');
         let amt = parseFloat(String(amtRaw||0).replace(/[$,]/g,''))||0;
-        if ([2500,1500,1350,1200,1000,800,750,650,600,550,500,350,2,1,0].indexOf(amt) !== -1) amt = 0;
+        if (!hasApproved && [0,1,2,100,500,650,700,750,800,1200,1250,1350,1500,2000,2500,5000].indexOf(amt) !== -1) amt = 0;
         const lastUpd = parseExcelDate(getCol(r,'Latest Update','Last Updated','Last Note Date','Last Note'));
         // The Update column reflects the latest activity date from the WO Audit upload.
         // Prefer "Latest Update"/"Last Updated"; those are usually blank in the audit sheet, so
