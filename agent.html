@@ -689,6 +689,25 @@ async function appendSnapshotHistory(daySnap){
   }
   log("⚠ Snapshot history update skipped.");
 }
+// Read the rolling trend store back for the workbook Trends sheet + email 7d/30d
+// trend section. Returns the date-keyed {YYYY-MM-DD: snap} map, or null on any
+// miss/error (consumers degrade to "accumulating" messaging).
+async function loadSnapshotHistory(){
+  try{const g=await bnClientGet("wo-snapshot-history");
+    if(g&&g.exists&&g.data&&g.data.days)return g.data.days;}catch(_){}
+  return null;
+}
+// Pick the snapshot on-or-before N days before the latest key. Keys are sortable
+// ISO dates; walks back from the target so a missing exact day falls to the
+// nearest earlier snapshot (returns null if none is old enough).
+function snapNDaysBack(days,latestKey,n){
+  if(!days||!latestKey)return null;
+  const target=new Date(latestKey+"T00:00:00");target.setDate(target.getDate()-n);
+  const keys=Object.keys(days).sort();
+  let best=null;
+  for(const k of keys){if(k<latestKey && new Date(k+"T00:00:00")<=target)best=k;}
+  return best?days[best]:null;
+}
 
 // ── Snapshot UI helpers ───────────────────────────────────────────────────────
 function setSnapBadge(state, text){
@@ -1725,7 +1744,11 @@ async function generateExcel(opts){
           valAll,matAll,propPipe,cipAll,propTurnoverLive,highRisk,watch,ok,fname}=d;
 
     // ── Palette ──────────────────────────────────────────────────────────────
-    const DARK='FF1A2332',GOLD='FFF0A500',WHITE='FFFFFFFF',HDR2='FF2D3F55',
+    // Palette rethemed navy/gold -> green (Phase 2) to match the email + Dashboard.
+    // DARK = brand deep green (#1a5f3e), GOLD = bright accent green (#2ECC71),
+    // HDR2 = mid green (#2a7052, the email's secondary header). WHITE text stays
+    // legible on all three; bright green on deep green mirrors the email header.
+    const DARK='FF1A5F3E',GOLD='FF2ECC71',WHITE='FFFFFFFF',HDR2='FF2A7052',
           RED_FILL='FFFFC7CE',YEL_FILL='FFFFEB9C',GRN_FILL='FFD4EDDA',
           EVEN='FFF5F5F5',ODD='FFFFFFFF';
     const bdr={style:'thin',color:{argb:'FFD0D0D0'}};
@@ -1995,6 +2018,28 @@ async function generateExcel(opts){
     });
     dr++;
 
+    // ── D2: Coordinator Load (canonical d.coords) ────────────────────────────
+    // Full per-coordinator rollup from the same coordAgg that feeds the canonical
+    // dataset, snapshot history, and email Coordinator Load section (one source of
+    // truth). Neutral roster order (no worst-first ranking) per the Phase 2 policy
+    // decision. Static values - the aggregate needs the per-status SLA table +
+    // Validates set, which are impractical as a single live Excel formula.
+    secTitle("COORDINATOR LOAD");
+    hdr(wsD,dr,["Coordinator","Jobs","High Risk","Over 30d","SLA Viol","Validates $","CIP","Oldest"],DARK);dr++;
+    const CLOAD_LIST=[...COORDS_LIST,...Object.keys(d.coords).filter(c=>!COORDS_LIST.includes(c))];
+    CLOAD_LIST.forEach(coord=>{
+      const a=d.coords[coord]||{jobs:0,highRisk:0,over30:0,slaViol:0,validatesVal:0,cip:0,oldest:0};
+      if(!a.jobs)return;
+      const alert=a.highRisk>0||a.slaViol>0||a.cip>0;
+      const bg=alert?RED_FILL:dr%2===0?EVEN:ODD,fc=alert?'FF721C24':'FF1A1A1A';
+      [coord,a.jobs,a.highRisk,a.over30,a.slaViol,a.validatesVal,a.cip,a.oldest+"d"].forEach((v,i)=>{
+        const cell=wsD.getRow(dr).getCell(i+1);cell.value=v;
+        s(cell,{bg,fg:fc,bold:alert&&i>0,sz:9,ha:i===0?'left':'center'});
+        if(i===5)cell.numFmt='$#,##0.00';
+      });dr++;
+    });
+    dr++;
+
     // ── E: Stalled Jobs Alert ────────────────────────────────────────────────
     secTitle("STALLED JOBS ALERT - BY STATUS HRS");
     hdr(wsD,dr,["Status Hrs Threshold","Count","Approved $","Avg Age (Days)",""],DARK);dr++;
@@ -2217,7 +2262,7 @@ async function generateExcel(opts){
     const coords=[...new Set(df.map(r=>r["Assigned To"]).filter(Boolean))].sort();
     coords.forEach(coord=>{
       const sub=byAge(df.filter(r=>r["Assigned To"]===coord));
-      const colorArgb='FF'+(COORD_COLORS[coord]||"1A2332").toUpperCase();
+      const colorArgb='FF'+(COORD_COLORS[coord]||"1A5F3E").toUpperCase();
       const ws=wb.addWorksheet(coord.slice(0,31),{properties:{tabColor:{argb:colorArgb}}});
       ws.mergeCells('A1:J1');ws.getCell('A1').value=coord.toUpperCase();
       s(ws.getCell('A1'),{bg:colorArgb,fg:WHITE,bold:true,sz:13,ha:'center'});ws.getRow(1).height=24;
@@ -2312,6 +2357,75 @@ async function generateExcel(opts){
     });
     wsSla.columns=[{width:30},{width:30},{width:30}];
     log("✅ Reference tabs created");
+
+    // ════════════════════════════════════════════════════════════════════════
+    // TRENDS - rolling wo-snapshot-history (Phase 2)
+    // ════════════════════════════════════════════════════════════════════════
+    // Read the date-keyed trend store and lay it out newest-last. Today's live
+    // snap is merged in so the latest row is present even when the background
+    // history write has not yet landed (the silent auto-build races it).
+    const _hist=await loadSnapshotHistory();
+    const wsT=wb.addWorksheet("Trends",{properties:{tabColor:{argb:GOLD}}});
+    wsT.mergeCells('A1:M1');wsT.getCell('A1').value=`OPS TRENDS - rolling snapshot history (through ${TODAY_STR})`;
+    s(wsT.getCell('A1'),{bg:DARK,fg:GOLD,bold:true,sz:12,ha:'center'});wsT.getRow(1).height=22;
+    const _mergedDays=Object.assign({},_hist||{});
+    _mergedDays[TODAY_KEY]={dateStr:TODAY_STR,total:d.total,svc:d.svc.length,wifi:d.wifi.length,
+      rf:d.rf.length,metSlaPct:d.metSlaPct,over30Pct:d.over30Pct,over30:d.over30,
+      highRisk:d.highRisk.length,valCount:d.valAll.length,valVal:sum(d.valAll),
+      cipCount:d.cipAll.length,propTurnoverLive:d.propTurnoverLive};
+    const _tkeys=Object.keys(_mergedDays).sort();
+    const TREND_COLS=["Date","Total","Svc","WIFI","RF","Met SLA %","Over 30 %","Over 30 #","High Risk","Validates #","Validates $","CIP","Prop Turnover"];
+    if(_tkeys.length){
+      const trendRows=_tkeys.map(k=>{const x=_mergedDays[k];return[
+        x.dateStr||k,x.total??"",x.svc??"",x.wifi??"",x.rf??"",
+        x.metSlaPct==null?"N/A":x.metSlaPct/100,(x.over30Pct==null?0:x.over30Pct/100),x.over30??"",
+        x.highRisk??"",x.valCount??"",x.valVal??"",x.cipCount??"",x.propTurnoverLive??""];});
+      wsT.addTable({name:'TrendData',ref:'A2',headerRow:true,totalsRow:false,
+        style:{theme:'TableStyleMedium2',showRowStripes:true},
+        columns:TREND_COLS.map(c=>({name:c,filterButton:true})),rows:trendRows});
+      trendRows.forEach((_,ri)=>{const r=ri+3;
+        wsT.getRow(r).getCell(6).numFmt='0.0%';wsT.getRow(r).getCell(7).numFmt='0.0%';
+        wsT.getRow(r).getCell(11).numFmt='$#,##0.00';wsT.getRow(r).getCell(13).numFmt='0.0';
+      });
+    }else{
+      wsT.mergeCells('A2:M2');wsT.getCell('A2').value="No snapshot history yet - trends fill in as daily snapshots accumulate.";
+      s(wsT.getCell('A2'),{bg:EVEN,fg:'FF888888',sz:10,ha:'center'});
+    }
+    wsT.columns=[{width:14},{width:9},{width:8},{width:8},{width:8},{width:11},{width:11},{width:11},{width:11},{width:12},{width:14},{width:8},{width:14}];
+    wsT.views=[{state:'frozen',ySplit:2}];
+    log(`✅ Trends sheet created (${_tkeys.length} day${_tkeys.length===1?"":"s"})`);
+
+    // ── Job ID -> Umbrava hyperlinks (Phase 2) ───────────────────────────────
+    // Final pass so every sheet (Excel Tables included) gets linked in one place.
+    // Digits-only id mirrors the userscript route (/work-orders/<num>); WIFI-/RF-
+    // prefixes strip cleanly. Only column(s) whose header reads "Job ID" are
+    // touched, and only single-token cells with >=3 digits - merged title rows
+    // (which contain spaces) and aggregate cells are skipped, so nothing is
+    // mis-linked. Overwriting a table cell's value post-addTable follows the same
+    // pattern the Raw Data G:J formulas already use.
+    function woUrl(id){
+      const digits=String(id).replace(/\D/g,"");
+      return digits.length>=3?`https://app.umbrava.com/work-orders/${digits}`:null;
+    }
+    const LINK_FONT={name:'Arial',size:9,color:{argb:'FF1A5F3E'},underline:true};
+    wb.worksheets.forEach(ws=>{
+      const jidCols=new Set();
+      ws.eachRow({includeEmpty:false},row=>{
+        row.eachCell({includeEmpty:false},(cell,col)=>{if(cell.value==="Job ID")jidCols.add(col);});
+      });
+      if(!jidCols.size)return;
+      ws.eachRow({includeEmpty:false},row=>{
+        jidCols.forEach(col=>{
+          const cell=row.getCell(col);const v=cell.value;
+          if(v==null||v==="Job ID"||typeof v==="object")return;
+          const sv=String(v);if(/\s/.test(sv))return;
+          const url=woUrl(sv);if(!url)return;
+          cell.value={text:sv,hyperlink:url};
+          cell.font=LINK_FONT;
+        });
+      });
+    });
+    log("✅ Job ID cells linked to Umbrava");
 
     // ── Download ─────────────────────────────────────────────────────────────
     const buffer=await wb.xlsx.writeBuffer();
@@ -2465,6 +2579,9 @@ function fallbackIntro(d){
 document.getElementById("gen-btn").addEventListener("click",async()=>{
   const d=window._td;if(!d){alert("Upload a file first.");return;}
   const btn=document.getElementById("gen-btn");btn.disabled=true;btn.innerHTML='Generating… <span class="spinner"></span>';
+  // Load the rolling trend store so the email's 7d/30d Trend section can render.
+  // Null/short history degrades to dashes + an "accumulating" note (never blocks).
+  try{window._snapHistory=await loadSnapshotHistory();}catch(_){window._snapHistory=null;}
   log("Calling Claude API for manager intro...");
   try{const intro=await fetchManagerIntro(d);log("Building email...");emailHtml=buildEmail(d,intro);}
   catch(err){log("❌ API error: "+err.message+". Using fallback.");emailHtml=buildEmail(d,fallbackIntro(d));}
@@ -2788,6 +2905,84 @@ function buildEmail(d, introHtml) {
   const dodSection = `<table style='border-collapse:collapse;width:100%;border:1px solid #e5e7eb;'><thead><tr>${dodHdr}</tr></thead><tbody>${dodRows}</tbody></table>` +
     (!p ? "<p style='font-size:11px;color:#9ca3af;font-style:italic;font-family:-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"Helvetica Neue\", Arial, sans-serif;margin-top:8px;'>Previous day data appears automatically once today's snapshot is saved.</p>" : "");
 
+  // ── Trend (7d / 30d) from wo-snapshot-history ──────────────────────────────
+  // Multi-day movement, distinct from the single-prev-day DoD table above. Reads
+  // window._snapHistory (loaded before buildEmail). snapNDaysBack picks the nearest
+  // snapshot on-or-before N days back; dodChange renders null prevs as a neutral
+  // dash, so sparse history degrades cleanly instead of breaking.
+  const FF = '-apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif';
+  let trendSection;
+  {
+    const hist = window._snapHistory;
+    const d7 = snapNDaysBack(hist, TODAY_KEY, 7);
+    const d30 = snapNDaysBack(hist, TODAY_KEY, 30);
+    const trendMetrics = [
+      ["Total Jobs", s => s ? s.total : null, total, cnt, false],
+      ["Met SLA %", s => s ? s.metSlaPct : null, metSlaPct, pct, false],
+      ["Over 30 Days %", s => s ? s.over30Pct : null, over30Pct, pct, true],
+      ["Over 30 (Count)", s => s ? s.over30 : null, over30, cnt, true],
+      ["High Risk", s => s ? s.highRisk : null, highRisk.length, cnt, true],
+      ["Validates (Count)", s => s ? s.valCount : null, valAll.length, cnt, false],
+      ["CIP Critical", s => s ? s.cipCount : null, cipAll.length, cnt, true],
+    ];
+    const thT = `padding:7px 10px;text-align:center;font-size:11px;font-family:${FF};font-weight:600;border-bottom:2px solid #2ECC71;background:#1a5f3e;color:#ffffff;`;
+    const trHdr = `<th style='${thT}text-align:left;'>Metric</th>
+      <th style='${thT}background:#2a7052;color:#9ca3af;'>30d ago</th>
+      <th style='${thT}background:#2a7052;color:#9ca3af;'>7d ago</th>
+      <th style='${thT}color:#2ECC71;'>${TODAY_STR}</th>
+      <th style='${thT}'>&#916; 7d</th>
+      <th style='${thT}'>&#916; 30d</th>`;
+    const dash = "<span style='color:#d1d5db;font-style:italic;'>-</span>";
+    const trBody = trendMetrics.map(([label, get, curVal, fmtFn, lower]) => {
+      const v7 = get(d7), v30 = get(d30);
+      const td = `padding:6px 10px;border-bottom:1px solid #edf0f4;font-size:11px;font-family:${FF};`;
+      const show = v => (v !== null && v !== undefined) ? fmtFn(v) : dash;
+      return `<tr style='background:#ffffff;'>
+        <td style='${td}font-weight:600;color:#1a5f3e;'>${label}</td>
+        <td style='${td}text-align:center;color:#9ca3af;'>${show(v30)}</td>
+        <td style='${td}text-align:center;color:#9ca3af;'>${show(v7)}</td>
+        <td style='${td}text-align:center;font-weight:600;color:#1a5f3e;'>${show(curVal)}</td>
+        <td style='${td}text-align:center;'>${dodChange(v7, curVal, fmtFn, lower)}</td>
+        <td style='${td}text-align:center;'>${dodChange(v30, curVal, fmtFn, lower)}</td>
+      </tr>`;
+    }).join("");
+    const trNote = (!d7 && !d30)
+      ? `<p style='font-size:11px;color:#9ca3af;font-style:italic;font-family:${FF};margin-top:8px;'>Trend history is still accumulating - the 7-day and 30-day columns fill in as daily snapshots build up.</p>`
+      : (!d30 ? `<p style='font-size:11px;color:#9ca3af;font-style:italic;font-family:${FF};margin-top:8px;'>30-day column fills in once history reaches 30 days.</p>` : "");
+    trendSection = `<table style='border-collapse:collapse;width:100%;border:1px solid #e5e7eb;'><thead><tr>${trHdr}</tr></thead><tbody>${trBody}</tbody></table>${trNote}`;
+  }
+
+  // ── Coordinator Load (from d.coords) ───────────────────────────────────────
+  // Per-coordinator open-WO load from the canonical coordAgg (same numbers the
+  // workbook Coordinator Load section and the AI prompt use). Neutral roster order
+  // (no worst-first ranking) per the Phase 2 policy decision; any coordinator in
+  // the data but off-roster is appended so nothing is dropped.
+  const cloadRoster = window._opsConfig.roster;
+  const cloadList = [...cloadRoster, ...Object.keys(d.coords || {}).filter(c => !cloadRoster.includes(c))];
+  const thCL = `padding:7px 10px;font-size:11px;font-family:${FF};font-weight:600;border-bottom:2px solid #2ECC71;background:#1a5f3e;color:#ffffff;`;
+  const cloadHdr = ["Coordinator", "Jobs", "High Risk", "Over 30d", "SLA Viol", "Validates $", "CIP", "Oldest"]
+    .map((h, i) => `<th style='${thCL}text-align:${i === 0 ? "left" : "center"};'>${h}</th>`).join("");
+  const cloadBody = cloadList.map((coord, idx) => {
+    const a = (d.coords && d.coords[coord]) || null;
+    if (!a || !a.jobs) return "";
+    const alert = a.highRisk > 0 || a.slaViol > 0 || a.cip > 0;
+    const rowBg = alert ? "#fff5f5" : (idx % 2 === 0 ? "#f8f9fb" : "#ffffff");
+    const td = `padding:6px 10px;border-bottom:1px solid #edf0f4;font-size:11px;font-family:${FF};color:#1a1a1a;`;
+    const flag = v => `${td}text-align:center;${v > 0 ? "color:#991b1b;font-weight:600;" : "color:#6b7280;"}`;
+    return `<tr style='background:${rowBg};${alert ? "border-left:3px solid #c62828;" : ""}'>
+      <td style='${td}font-weight:600;color:#1a5f3e;'>${escapeHtml(coord)}</td>
+      <td style='${td}text-align:center;font-weight:600;'>${a.jobs}</td>
+      <td style='${flag(a.highRisk)}'>${a.highRisk}</td>
+      <td style='${td}text-align:center;'>${a.over30}</td>
+      <td style='${flag(a.slaViol)}'>${a.slaViol}</td>
+      <td style='${td}text-align:right;font-weight:600;color:#166534;'>${fmtUsd(a.validatesVal)}</td>
+      <td style='${flag(a.cip)}'>${a.cip}</td>
+      <td style='${td}text-align:center;color:#6b7280;'>${a.oldest}d</td>
+    </tr>`;
+  }).join("");
+  const coordLoadSection = `<p style='font-size:12px;margin:0 0 10px 0;font-family:${FF};color:#374151;'>Open-WO load per coordinator, roster order. Red cells flag high-risk, SLA-breached, or CIP jobs - look at those first.</p>
+    <table style='border-collapse:collapse;width:100%;border:1px solid #e5e7eb;'><thead><tr>${cloadHdr}</tr></thead><tbody>${cloadBody}</tbody></table>`;
+
   // ── Opening lines ──────────────────────────────────────────────────────────
   const openingLines = [];
   if (psSlaViol.length) openingLines.push(`🔴 <strong>${psSlaViol.length} Pending Schedule</strong> past 48-hr SLA. These are ready - do not let them sit.`);
@@ -2846,7 +3041,8 @@ function buildEmail(d, introHtml) {
 
   // ── TOC ────────────────────────────────────────────────────────────────────
   const tocSections = [
-    ["s1", "1) Day-over-Day"], ["s2", "2) Key Takeaways"], ["s3", "3) KPI Scorecard"],
+    ["s1", "1) Day-over-Day"], ["s1b", "1b) Trend 7/30d"], ["s2", "2) Key Takeaways"],
+    ["s2b", "2b) Coord Load"], ["s3", "3) KPI Scorecard"],
     ["s4", "4) Status Snapshot"], ["s5", "5) Stalled Jobs"], ["s6", "6) Pending Schedule"],
     ...(psWifi.length ? [["s5b", "5b) WIFI Schedule"]] : []),
     ["s7", "7) Vendor Proposal"], ["s8", "8) Scheduled"],
@@ -2908,7 +3104,9 @@ function buildEmail(d, introHtml) {
 
   <!-- SECTIONS -->
   ${sec("1) Day-over-Day Summary", dodSection, "#3b82f6", "s1")}
+  ${sec("1b) Trend - 7 Day & 30 Day", trendSection, "#3b82f6", "s1b")}
   ${sec("2) Opening & Key Takeaways", openingLines.map(l => `<p style='margin:0 0 10px 0;font-size:12px;font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;color:#1a1a1a;padding:8px 12px;background:#fffbeb;border-left:3px solid #2ECC71;'>${l}</p>`).join(""), "#2ECC71", "s2")}
+  ${sec("2b) Coordinator Load", coordLoadSection, "#2ECC71", "s2b")}
   ${sec("3) KPI Scorecard", kpiSection + ytdSection, "#2ECC71", "s3")}
   ${sec("4) Full Status Snapshot - All " + total + " Open Jobs", statusSnapshotSection, "#6b7280", "s4")}
   ${sec("5) Stalled Jobs Alert", stalledSection, "#92400e", "s5")}
