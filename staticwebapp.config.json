@@ -32,6 +32,10 @@
     "allowedRoles": ["anonymous"]
   },
   {
+    "route": "/api/cc-auth",
+    "allowedRoles": ["anonymous"]
+  },
+  {
     "route": "/api/scrape-contacts",
     "allowedRoles": ["anonymous"]
   },
