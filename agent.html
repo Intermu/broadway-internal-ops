@@ -992,7 +992,47 @@ document.getElementById("ts").textContent=`Today: ${DAY_STR}, ${DATE_STR}`;
 const YTD_PERIOD="Jan-Feb 2026",YTD_TOTAL_REV=1356909.72,YTD_TOTAL_GP_DOL=438902.21,YTD_TOTAL_GP_PCT=32.35,YTD_PROP_TURNOVER=13.53;
 const YTD_COORD_DATA=[["Dalton Burger",93478.51,31830.85,34.05,27.71],["Daniel Russell",271278.35,90199.41,33.25,17.63],["Erick Nieves-Cruz",265734.26,83327.91,31.36,12.39],["Glenn Kohlmann",94000.47,28194.06,29.99,12.78],["Lisa Porzelt",372120.54,118951.78,31.97,10.44],["Matthew Zozimo",86750.99,34077.45,39.28,11.84],["Mike Najarro",1018.00,431.84,42.42,0.00],["Robert Del Vicario",169710.86,50947.41,30.02,12.38],["Ronny Sharp",2817.74,941.50,33.41,36.00]];
 const STATUS_GROUPS={"Pending Schedule":"🔵 Active","Vendor Proposal Required":"🔵 Active","Scheduled":"🔵 Active","Need Material":"🟡 Material","Material Ordered":"🟡 Material","Pending Materials Supplier":"🟡 Material","Pending Materials Client":"🟡 Material","Awaiting Supplier":"🟡 Material","Fabrication":"🟡 Material","Proposed":"🟣 Proposal","Proposal Approved":"🟣 Proposal","Preparing Client Proposal":"🟣 Proposal","Vendor Proposal Received":"🟣 Proposal","Internal Proposal Approved":"🟣 Proposal","Internal Proposal Rejected":"🟣 Proposal","Clocked Out: Complete":"🟢 Validates","ATF Prep":"🟢 Validates","ATF Submitted":"🟢 Validates","Clocked Out: In Progress":"🔴 Critical","Pending Trade Specialist":"⚪ Other","Client Action Required":"⚪ Other","Awaiting 3rd Party":"⚪ Other","On-Site":"⚪ Other","Pending Dispatch":"⚪ Other"};
-const STATUS_SLA_HRS={"Pending Dispatch":8,"Recruiting Vendor":48,"Vendor Compliance":48,"Pending Schedule":48,"Clocked Out: Complete":24,"Vendor Proposal Required":48,"Supplier Proposal Pending":48,"Vendor Proposal Received":8,"Pending Proposal Review":4,"Internal Proposal Approved":2,"Internal Proposal Rejected":8,"Preparing Client Proposal":8,"Proposal Approved":2,"Proposal Rejected":24,"Need Material":120,"Material Ordered":120,"Pending Materials Supplier":120,"Pending Materials Client":120,"Awaiting Supplier":120,"Fabrication":120,"Clocked Out: In Progress":8,"Recall":8,"ATF Prep":8,"ATF Submitted":8};
+let STATUS_SLA_HRS={"Pending Dispatch":8,"Recruiting Vendor":48,"Vendor Compliance":48,"Pending Schedule":48,"Clocked Out: Complete":24,"Vendor Proposal Required":48,"Supplier Proposal Pending":48,"Vendor Proposal Received":8,"Pending Proposal Review":4,"Internal Proposal Approved":2,"Internal Proposal Rejected":8,"Preparing Client Proposal":8,"Proposal Approved":2,"Proposal Rejected":24,"Need Material":120,"Material Ordered":120,"Pending Materials Supplier":120,"Pending Materials Client":120,"Awaiting Supplier":120,"Fabrication":120,"Clocked Out: In Progress":8,"Recall":8,"ATF Prep":8,"ATF Submitted":8};
+// ── Per-client ops config (data-store slot: "config") ───────────────────────
+// Single source of truth for the roster, KPI goals, per-status SLA hour limits,
+// and placeholder approved-amounts. The values below are OFFLINE DEFAULTS: with no
+// "config" blob in the data store the merged config equals them exactly, so output
+// is byte-identical to the previous hardcoded build. At startup loadOpsConfig()
+// overlays the blob (clients/pilot/config) so these can change without a redeploy.
+// Consume via window._opsConfig.* (kpiGoals via the local _KPI alias); STATUS_SLA_HRS
+// stays a live binding that loadOpsConfig reassigns so its many call sites are
+// untouched. Additive + reversible: delete the blob to fall back to these defaults.
+const DEFAULT_OPS_CONFIG={
+  _about:"Fallback only. Runtime source of truth is the data-store 'config' slot (clients/pilot/config).",
+  roster:["Dalton Burger","Daniel Russell","Erick Nieves-Cruz","Glenn Kohlmann","Lisa Porzelt","Matthew Zozimo","Mike Najarro","Robert Del Vicario","Ronny Sharp"],
+  coordColors:{"Daniel Russell":"3A5BA0","Erick Nieves-Cruz":"8B4513","Dalton Burger":"6B3A8B","Lisa Porzelt":"2E8B57","Matthew Zozimo":"B8860B","Robert Del Vicario":"8B0000","Glenn Kohlmann":"2F4F4F","Ronny Sharp":"4682B4","Mike Najarro":"2F6B5E"},
+  kpiGoals:{metSlaGoal:90,metSlaMin:80,over30Target:10,over30Max:15,gpGoal:35,gpMin:33},
+  placeholderAmts:[0,1,2,100,500,650,700,750,800,1200,1250,1350,1500,2000,2500,5000],
+  statusSlaHrs:STATUS_SLA_HRS,
+};
+// Deep-overlay `over` onto `base`: nested plain objects merge recursively; arrays and
+// scalars are replaced wholesale. Returns a new object (inputs not mutated). Mirrors
+// the Dashboard's BN.mergeConfig so both surfaces overlay the same blob identically.
+function mergeOpsConfig(base,over){
+  if(!over||typeof over!=="object")return base;
+  const out=Array.isArray(base)?base.slice():Object.assign({},base);
+  for(const k in over){
+    if(!Object.prototype.hasOwnProperty.call(over,k))continue;
+    if(over[k]&&typeof over[k]==="object"&&!Array.isArray(over[k])&&base&&typeof base[k]==="object"&&!Array.isArray(base[k]))
+      out[k]=mergeOpsConfig(base[k],over[k]);
+    else out[k]=over[k];
+  }
+  return out;
+}
+window._opsConfig=DEFAULT_OPS_CONFIG;   // defaults available synchronously
+async function loadOpsConfig(){
+  let fetched=null;
+  try{const r=await bnClientGet("config");if(r&&r.exists&&r.data)fetched=r.data;}catch(_){}
+  window._opsConfig=mergeOpsConfig(DEFAULT_OPS_CONFIG,fetched);
+  STATUS_SLA_HRS=window._opsConfig.statusSlaHrs;   // keep the live binding in sync
+  return window._opsConfig;
+}
+loadOpsConfig();   // fire-and-forget at load; defaults cover the pre-fetch window
 const VALIDATES_STATUSES=new Set(["ATF Prep","ATF Submitted","Clocked Out: Complete"]);
 const MATERIAL_GROUP=new Set(["Need Material","Material Ordered","Pending Materials Supplier","Pending Materials Client","Awaiting Supplier","Fabrication"]);
 const MAT_CORRECT=new Set(["Need Material","Material Ordered","Pending Materials Supplier","Pending Materials Client","Fabrication"]);
@@ -1489,7 +1529,7 @@ function processData(raw,fname){
     const raw_rf=r["Risk Flag"]||"";
     r["Risk Flag"]=raw_rf&&["HIGH RISK","WATCH","OK"].includes(raw_rf.toUpperCase().trim())?raw_rf.toUpperCase().trim():deriveRiskFlag(r);
     // Approved_Flag: 0 if Amount is a placeholder/round number, 1 if real approved dollar
-    const PLACEHOLDER_AMTS=new Set([0,1,2,100,500,650,700,750,800,1200,1250,1350,1500,2000,2500,5000]);
+    const PLACEHOLDER_AMTS=new Set(window._opsConfig.placeholderAmts);
     r["Approved_Flag"]=PLACEHOLDER_AMTS.has(r["Amount"])?0:1;
     r["Approved_Amount"]=r["Amount"]*r["Approved_Flag"];
   });
@@ -1540,13 +1580,14 @@ function processData(raw,fname){
   });
   Object.values(coordAgg).forEach(a=>{a.validatesVal=parseFloat(a.validatesVal.toFixed(2));});
 
+  const _KPI=window._opsConfig.kpiGoals;
   document.getElementById("stats").innerHTML=`
     <div class="stat"><label>Total Jobs</label><div class="val">${total}</div></div>
     <div class="stat"><label>Service</label><div class="val">${svc.length}</div></div>
     <div class="stat"><label>WIFI</label><div class="val">${wifi.length}</div></div>
     <div class="stat"><label>Retrofit</label><div class="val">${rf.length}</div></div>
-    <div class="stat"><label>Met SLA</label><div class="val ${!metSlaPct?'':metSlaPct>=80?'green':metSlaPct>=60?'amber':'red'}">${metSlaPct===null?"N/A":metSlaPct.toFixed(1)+"%"}</div></div>
-    <div class="stat"><label>Over 30 Days</label><div class="val ${over30Pct<=10?'green':over30Pct<=15?'amber':'red'}">${over30Pct.toFixed(1)}% (${over30})</div></div>
+    <div class="stat"><label>Met SLA</label><div class="val ${!metSlaPct?'':metSlaPct>=_KPI.metSlaMin?'green':metSlaPct>=60?'amber':'red'}">${metSlaPct===null?"N/A":metSlaPct.toFixed(1)+"%"}</div></div>
+    <div class="stat"><label>Over 30 Days</label><div class="val ${over30Pct<=_KPI.over30Target?'green':over30Pct<=_KPI.over30Max?'amber':'red'}">${over30Pct.toFixed(1)}% (${over30})</div></div>
     <div class="stat"><label>Validates</label><div class="val green">${valAll.length} · ${fmtUsd(sum(valAll))}</div></div>
     <div class="stat"><label>CIP Critical</label><div class="val ${cipAll.length>0?'red':''}">${cipAll.length}</div></div>`;
 
@@ -1898,8 +1939,7 @@ async function generateExcel(opts){
     // ── D: Per-Person High Risk Ownership ────────────────────────────────────
     secTitle("PER-PERSON HIGH RISK OWNERSHIP");
     hdr(wsD,dr,["Coordinator","HIGH RISK Jobs","HIGH RISK $","WATCH Jobs","Total Jobs",""],DARK);dr++;
-    const COORDS_LIST=["Dalton Burger","Daniel Russell","Erick Nieves-Cruz","Glenn Kohlmann",
-                       "Lisa Porzelt","Matthew Zozimo","Mike Najarro","Robert Del Vicario","Ronny Sharp"];
+    const COORDS_LIST=window._opsConfig.roster;
     COORDS_LIST.forEach(coord=>{
       const sub=df.filter(r=>r["Assigned To"]===coord);
       const hr=sub.filter(r=>r["Risk Flag"]==="HIGH RISK");
@@ -2139,9 +2179,7 @@ async function generateExcel(opts){
     // ════════════════════════════════════════════════════════════════════════
     // COORDINATOR TABS
     // ════════════════════════════════════════════════════════════════════════
-    const COORD_COLORS={"Daniel Russell":"3A5BA0","Erick Nieves-Cruz":"8B4513","Dalton Burger":"6B3A8B",
-      "Lisa Porzelt":"2E8B57","Matthew Zozimo":"B8860B","Robert Del Vicario":"8B0000",
-      "Glenn Kohlmann":"2F4F4F","Ronny Sharp":"4682B4","Mike Najarro":"2F6B5E"};
+    const COORD_COLORS=window._opsConfig.coordColors;
     const coords=[...new Set(df.map(r=>r["Assigned To"]).filter(Boolean))].sort();
     coords.forEach(coord=>{
       const sub=byAge(df.filter(r=>r["Assigned To"]===coord));
@@ -2176,11 +2214,12 @@ async function generateExcel(opts){
     const wsK=wb.addWorksheet("KPI Dashboard",{properties:{tabColor:{argb:GOLD}}});
     wsK.mergeCells('A1:F1');wsK.getCell('A1').value="KEY PERFORMANCE INDICATORS";
     s(wsK.getCell('A1'),{bg:DARK,fg:WHITE,bold:true,sz:12,ha:'center'});wsK.getRow(1).height=22;
+    const _KPI=window._opsConfig.kpiGoals;
     [["KPI","Goal","Target","Current","Status","Notes"],
-     ["Met SLA","90%","80% min",metSlaPct===null?"N/A":metSlaPct.toFixed(1)+"%",metSlaPct===null?"-":kpiStatus(metSlaPct,90,80),"Live from Raw Data"],
-     ["Over 30 Days","≤10%","≤15%",`${over30Pct.toFixed(1)}% (${over30})`,kpiStatus(over30Pct,10,15,false),"% aged >30d"],
+     ["Met SLA",`${_KPI.metSlaGoal}%`,`${_KPI.metSlaMin}% min`,metSlaPct===null?"N/A":metSlaPct.toFixed(1)+"%",metSlaPct===null?"-":kpiStatus(metSlaPct,_KPI.metSlaGoal,_KPI.metSlaMin),"Live from Raw Data"],
+     ["Over 30 Days",`≤${_KPI.over30Target}%`,`≤${_KPI.over30Max}%`,`${over30Pct.toFixed(1)}% (${over30})`,kpiStatus(over30Pct,_KPI.over30Target,_KPI.over30Max,false),"% aged >30d"],
      ["HIGH RISK Jobs","0","<5%",`${highRisk.length} (${total?((highRisk.length/total)*100).toFixed(1):0}%)`,highRisk.length===0?"✅ MET GOAL":highRisk.length/total<0.05?"⚠ AT TARGET":"🔴 EXCEEDS TARGET",""],
-     (()=>{const p=window._ytdPeriod||YTD_PERIOD;const gpp=(window._ytdTotal&&window._ytdTotal.gpp)||YTD_TOTAL_GP_PCT;return [`GP % (${p})`,"35%","33% min",`${gpp.toFixed(2)}%`,kpiStatus(gpp,35,33),`YTD ${p}`];})(),
+     (()=>{const p=window._ytdPeriod||YTD_PERIOD;const gpp=(window._ytdTotal&&window._ytdTotal.gpp)||YTD_TOTAL_GP_PCT;return [`GP % (${p})`,`${_KPI.gpGoal}%`,`${_KPI.gpMin}% min`,`${gpp.toFixed(2)}%`,kpiStatus(gpp,_KPI.gpGoal,_KPI.gpMin),`YTD ${p}`];})(),
      (()=>{const pt=(window._ytdTotal&&window._ytdTotal.pt)||YTD_PROP_TURNOVER;return ["Proposal Turnover","5 Days","7 Days",`${pt.toFixed(1)}d YTD`,kpiStatus(pt,5,7,false),""];})(),
     ].forEach((row,ri)=>{
       row.forEach((v,ci)=>{
@@ -2198,9 +2237,9 @@ async function generateExcel(opts){
     s(wsK.getCell('A10'),{bg:DARK,fg:WHITE,bold:true,sz:11,ha:'center'});wsK.getRow(10).height=20;
     const _xlYtd=window._ytdCoordData||YTD_COORD_DATA;
     const _xlTotal=window._ytdTotal||{rev:YTD_TOTAL_REV,gpd:YTD_TOTAL_GP_DOL,gpp:YTD_TOTAL_GP_PCT,pt:YTD_PROP_TURNOVER};
-    [["Coordinator","Inv Revenue","GP $","GP %","Proposal Turnover","vs Goal (35%)"],
-     ..._xlYtd.map(([name,rev,gpd,gpp,pt])=>[name,rev,gpd,`${gpp.toFixed(2)}%`,`${pt.toFixed(1)}d`,gpp>=35?`✅ ${gpp.toFixed(2)}%`:gpp>=33?`⚠ ${gpp.toFixed(2)}%`:`🔴 ${gpp.toFixed(2)}%`]),
-     ["GRAND TOTAL",_xlTotal.rev,_xlTotal.gpd,`${_xlTotal.gpp.toFixed(2)}%`,`${_xlTotal.pt.toFixed(1)}d`,_xlTotal.gpp>=35?`✅ ${_xlTotal.gpp.toFixed(2)}%`:_xlTotal.gpp>=33?`⚠ ${_xlTotal.gpp.toFixed(2)}%`:`🔴 ${_xlTotal.gpp.toFixed(2)}%`]
+    [["Coordinator","Inv Revenue","GP $","GP %","Proposal Turnover",`vs Goal (${_KPI.gpGoal}%)`],
+     ..._xlYtd.map(([name,rev,gpd,gpp,pt])=>[name,rev,gpd,`${gpp.toFixed(2)}%`,`${pt.toFixed(1)}d`,gpp>=_KPI.gpGoal?`✅ ${gpp.toFixed(2)}%`:gpp>=_KPI.gpMin?`⚠ ${gpp.toFixed(2)}%`:`🔴 ${gpp.toFixed(2)}%`]),
+     ["GRAND TOTAL",_xlTotal.rev,_xlTotal.gpd,`${_xlTotal.gpp.toFixed(2)}%`,`${_xlTotal.pt.toFixed(1)}d`,_xlTotal.gpp>=_KPI.gpGoal?`✅ ${_xlTotal.gpp.toFixed(2)}%`:_xlTotal.gpp>=_KPI.gpMin?`⚠ ${_xlTotal.gpp.toFixed(2)}%`:`🔴 ${_xlTotal.gpp.toFixed(2)}%`]
     ].forEach((row,ri)=>{
       const isHdr=ri===0,isTotal=ri===_xlYtd.length+1;
       row.forEach((v,ci)=>{
@@ -2297,12 +2336,13 @@ async function fetchManagerIntro(d){
   const propAppr=propPipe.filter(r=>r["Status"]==="Proposal Approved");
   const critical=df.filter(r=>r["Status Hrs"]>500);
 
+  const _KPI=window._opsConfig.kpiGoals;
   const prompt=`You are a seasoned dispatcher manager at Broadway National, a national facilities maintenance company. You are writing the daily morning agenda email to your team of service coordinators. Today is ${TODAY_STR} (${DAY_STR}).
 
 LIVE WORK ORDER DATA:
 Total open jobs: ${total} | Service: ${svc.length} | WIFI: ${wifi.length} | Retrofit: ${rf.length}
-Met SLA: ${metSlaPct===null?"N/A":metSlaPct.toFixed(1)+"%"} (goal: 90%, minimum: 80%)
-Over 30 days aged: ${over30Pct.toFixed(1)}% - ${over30} jobs (max target: 15%)
+Met SLA: ${metSlaPct===null?"N/A":metSlaPct.toFixed(1)+"%"} (goal: ${_KPI.metSlaGoal}%, minimum: ${_KPI.metSlaMin}%)
+Over 30 days aged: ${over30Pct.toFixed(1)}% - ${over30} jobs (max target: ${_KPI.over30Max}%)
 HIGH RISK jobs: ${highRisk.length} (${total?((highRisk.length/total)*100).toFixed(1):0}% of WOs)
 WATCH jobs: ${watch.length}
 Validates queue: ${valAll.length} jobs worth ${fmtUsd(sum(valAll))} - this is REVENUE ALREADY EARNED waiting to be invoiced
@@ -2379,8 +2419,9 @@ Write a short morning intro for the daily ops email. 3 paragraphs max, using <p>
 function fallbackIntro(d){
   const{metSlaPct,over30Pct,over30,highRisk,valAll,cipAll}=d;
   const g={Monday:"Hope everyone had a good weekend - let's hit the ground running.",Tuesday:"We're into the week, let's keep the momentum going.",Wednesday:"Midweek check-in. It's a good time to audit your WOs and make sure nothing is slipping.",Thursday:"One more push before the end of the week. Let's close out what we can.",Friday:"Last push of the week. Let's finish strong and set ourselves up clean for Monday."};
+  const _KPI=window._opsConfig.kpiGoals;
   let html=`<p>${g[DAY_STR]||"Let's make today count."}</p>`;
-  html+=`<p>Met SLA is sitting at <b>${metSlaPct===null?"N/A":metSlaPct.toFixed(1)+"%"}</b> against our 90% goal. We have <b>${highRisk.length} HIGH RISK jobs</b> in open WOs right now - those need to be the first thing you look at this morning. Over-30-day jobs are at <b>${over30Pct.toFixed(1)}%</b> (${over30} jobs), which ${over30Pct>15?"is above our 15% max - we need to chip away at it today":"is within target - let's keep it there"}.</p>`;
+  html+=`<p>Met SLA is sitting at <b>${metSlaPct===null?"N/A":metSlaPct.toFixed(1)+"%"}</b> against our ${_KPI.metSlaGoal}% goal. We have <b>${highRisk.length} HIGH RISK jobs</b> in open WOs right now - those need to be the first thing you look at this morning. Over-30-day jobs are at <b>${over30Pct.toFixed(1)}%</b> (${over30} jobs), which ${over30Pct>_KPI.over30Max?`is above our ${_KPI.over30Max}% max - we need to chip away at it today`:"is within target - let's keep it there"}.</p>`;
   if(valAll.length>0)html+=`<p>There is <b>${fmtUsd(sum(valAll))}</b> sitting in Validates across ${valAll.length} jobs. Every one of those is revenue we have already earned. Get the paperwork done and get it invoiced.</p>`;
   if(cipAll.length>0)html+=`<p><b>${cipAll.length} jobs are Clocked Out: In Progress</b> with no defined next step. Until each of those gets relabeled with a clear status, execution is stalled. Review your CIP jobs first thing and determine the next action for each one.</p>`;
   html+=`<p>As always - if something is stuck, don't sit on it. Reach out and we'll get it moving together. Let's have a good day. 💪</p>`;
@@ -2525,10 +2566,11 @@ function buildEmail(d, introHtml) {
   }
 
   // ── KPI rows ───────────────────────────────────────────────────────────────
+  const _KPI=window._opsConfig.kpiGoals;
   const kpiRows = [
-    ["Met SLA ⭐", "90%", "80% min", metSlaPct === null ? "N/A" : metSlaPct.toFixed(1) + "%", metSlaPct === null ? "-" : kpiStatus(metSlaPct, 90, 80), metSlaPct === null ? "#f8f9fb" : metSlaPct >= 90 ? "#dcfce7" : metSlaPct >= 80 ? "#fef9c3" : "#fee2e2", metSlaPct === null ? "#374151" : metSlaPct >= 90 ? "#166534" : metSlaPct >= 80 ? "#854d0e" : "#991b1b"],
-    ["Over 30 Days", "≤10%", "≤15%", over30Pct.toFixed(1) + "% (" + over30 + " jobs)", kpiStatus(over30Pct, 10, 15, false), over30Pct <= 10 ? "#dcfce7" : over30Pct <= 15 ? "#fef9c3" : "#fee2e2", over30Pct <= 10 ? "#166534" : over30Pct <= 15 ? "#854d0e" : "#991b1b"],
-    (()=>{const p=window._ytdPeriod||YTD_PERIOD;const gpp=(window._ytdTotal&&window._ytdTotal.gpp)||YTD_TOTAL_GP_PCT;return ["GP % (" + p + ")", "35%", "33% min", gpp.toFixed(2) + "%", kpiStatus(gpp, 35, 33), gpp >= 35 ? "#dcfce7" : gpp >= 33 ? "#fef9c3" : "#fee2e2", gpp >= 35 ? "#166534" : gpp >= 33 ? "#854d0e" : "#991b1b"];})(),
+    ["Met SLA ⭐", `${_KPI.metSlaGoal}%`, `${_KPI.metSlaMin}% min`, metSlaPct === null ? "N/A" : metSlaPct.toFixed(1) + "%", metSlaPct === null ? "-" : kpiStatus(metSlaPct, _KPI.metSlaGoal, _KPI.metSlaMin), metSlaPct === null ? "#f8f9fb" : metSlaPct >= _KPI.metSlaGoal ? "#dcfce7" : metSlaPct >= _KPI.metSlaMin ? "#fef9c3" : "#fee2e2", metSlaPct === null ? "#374151" : metSlaPct >= _KPI.metSlaGoal ? "#166534" : metSlaPct >= _KPI.metSlaMin ? "#854d0e" : "#991b1b"],
+    ["Over 30 Days", `≤${_KPI.over30Target}%`, `≤${_KPI.over30Max}%`, over30Pct.toFixed(1) + "% (" + over30 + " jobs)", kpiStatus(over30Pct, _KPI.over30Target, _KPI.over30Max, false), over30Pct <= _KPI.over30Target ? "#dcfce7" : over30Pct <= _KPI.over30Max ? "#fef9c3" : "#fee2e2", over30Pct <= _KPI.over30Target ? "#166534" : over30Pct <= _KPI.over30Max ? "#854d0e" : "#991b1b"],
+    (()=>{const p=window._ytdPeriod||YTD_PERIOD;const gpp=(window._ytdTotal&&window._ytdTotal.gpp)||YTD_TOTAL_GP_PCT;return ["GP % (" + p + ")", `${_KPI.gpGoal}%`, `${_KPI.gpMin}% min`, gpp.toFixed(2) + "%", kpiStatus(gpp, _KPI.gpGoal, _KPI.gpMin), gpp >= _KPI.gpGoal ? "#dcfce7" : gpp >= _KPI.gpMin ? "#fef9c3" : "#fee2e2", gpp >= _KPI.gpGoal ? "#166534" : gpp >= _KPI.gpMin ? "#854d0e" : "#991b1b"];})(),
     ["Volume", "-", "-", "Total " + total + " | Svc " + svc.length + " | WIFI " + wifi.length + " | RF " + rf.length, "-", "#f8f9fb", "#374151"],
   ];
 
@@ -2557,9 +2599,9 @@ function buildEmail(d, introHtml) {
   const ytdHdr = ["Coordinator", "Inv Revenue", "GP $", "GP %", "Prop Turnover", "vs Goal"].map(h => `<th style='${thY}'>${h}</th>`).join("");
   const ytdBody = _ytdCoords.map((r, i) => {
     const [name, rev, gpd, gpp, pt] = r;
-    const gpBg = gpp >= 35 ? "#dcfce7" : gpp >= 33 ? "#fef9c3" : "#fee2e2";
-    const gpFc = gpp >= 35 ? "#166534" : gpp >= 33 ? "#854d0e" : "#991b1b";
-    const gpLabel = gpp >= 35 ? "✅ " + gpp.toFixed(2) + "%" : gpp >= 33 ? "⚠ " + gpp.toFixed(2) + "%" : "🔴 " + gpp.toFixed(2) + "%";
+    const gpBg = gpp >= _KPI.gpGoal ? "#dcfce7" : gpp >= _KPI.gpMin ? "#fef9c3" : "#fee2e2";
+    const gpFc = gpp >= _KPI.gpGoal ? "#166534" : gpp >= _KPI.gpMin ? "#854d0e" : "#991b1b";
+    const gpLabel = gpp >= _KPI.gpGoal ? "✅ " + gpp.toFixed(2) + "%" : gpp >= _KPI.gpMin ? "⚠ " + gpp.toFixed(2) + "%" : "🔴 " + gpp.toFixed(2) + "%";
     const rowBg = i % 2 === 0 ? "#f8f9fb" : "#ffffff";
     const td = `padding:6px 10px;font-size:11px;font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;border-bottom:1px solid #edf0f4;background:${rowBg};`;
     return `<tr>
@@ -2568,11 +2610,11 @@ function buildEmail(d, introHtml) {
       <td style='${td}text-align:right;'>${fmtUsd(gpd)}</td>
       <td style='${td}text-align:center;background:${gpBg};color:${gpFc};font-weight:600;'>${gpLabel}</td>
       <td style='${td}text-align:center;'>${pt.toFixed(1)}d</td>
-      <td style='${td}text-align:center;background:${gpBg};color:${gpFc};font-weight:600;'>${gpp >= 35 ? "✅ Met" : gpp >= 33 ? "⚠ Near" : "🔴 Below"}</td>
+      <td style='${td}text-align:center;background:${gpBg};color:${gpFc};font-weight:600;'>${gpp >= _KPI.gpGoal ? "✅ Met" : gpp >= _KPI.gpMin ? "⚠ Near" : "🔴 Below"}</td>
     </tr>`;
   }).join("");
-  const totGpBg = _ytdTotal.gpp >= 35 ? "#dcfce7" : _ytdTotal.gpp >= 33 ? "#fef9c3" : "#fee2e2";
-  const totGpFc = _ytdTotal.gpp >= 35 ? "#166534" : _ytdTotal.gpp >= 33 ? "#854d0e" : "#991b1b";
+  const totGpBg = _ytdTotal.gpp >= _KPI.gpGoal ? "#dcfce7" : _ytdTotal.gpp >= _KPI.gpMin ? "#fef9c3" : "#fee2e2";
+  const totGpFc = _ytdTotal.gpp >= _KPI.gpGoal ? "#166534" : _ytdTotal.gpp >= _KPI.gpMin ? "#854d0e" : "#991b1b";
   const tdTot = "padding:7px 10px;font-size:11px;font-family:-apple-system, BlinkMacSystemFont, \"Segoe UI\", \"Helvetica Neue\", Arial, sans-serif;background:#1a5f3e;color:#2ECC71;font-weight:600;border-top:2px solid #2ECC71;";
   const ytdTotalRow = `<tr>
     <td style='${tdTot}'>GRAND TOTAL</td>
@@ -2580,7 +2622,7 @@ function buildEmail(d, introHtml) {
     <td style='${tdTot}text-align:right;'>${fmtUsd(_ytdTotal.gpd)}</td>
     <td style='${tdTot}text-align:center;background:${totGpBg};color:${totGpFc};'>${_ytdTotal.gpp.toFixed(2)}%</td>
     <td style='${tdTot}text-align:center;'>${_ytdTotal.pt.toFixed(1)}d</td>
-    <td style='${tdTot}text-align:center;background:${totGpBg};color:${totGpFc};'>${_ytdTotal.gpp >= 35 ? "✅ Met" : _ytdTotal.gpp >= 33 ? "⚠ Near" : "🔴 Below"}</td>
+    <td style='${tdTot}text-align:center;background:${totGpBg};color:${totGpFc};'>${_ytdTotal.gpp >= _KPI.gpGoal ? "✅ Met" : _ytdTotal.gpp >= _KPI.gpMin ? "⚠ Near" : "🔴 Below"}</td>
   </tr>`;
   const ytdStaleNote = _ytdFallback ? `<p style='font-size:10px;font-weight:600;color:#991b1b;background:#fee2e2;border:1px solid #fca5a5;padding:6px 10px;text-transform:none;letter-spacing:normal;font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;margin:16px 0 0 0;'>These YTD figures are from the ${_ytdPeriod} upload and may be out of date. Upload the current Pilot Revenue (GP) file to refresh them.</p>` : "";
   const ytdSection = ytdStaleNote + `<p style='font-size:10px;font-weight:600;color:#6b7280;text-transform:none;letter-spacing:normal;font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;margin:16px 0 6px 0;'>${_ytdPeriod} YTD Performance</p>
@@ -2753,8 +2795,8 @@ function buildEmail(d, introHtml) {
   }
 
   // ── Stat strip ─────────────────────────────────────────────────────────────
-  const slaColor = metSlaPct === null ? "#6b7280" : metSlaPct >= 80 ? "#16a34a" : metSlaPct >= 60 ? "#d97706" : "#dc2626";
-  const over30Color = over30Pct <= 10 ? "#16a34a" : over30Pct <= 15 ? "#d97706" : "#dc2626";
+  const slaColor = metSlaPct === null ? "#6b7280" : metSlaPct >= _KPI.metSlaMin ? "#16a34a" : metSlaPct >= 60 ? "#d97706" : "#dc2626";
+  const over30Color = over30Pct <= _KPI.over30Target ? "#16a34a" : over30Pct <= _KPI.over30Max ? "#d97706" : "#dc2626";
   const statStrip = `<table cellpadding='0' cellspacing='0' style='width:100%;margin-bottom:16px;table-layout:fixed;'>
     <tr>
       ${statBadge("Total Open Jobs", total, "#1a5f3e", "#f0f4f8")}
