@@ -5,6 +5,7 @@
   "description": "Broadway National internal ops tools - Azure Static Web App",
   "scripts": {
     "migrate": "node scripts/migrate-from-netlify.js",
+    "test": "node --test scripts/test-*.js",
     "build": "echo 'No build needed - static files only'",
     "build:azure": "echo 'No build needed - static files only'"
   },
