@@ -44,6 +44,10 @@
     "allowedRoles": ["anonymous"]
   },
   {
+    "route": "/api/ai",
+    "allowedRoles": ["anonymous"]
+  },
+  {
     "route": "/api/scrape-contacts",
     "allowedRoles": ["anonymous"]
   },
