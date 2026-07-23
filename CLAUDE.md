@@ -367,6 +367,13 @@ Some tools live outside this repo; verify presence before editing.
 - **Broadway_Sign_Proof_Builder.html** - seven sign types with SVG drawings + fabrication refs.
 - **Broadway_InHouse_Dispatch_Report.html** - MT bypass detection from WO CSV.
 - **WO_Audit_Tool.html** - daily audit workbook refresh (ExcelJS).
+- **triage skill** (repo-dev automation, not a product tool) - `.claude/skills/triage/` +
+  `scripts/triage/`. Solo-dev morning loop trimmed from mcpvault: a gitignored `.triage/state.json`
+  resume spine, worktree draft -> adversarial-review -> green-gate-before-commit, gather (recent
+  commits + local gate + CLAUDE.md backlog) -> triage -> spill to `.triage/inbox.md`. Green gate =
+  `node scripts/preflight.js` + the bundled-node `scripts/test-*.js` suites (baseline-aware; bundled
+  node must be on PATH). Commits locally on `triage/<id>`, never pushes (deploy split). Invoke via
+  `/triage`.
 - Also canonical: Coordinator Check-In Dashboard, 1:1 Meeting Agenda, PIP Roadmap & Manager
   Checklist, CrossAmerica Partners Vendor Coverage Matrix, Primark Unified Ops Agent + Dashboard,
   Inventory - Log Stock Movement (Power Automate flow).
