@@ -4,7 +4,11 @@ const CONTAINER_NAME = "broadway-data";
 
 // SLOTS are types of data. Same set for every client.
 // Adding a slot = ship code. Adding a client = edit VALID_CLIENTS below.
-const VALID_SLOTS = ["revenue", "revenue-gp", "wo-snapshot-today", "wo-snapshot-previous", "workbook", "wo-dataset", "wo-snapshot-history", "over30-history", "job-notes", "config", "checkin", "om-bonus", "wo-audit", "exception-queue", "o30-lines", "job-plans", "live-jobs", "job-divisions"];
+const VALID_SLOTS = ["revenue", "revenue-gp", "wo-snapshot-today", "wo-snapshot-previous", "workbook", "wo-dataset", "wo-snapshot-history", "over30-history", "job-notes", "config", "checkin", "om-bonus", "wo-audit", "exception-queue", "o30-lines", "job-plans", "live-jobs", "job-divisions", "knowledge"];
+// "knowledge": the team-authored knowledge doc the BWN Ask copilot (bwn-ask.user.js /
+// api/ask) injects as grounding context - SOPs, per-client rules, escalation contacts.
+//   { v:1, md:"...markdown...", sections?:[{title,body}] }  (a bare string is also accepted).
+// Edited here (broadway_employee gate); READ server-side by api/ask. Not financial.
 // "o30-lines": per-client Over-30 audit lines + board trend, WRITTEN by the userscript
 // connector via /api/wo-ingest (key-gated); the dashboard READS it here (AAD gate):
 //   { v:1, items:{ "<tracking>": { line, ts, by, prev:[{line,ts,by}×≤4] } },
