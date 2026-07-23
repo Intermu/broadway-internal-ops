@@ -1,2 +1,7 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Minified libraries are integrity-pinned (Subresource Integrity / sha384). EOL
+# conversion would change the served bytes so they no longer match the pinned hash,
+# and the browser would silently refuse to load the library. Never convert them.
+*.min.js -text
