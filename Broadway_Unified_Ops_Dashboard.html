@@ -4624,12 +4624,12 @@ function buildWbHealth(raw, sheetName, fileName, parsedCount){
     {label:"Job ID", aliases:["Job ID","Source Job #"], level:"crit"},
     {label:"Coordinator", aliases:["Assigned To"], level:"warn"},
     {label:"Status", aliases:["Status Category","Status"], level:"warn"},
-    {label:"Age (days)", aliases:["Aged (Days)","# Days"], level:"warn"},
+    {label:"Age (days)", aliases:["Aged (Days)","# Days","Aged"], level:"warn"},
     {label:"Approved $", aliases:["Approved_Amount","Approved Amount","Amount","Client DNE","Client DNE ($)"], level:"warn"},
     {label:"Staleness", aliases:["Latest Update","Last Updated","Last Note Date","Last Note","Days Since Update"], level:"warn"},
     {label:"Expected completion", aliases:["Expected Completion Date","Expected Completion"], level:"info"},
     {label:"Next onsite", aliases:["Next Onsite Date","Next Onsite"], level:"info"},
-    {label:"Time in status", aliases:["Time in Status (hrs.)","Status Hrs.","Status (hrs.)"], level:"info"}
+    {label:"Time in status", aliases:["Time in Status (hrs.)","Status Hrs.","Status (hrs.)","Status Hrs"], level:"info"}
   ].map(function(c){ c.matched = match(c.aliases); return c; });
   const missingWarn = cols.filter(function(c){ return !c.matched && c.level==="warn"; });
   const jobIdCol = cols[0].matched;
