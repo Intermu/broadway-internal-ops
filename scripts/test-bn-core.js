@@ -1,13 +1,34 @@
 /* test-bn-core.js -- guards the bn-core consumption boundary. The live tools now
  * delegate their classifiers to window.BN (bn-core), so this proves the delegation
- * is wired correctly. Run from repo root:  node scripts/test-bn-core.js
+ * is wired correctly.
+ *
+ * Runs on Node's built-in test runner (node:test) - no dependencies, no build.
+ * Run with the Adobe-bundled node (no Node on PATH):
+ *   "/c/Program Files/Adobe/Adobe Creative Cloud Experience/libs/node.exe" scripts/test-bn-core.js
+ * or the whole suite dir:
+ *   "/c/Program Files/Adobe/Adobe Creative Cloud Experience/libs/node.exe" --test scripts
  *
  * Extracts the live functions straight out of the HTML by brace-matching, injects
  * BN, and asserts identical output to bn-core across an edge-case corpus (and, when
  * present, every real Source Job # in a Pilot revenue workbook). A mismapped
- * delegator (wrong arg or wrong BN.* fn) fails here. Exits non-zero on any mismatch
- * so it can gate a commit.
+ * delegator (wrong arg or wrong BN.* fn) fails here.
+ *
+ * NOTE (pre-existing): the o30Division parity guard is retired (todo below). It is
+ * NOT a source regression - O30_BUCKET still exists in the Dashboard (near line 3532).
+ * The old red was a harness gap: grabFn brace-extracts o30Division fine, but the body
+ * now reads O30_BUCKET plus the divisionOf() -> divisionAuto() -> divisionsCfg() /
+ * JOB_DIVISION chain, and a single-function grab injects only BN, so a call throws
+ * ReferenceError: O30_BUCKET is not defined. Wiring the whole chain in would still not
+ * assert anything useful: o30Division was refactored to client-config-driven, anchored,
+ * override-aware classification (with a Q/R bucket), which genuinely diverges from
+ * BN.division's fixed unanchored 3-bucket regex - and no live code calls BN.division
+ * anymore (its former consumer o30Division was rewritten). Decision deferred: repoint
+ * the guard at divisionAuto, or retire BN.division. _cclass / classifyJob /
+ * _closedWifiByPO still delegate to BN.* and are guarded here.
  */
+"use strict";
+const { describe, it } = require("node:test");
+const assert = require("node:assert");
 const fs = require("fs");
 const path = require("path");
 
@@ -39,16 +60,9 @@ function grabFn(file, name) {
 const DASH = path.join(ROOT, "Broadway_Unified_Ops_Dashboard.html");
 const DIAG = path.join(ROOT, "Pilot_Proposal_Diagnostic.html");
 
-const o30Division = grabFn(DASH, "o30Division");      // live 3-bucket
-const _cclass = grabFn(DASH, "_cclass");              // live 4-bucket
-const _closedWifiByPO = grabFn(DASH, "_closedWifiByPO");
+const _cclass = grabFn(DASH, "_cclass");              // live 4-bucket (delegates to BN.jobClass)
+const _closedWifiByPO = grabFn(DASH, "_closedWifiByPO"); // delegates to BN.invoicedWifiByPO
 const classifyJob = grabFn(DIAG, "classifyJob");      // live 4-bucket (row form)
-
-let fails = 0, checks = 0;
-function eq(label, a, b) {
-  checks++;
-  if (a !== b) { fails++; console.log("  MISMATCH [" + label + "]  bn=" + JSON.stringify(a) + "  live=" + JSON.stringify(b)); }
-}
 
 const jobCorpus = [
   "", "   ", "1980247", "2098878 (add)", "2098878 - additional",
@@ -58,43 +72,64 @@ const jobCorpus = [
   null, undefined, 1980247
 ];
 
-for (const x of jobCorpus) {
-  eq("division:" + x, BN.division(x), o30Division({ jobId: (x == null ? x : String(x)) }));
-  const s = String(x == null ? "" : x);
-  eq("jobClass/_cclass:" + x, BN.jobClass(x), _cclass(s));
-  eq("jobClass/classifyJob:" + x, BN.jobClass(x), classifyJob({ sourceJobNum: x }));
-}
+describe("bn-core v" + BN.VERSION + " parity: job classifiers", () => {
+  for (const x of jobCorpus) {
+    const label = JSON.stringify(x);
+    const s = String(x == null ? "" : x);
+    it("jobClass vs _cclass " + label, () => {
+      assert.strictEqual(BN.jobClass(x), _cclass(s));
+    });
+    it("jobClass vs classifyJob " + label, () => {
+      assert.strictEqual(BN.jobClass(x), classifyJob({ sourceJobNum: x }));
+    });
+  }
+
+  // Retired guard (see the file-header NOTE): grabbing o30Division and injecting only
+  // BN throws "ReferenceError: O30_BUCKET is not defined" - a harness gap, not a source
+  // regression (O30_BUCKET is still defined near Dashboard line 3532). Even fully wired
+  // through the divisionOf()/divisionAuto()/JOB_DIVISION chain, o30Division no longer
+  // matches BN.division (anchored client-config buckets vs a fixed unanchored regex), and
+  // nothing calls BN.division at runtime. Non-gating pending: repoint at divisionAuto or
+  // retire BN.division.
+  it.todo("division vs BN.division parity - o30Division diverged (divisionOf/divisionAuto); repoint or retire BN.division");
+});
 
 const poCorpus = [
   "", null, "WIFI-123", "wifi 5", "WIFItech", "Tech-44", "tech-99",
   "123456789012", "12 - TS - 34", "X-TS-Y", "TS-12", "ABC", "  -TS  ", "PO-100 / PO-200"
 ];
-for (const p of poCorpus) eq("invoicedWifiByPO:" + p, BN.invoicedWifiByPO(p), _closedWifiByPO(p));
+
+describe("bn-core parity: invoicedWifiByPO", () => {
+  for (const p of poCorpus) {
+    it("invoicedWifiByPO " + JSON.stringify(p), () => {
+      assert.strictEqual(BN.invoicedWifiByPO(p), _closedWifiByPO(p));
+    });
+  }
+});
 
 // Optional: every real Source Job # in a Pilot revenue workbook, if available.
-let xlsxNote = "skipped (no workbook / xlsx module)";
-try {
-  const XLSX = require("xlsx");
-  const candidates = [
-    path.join(ROOT, "Pilot_Revenue_26.xlsx"),
-    "/mnt/user-data/uploads/Pilot_Revenue_26.xlsx"
-  ];
-  const wbPath = candidates.find(p => fs.existsSync(p));
-  if (wbPath) {
+// xlsx is not installed by default (no node_modules); skip cleanly when absent.
+describe("bn-core parity: Pilot revenue workbook (optional)", () => {
+  let XLSX = null, wbPath = null;
+  try {
+    XLSX = require("xlsx");
+    const candidates = [
+      path.join(ROOT, "Pilot_Revenue_26.xlsx"),
+      "/mnt/user-data/uploads/Pilot_Revenue_26.xlsx"
+    ];
+    wbPath = candidates.find(p => fs.existsSync(p)) || null;
+  } catch (e) { /* xlsx module unavailable */ }
+
+  if (XLSX && wbPath) {
     const wb = XLSX.readFile(wbPath);
     const rows = XLSX.utils.sheet_to_json(wb.Sheets["Work Order Report"], { defval: "" });
-    let n = 0;
-    for (const r of rows) {
-      const v = r["Source Job #"];
-      eq("xlsx.division", BN.division(v), o30Division({ jobId: (v == null ? v : String(v)) }));
-      eq("xlsx.jobClass", BN.jobClass(v), _cclass(String(v == null ? "" : v)));
-      n++;
-    }
-    xlsxNote = n + " Source Job # rows from " + path.basename(wbPath);
+    it(rows.length + " Source Job # rows from " + path.basename(wbPath), () => {
+      for (const r of rows) {
+        const v = r["Source Job #"];
+        assert.strictEqual(BN.jobClass(v), _cclass(String(v == null ? "" : v)));
+      }
+    });
+  } else {
+    it.skip("workbook corpus (no workbook / xlsx module)", () => {});
   }
-} catch (e) { xlsxNote = "skipped (" + e.message + ")"; }
-
-console.log("bn-core v" + BN.VERSION + " parity: " + (checks - fails) + "/" + checks + " checks passed");
-console.log("workbook corpus: " + xlsxNote);
-if (fails) { console.log("FAIL: " + fails + " mismatch(es)"); process.exit(1); }
-console.log("OK: bn-core is behavior-identical to the live classifiers.");
+});
