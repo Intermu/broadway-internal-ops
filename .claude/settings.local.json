@@ -345,7 +345,9 @@
       "Bash(cp 'C:/Users/mnajarro/Downloads/Form W-9 \\(002\\).pdf' C:/Users/mnajarro/AppData/Local/Temp/claude/C--Users-mnajarro-OneDrive---Broadway-National-Documents-GitHub-broadway-internal-ops/b9a0d5dc-c59f-4d55-b3a6-5560675876ea/scratchpad/w9b.pdf)",
       "Bash('/c/Program Files/Adobe/Adobe Creative Cloud Experience/libs/node.exe' C:/Users/mnajarro/AppData/Local/Temp/claude/C--Users-mnajarro-OneDrive---Broadway-National-Documents-GitHub-broadway-internal-ops/b9a0d5dc-c59f-4d55-b3a6-5560675876ea/scratchpad/w9_probe.js)",
       "Bash('/c/Program Files/Adobe/Adobe Creative Cloud Experience/libs/node.exe' C:/Users/mnajarro/AppData/Local/Temp/claude/C--Users-mnajarro-OneDrive---Broadway-National-Documents-GitHub-broadway-internal-ops/b9a0d5dc-c59f-4d55-b3a6-5560675876ea/scratchpad/w9a_inflate.js)",
-      "Bash('/c/Program Files/Adobe/Adobe Creative Cloud Experience/libs/node.exe' C:/Users/mnajarro/AppData/Local/Temp/claude/C--Users-mnajarro-OneDrive---Broadway-National-Documents-GitHub-broadway-internal-ops/b9a0d5dc-c59f-4d55-b3a6-5560675876ea/scratchpad/msg_extract_test.js)"
+      "Bash('/c/Program Files/Adobe/Adobe Creative Cloud Experience/libs/node.exe' C:/Users/mnajarro/AppData/Local/Temp/claude/C--Users-mnajarro-OneDrive---Broadway-National-Documents-GitHub-broadway-internal-ops/b9a0d5dc-c59f-4d55-b3a6-5560675876ea/scratchpad/msg_extract_test.js)",
+      "Read(//c/Users/mnajarro/OneDrive - Broadway National/mcpvault/.github/workflows/**)",
+      "Read(//c/Users/mnajarro/OneDrive - Broadway National/mcpvault/.github/**)"
     ]
   }
 }
