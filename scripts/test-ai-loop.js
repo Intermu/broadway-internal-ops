@@ -325,6 +325,33 @@ describe("iteration cap", () => {
   });
 });
 
+// ================= throttle (security fix val-1) =================
+describe("throttle", () => {
+  it("summarize over the per-IP cap -> 429 (courtesy throttle, key-only tier keys on IP)", async () => {
+    process.env.BWN_AI_RL_MAX = "2";
+    scriptModel([mText("a"), mText("b"), mText("c")]);
+    const hdr = { "x-bwn-key": "testkey", "x-forwarded-for": "9.9.9.9" };   // isolated bucket
+    const r1 = ctx(); await ai(r1, reqOf({ headers: hdr, body: { task: "summarize", input: "x" } }));
+    const r2 = ctx(); await ai(r2, reqOf({ headers: hdr, body: { task: "summarize", input: "x" } }));
+    const r3 = ctx(); await ai(r3, reqOf({ headers: hdr, body: { task: "summarize", input: "x" } }));
+    delete process.env.BWN_AI_RL_MAX;
+    assert.ok(r1.res.status === 200 && r2.res.status === 200 && r3.res.status === 429,
+      "3rd call over cap -> 429: " + JSON.stringify([r1.res.status, r2.res.status, r3.res.status]));
+  });
+});
+
+// ================= constant-time key compare (security fix crypto-2) =================
+describe("safeStrEqual", () => {
+  const AUTH = require(path.join(__dirname, "..", "api", "shared", "umbrava-auth.js"));
+  it("equal -> true; unequal / different length / non-string -> false", () => {
+    assert.ok(AUTH.safeStrEqual("s3cret", "s3cret"));
+    assert.ok(!AUTH.safeStrEqual("s3cret", "s3creT"));
+    assert.ok(!AUTH.safeStrEqual("s3cret", "s3cret-longer"));
+    assert.ok(!AUTH.safeStrEqual(undefined, "s3cret"));
+    assert.ok(!AUTH.safeStrEqual(null, null));
+  });
+});
+
 // ================= config + em-dash + brackets (TASK-006 / TEST-002) =================
 describe("config / hygiene", () => {
   const root = path.join(__dirname, "..");

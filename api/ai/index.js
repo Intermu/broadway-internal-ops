@@ -214,6 +214,36 @@ function s(v, max) {
   return out;
 }
 
+// ---- throttle ------------------------------------------------------------------------------
+// Best-effort in-memory rate limit (courtesy cap, NOT the security control - the x-bwn-key
+// + the advanced-tier vouch are that). Advanced tasks key on the VERIFIED actor (email, not
+// spoofable); summarize/classify are key-only, so they key on the caller IP (x-forwarded-for)
+// to bound a single source without collapsing all coordinators into one bucket. Tunable via
+// BWN_AI_RL_MAX (default 60 / 60s); raise it for heavy legit batches. Mirrors api/ask.
+const RL_WINDOW_MS = 60000;
+function rlMax() { const n = parseInt(process.env.BWN_AI_RL_MAX, 10); return (n >= 1 && n <= 100000) ? n : 60; }
+const rlHits = new Map();
+function rateLimited(actorKey) {
+  const now = Date.now();
+  const max = rlMax();
+  const arr = (rlHits.get(actorKey) || []).filter((t) => now - t < RL_WINDOW_MS);
+  if (arr.length >= max) { rlHits.set(actorKey, arr); return true; }
+  arr.push(now);
+  rlHits.set(actorKey, arr);
+  if (rlHits.size > 500) {
+    for (const k of Array.from(rlHits.keys())) {
+      if (!(rlHits.get(k) || []).some((t) => now - t < RL_WINDOW_MS)) rlHits.delete(k);
+      if (rlHits.size <= 500) break;
+    }
+  }
+  return false;
+}
+function clientIp(req) {
+  const xff = req && req.headers && (req.headers["x-forwarded-for"] || req.headers["X-Forwarded-For"]);
+  const first = String(xff || "").split(",")[0].trim();
+  return first || "key-only";
+}
+
 // ---- caps (trim rather than reject so a chatty conversation still answers) ----------------
 const MAX_INPUT = 120000;          // convenience prompt/input path (no messages[] supplied)
 const MAX_SYSTEM = 20000;          // caller-supplied system for non-ask tasks
@@ -295,7 +325,7 @@ module.exports = async function (context, req) {
     const expected = process.env.WO_INGEST_KEY;
     if (!expected) { context.res = json(503, { ok: false, error: "connector not configured" }); return; }
     const key = req.headers && (req.headers["x-bwn-key"] || req.headers["X-BWN-KEY"]);
-    if (!key || key !== expected) { context.res = json(403, { ok: false, error: "unauthorized" }); return; }
+    if (!AUTH.safeStrEqual(key, expected)) { context.res = json(403, { ok: false, error: "unauthorized" }); return; }
 
     const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) { context.res = json(503, { ok: false, error: "ANTHROPIC_API_KEY is not set" }); return; }
@@ -319,6 +349,10 @@ module.exports = async function (context, req) {
       }
       actor = auth.user.email || auth.user.sub || "verified-unknown";
     }
+
+    // Courtesy throttle: advanced tier by verified actor, summarize/classify by caller IP.
+    const rlKey = (group === "advanced") ? ("actor:" + actor) : ("ip:" + clientIp(req));
+    if (rateLimited(rlKey)) { context.res = json(429, { ok: false, error: "rate limited; slow down" }); return; }
 
     const model = pickModel(body.model);
 

@@ -1,4 +1,16 @@
 const https = require("https");
+const crypto = require("crypto");
+
+// Constant-time string compare for shared-secret checks (the x-bwn-key gate). Both sides
+// are hashed to a fixed 32 bytes first, so this is length-agnostic and does not leak length
+// via early return the way `a !== b` (or a raw timingSafeEqual with a length pre-check) can.
+// Returns false for any non-string input. Use for `key === expected` style secret checks.
+function safeStrEqual(a, b) {
+  if (typeof a !== "string" || typeof b !== "string") return false;
+  const ha = crypto.createHash("sha256").update(a).digest();
+  const hb = crypto.createHash("sha256").update(b).digest();
+  return crypto.timingSafeEqual(ha, hb);
+}
 
 // Shared Umbrava identity + role enforcement for the connector Functions.
 //
@@ -262,6 +274,7 @@ function roleDeniedBody(user, minRank) {
 
 module.exports = {
   RANK: RANK,
+  safeStrEqual: safeStrEqual,
   ISSUERS: ISSUERS,
   AUDS: AUDS,
   normUrl: normUrl,

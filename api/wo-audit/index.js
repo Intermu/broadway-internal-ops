@@ -1,4 +1,5 @@
 const https = require("https");
+const AUTH = require("../shared/umbrava-auth.js");
 
 // WO Audit SUMMARIZE proxy for the BWN suite userscript (bwn-wo-audit.user.js).
 //
@@ -122,6 +123,35 @@ function s(v, max) {
   return out;
 }
 
+// ---- throttle ------------------------------------------------------------------------------
+// Best-effort in-memory rate limit (courtesy cap, NOT the security control - the shared
+// x-bwn-key is that). This route is key-only (no per-user identity), so it keys on the caller
+// IP (x-forwarded-for) to bound a single source. Tunable via WO_AUDIT_RL_MAX (default 240/60s:
+// generous for a full WO-Audit batch, low enough to bound a runaway/abusive loop). See api/ask.
+const RL_WINDOW_MS = 60000;
+function rlMax() { const n = parseInt(process.env.WO_AUDIT_RL_MAX, 10); return (n >= 1 && n <= 100000) ? n : 240; }
+const rlHits = new Map();
+function rateLimited(actorKey) {
+  const now = Date.now();
+  const max = rlMax();
+  const arr = (rlHits.get(actorKey) || []).filter((t) => now - t < RL_WINDOW_MS);
+  if (arr.length >= max) { rlHits.set(actorKey, arr); return true; }
+  arr.push(now);
+  rlHits.set(actorKey, arr);
+  if (rlHits.size > 500) {
+    for (const k of Array.from(rlHits.keys())) {
+      if (!(rlHits.get(k) || []).some((t) => now - t < RL_WINDOW_MS)) rlHits.delete(k);
+      if (rlHits.size <= 500) break;
+    }
+  }
+  return false;
+}
+function clientIp(req) {
+  const xff = req && req.headers && (req.headers["x-forwarded-for"] || req.headers["X-Forwarded-For"]);
+  const first = String(xff || "").split(",")[0].trim();
+  return first || "key-only";
+}
+
 module.exports = async function (context, req) {
   try {
     if (req.method === "OPTIONS") { context.res = { status: 204, headers: CORS }; return; }
@@ -132,7 +162,10 @@ module.exports = async function (context, req) {
     const expected = process.env.WO_INGEST_KEY;
     if (!expected) { context.res = json(503, { ok: false, error: "connector not configured" }); return; }
     const key = req.headers && (req.headers["x-bwn-key"] || req.headers["X-BWN-KEY"]);
-    if (!key || key !== expected) { context.res = json(403, { ok: false, error: "unauthorized" }); return; }
+    if (!AUTH.safeStrEqual(key, expected)) { context.res = json(403, { ok: false, error: "unauthorized" }); return; }
+
+    // Courtesy throttle (key-only route -> key on caller IP). See the note above the helper.
+    if (rateLimited("ip:" + clientIp(req))) { context.res = json(429, { ok: false, error: "rate limited; slow down" }); return; }
 
     const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) { context.res = json(503, { ok: false, error: "ANTHROPIC_API_KEY is not set" }); return; }
@@ -180,8 +213,10 @@ module.exports = async function (context, req) {
 
     const r = await anthropicMessages(apiKey, payload, 60000);
     if (r.status !== 200 || !r.json) {
+      // Log the raw upstream body server-side, but do NOT echo it to the client - it can
+      // carry provider internals (model ids, quota/billing text). Mirrors api/ai / api/ask.
       context.log.error("wo-audit: Anthropic error", r.status, (r.raw || "").slice(0, 400));
-      context.res = json(502, { ok: false, error: "Anthropic API error (" + r.status + ")", detail: (r.raw || "").slice(0, 300) });
+      context.res = json(502, { ok: false, error: "Anthropic API error (" + r.status + ")" });
       return;
     }
 
@@ -194,6 +229,6 @@ module.exports = async function (context, req) {
   } catch (err) {
     const m = (err && err.message) ? err.message : String(err);
     context.log.error("wo-audit error:", m);
-    context.res = json(500, { ok: false, error: m });
+    context.res = json(500, { ok: false, error: "wo-audit error" });
   }
 };
