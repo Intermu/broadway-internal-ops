@@ -36,6 +36,14 @@
     "allowedRoles": ["anonymous"]
   },
   {
+    "route": "/api/ask",
+    "allowedRoles": ["anonymous"]
+  },
+  {
+    "route": "/api/wo-audit",
+    "allowedRoles": ["anonymous"]
+  },
+  {
     "route": "/api/scrape-contacts",
     "allowedRoles": ["anonymous"]
   },

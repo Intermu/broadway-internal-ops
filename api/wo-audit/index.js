@@ -1,39 +1,54 @@
 const https = require("https");
 
-// WO Audit proxy for the SWA-hosted WO_Audit_Automation.html tool.
+// WO Audit SUMMARIZE proxy for the BWN suite userscript (bwn-wo-audit.user.js).
 //
-// The tool batch-audits a WO list: for each work order it asks Claude (connected
-// to Umbrava over MCP) to search the WO, read its two most recent notes, and write
-// a 1-3 sentence client-ready status note. The browser orchestrates the loop
-// (concurrency, retries, resume, edit, download); THIS route is the stateless
-// per-WO Anthropic call.
+// v2 (2026-07-23) - direct-GraphQL rebuild. The old v1 of this route asked Claude to
+// reach Umbrava over an MCP connector; that failed in production with a 400
+// "Authentication error while..." because Umbrava's MCP endpoint only accepts a
+// LIVE-SESSION Auth0 bearer (no static/service token), which a server-side Function
+// does not have. See the vault note [[wo-audit-automation]].
 //
-// Why a proxy at all: the original tool called api.anthropic.com directly from the
-// browser with a pasted `sk-ant-` key. That is (a) CORS-blocked without the
-// `anthropic-dangerous-direct-browser-access` header and (b) ships the org key to
-// every operator's browser. Here the key (ANTHROPIC_API_KEY app setting) stays
-// server-side; the browser calls this route SAME-ORIGIN, so there is no CORS and
-// no key exposure. (Repo CLAUDE.md Active Work: "needs an Azure Function proxy for
-// the Anthropic key".)
+// v2 moves the Umbrava read INTO the page: bwn-wo-audit.user.js runs on app.umbrava.com,
+// so it already holds the operator's live Auth0 bearer and fetches each WO's notes with a
+// plain same-origin GraphQL call (the same woToJob flow bwn-suite-ai uses for drafts). This
+// route no longer touches Umbrava AT ALL - it receives the already-fetched note text and
+// only asks Claude to write the 1-3 sentence client-ready status note. The Anthropic key
+// stays server-side; no key and no MCP anywhere.
 //
-// AUTH: this route has NO in-code auth gate, exactly like /api/generate. The SWA
-// edge protects it: WO_Audit_Automation.html is served to broadway_employee only,
-// and /api/wo-audit falls under the /api/* -> broadway_employee route rule in
-// staticwebapp.config.json. A signed-in Broadway employee's AAD session is the gate;
-// the browser's same-origin cookie is presented automatically.
+// AUTH: the userscript runs on app.umbrava.com (a different origin, NOT federated to
+// Broadway's Entra tenant) and calls this route cross-origin via GM_xmlhttpRequest, so it
+// cannot present the AAD principal the rest of /api/* relies on. This route is therefore
+// reachable ANONYMOUSLY at the SWA route layer (see staticwebapp.config.json) and gates
+// itself with the shared connector key (app setting WO_INGEST_KEY, sent as `x-bwn-key`) -
+// the SAME key the rest of the connector uses (wo-ingest, cc-auth, user-role, ...). A batch
+// summarize over WO notes the caller already has read access to is a coordinator action, so
+// there is no minimum rank - the shared key is the tenant gate.
 //
 // HTTP via the `https` module, never global fetch (repo CLAUDE.md Hard Rule 2 - the
-// SWA-managed Node runtime does not reliably expose fetch). Fixed Anthropic host, no
-// SSRF surface.
+// SWA-managed Node runtime does not reliably expose fetch). Fixed Anthropic host, no SSRF.
 //
-//   POST /api/wo-audit
-//        body { wo: { raw, status, city, state, location, days, assignedTo }, model }
-//        -> { ok:true, note:"...", mcpCalls:[...], stopReason:"end_turn" }
-//        -> { ok:false, error:"...", stopReason?, status? } on a handled failure
+//   POST /api/wo-audit   header x-bwn-key: <WO_INGEST_KEY>
+//        body { wo:{ raw, number, status, city, state, location, days, assignedTo },
+//               notes:[ { content, createdDate, type, isPinned } ],   // newest first, <=2 used
+//               model }
+//        -> { ok:true, note:"...", usedNotes:N }
+//        -> { ok:false, error:"..." } on a handled failure
 
-// Only these models may be requested (client dropdown). An unknown/absent value
-// falls back to the default rather than erroring - a batch should never hard-stop
-// on a stray model string.
+// CORS: Tampermonkey's GM_xmlhttpRequest bypasses same-origin (that's what @connect
+// authorizes), so these are belt-and-suspenders - they scope any normal-fetch caller to the
+// Umbrava origin. Mirrors cc-auth / wo-ingest.
+const CORS = {
+  "Access-Control-Allow-Origin": "https://app.umbrava.com",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, x-bwn-key",
+  "Vary": "Origin",
+};
+function json(status, body) {
+  return { status, headers: Object.assign({ "Content-Type": "application/json" }, CORS), body };
+}
+
+// Only these models may be requested (client dropdown). An unknown/absent value falls back
+// to the default rather than erroring - a batch should never hard-stop on a stray string.
 const ALLOWED_MODELS = ["claude-sonnet-5", "claude-opus-4-8", "claude-haiku-4-5"];
 function pickModel(requested) {
   const r = String(requested || "").trim();
@@ -43,17 +58,14 @@ function pickModel(requested) {
   return "claude-sonnet-5";
 }
 
+// The notes are now SUPPLIED (fetched in-page), so the model does no tool calls - it only
+// writes the status note from the two most recent notes it is given.
 const SYSTEM_PROMPT = [
-  "You are a work order audit agent connected to Umbrava via MCP.",
+  "You are a work order audit assistant for a facilities-maintenance company.",
   "",
-  "For the single work order given:",
-  "1. Call search_work_orders with the source job number EXACTLY as given, no modifications.",
-  "2. Take the \"id\" from the first result.",
-  "3. Call get_work_order_notes with that id EXACTLY ONCE.",
-  "4. Read only the 2 most recent notes. Ignore email threads and old history.",
-  "5. Write a professional 1-3 sentence client-ready status note.",
-  "",
-  "Total tool calls: exactly 2 (1 search + 1 get_notes). No other tools.",
+  "You are given one work order's header facts and its most recent notes (newest first).",
+  "Write a professional 1-3 sentence client-ready status note describing where the work",
+  "order stands right now, based ONLY on the notes and facts provided.",
   "",
   "Note writing rules:",
   "- Pending scheduling -> scheduling is in progress, state reason if known.",
@@ -62,14 +74,15 @@ const SYSTEM_PROMPT = [
   "- On-site active -> state progress and next confirmed milestone.",
   "- Waiting on third party/client/vendor -> clearly state the dependency.",
   "- Complete -> state completion, mention closeout items only if confirmed.",
-  "- Never invent ETAs, dates, or approvals.",
+  "- Never invent ETAs, dates, approvals, or facts not present in the notes.",
+  "- If the notes are empty or say nothing about status, say so plainly",
+  "  (e.g. \"No recent status notes on file.\") - do NOT fabricate a status.",
   "",
   "Return ONLY the note text: 1-3 plain sentences, no preamble, no JSON, no markdown, no quotes.",
 ].join("\n");
 
-// One Umbrava-connected Anthropic Messages call. Fixed host; MCP server host/token
-// come from app settings, not the caller, so there is no SSRF surface.
-function anthropicAudit(apiKey, body, timeoutMs) {
+// One plain Anthropic Messages call (no MCP, no tools). Fixed host, no SSRF surface.
+function anthropicMessages(apiKey, body, timeoutMs) {
   return new Promise((resolve, reject) => {
     const payload = JSON.stringify(body);
     const req = https.request(
@@ -80,11 +93,10 @@ function anthropicAudit(apiKey, body, timeoutMs) {
         headers: {
           "x-api-key": apiKey,
           "anthropic-version": "2023-06-01",
-          "anthropic-beta": "mcp-client-2025-11-20",
           "content-type": "application/json",
           "content-length": Buffer.byteLength(payload),
         },
-        timeout: timeoutMs || 180000,
+        timeout: timeoutMs || 60000,
       },
       (res) => {
         let buf = "";
@@ -111,89 +123,77 @@ function s(v, max) {
 }
 
 module.exports = async function (context, req) {
-  if (req.method !== "POST") { context.res = { status: 405, body: "Method Not Allowed" }; return; }
-
   try {
+    if (req.method === "OPTIONS") { context.res = { status: 204, headers: CORS }; return; }
+    if (req.method !== "POST") { context.res = json(405, { ok: false, error: "Method Not Allowed" }); return; }
+
+    // -- Key gate (fail closed). 403 not 401: responseOverrides rewrites 401 into a login
+    //    redirect a client would misread as success. --------------------------------------
+    const expected = process.env.WO_INGEST_KEY;
+    if (!expected) { context.res = json(503, { ok: false, error: "connector not configured" }); return; }
+    const key = req.headers && (req.headers["x-bwn-key"] || req.headers["X-BWN-KEY"]);
+    if (!key || key !== expected) { context.res = json(403, { ok: false, error: "unauthorized" }); return; }
+
     const apiKey = process.env.ANTHROPIC_API_KEY;
-    if (!apiKey) {
-      context.res = { status: 500, headers: { "Content-Type": "application/json" }, body: { ok: false, error: "ANTHROPIC_API_KEY is not set" } };
-      return;
-    }
+    if (!apiKey) { context.res = json(503, { ok: false, error: "ANTHROPIC_API_KEY is not set" }); return; }
 
     const body = (req.body && typeof req.body === "object") ? req.body : {};
-    const wo = (body.wo && typeof body.wo === "object") ? body.wo : null;
-    const raw = wo ? s(wo.raw, 64) : "";
-    if (!raw) {
-      context.res = { status: 400, headers: { "Content-Type": "application/json" }, body: { ok: false, error: "missing wo.raw (source job number)" } };
-      return;
-    }
+    const wo = (body.wo && typeof body.wo === "object") ? body.wo : {};
+    const raw = s(wo.raw, 64) || s(wo.number, 64);
+    if (!raw) { context.res = json(400, { ok: false, error: "missing wo.raw / wo.number" }); return; }
 
     const model = pickModel(body.model);
 
-    // Human-readable per-WO facts for the model. All fields sanitized; the model
-    // searches on `raw` (the source job number) exactly.
+    // The two most recent notes, sanitized. The client sorts newest-first and sends the top
+    // few; we defensively re-slice to 2 and cap length so a giant note can't blow the prompt.
+    const notesIn = Array.isArray(body.notes) ? body.notes.slice(0, 2) : [];
+    const noteLines = notesIn.map(function (n, i) {
+      n = (n && typeof n === "object") ? n : {};
+      const when = s(n.createdDate, 40);
+      const type = s(n.type, 40);
+      const txt = s(n.content, 4000);
+      const head = "Note " + (i + 1) + (when ? " (" + when + ")" : "") + (type ? " [" + type + "]" : "") + ":";
+      return head + "\n" + (txt || "(empty)");
+    });
+
     const loc = [s(wo.location, 200), [s(wo.city, 120), s(wo.state, 40)].filter(Boolean).join(", ")].filter(Boolean).join(" ");
     const userMsg = [
-      "Source Job #: " + raw,
+      "WO #: " + raw,
       "Status: " + (s(wo.status, 120) || "(unknown)"),
       "Location: " + (loc || "(unknown)"),
       "Days open: " + (s(wo.days, 20) || "(unknown)"),
       "Assigned: " + (s(wo.assignedTo, 200) || "(unknown)"),
       "",
-      "Search for this work order using the source job number above, read its two most",
-      "recent notes, and return ONLY the client-ready status note.",
+      "Most recent notes (newest first):",
+      noteLines.length ? noteLines.join("\n\n") : "(no notes provided)",
+      "",
+      "Write ONLY the 1-3 sentence client-ready status note.",
     ].join("\n");
-
-    // MCP server + its credential are server-held. authorization_token is attached
-    // only when UMBRAVA_MCP_TOKEN is configured (the endpoint may accept unauthenticated
-    // calls in some deployments; if reads come back empty, set the token app setting).
-    const mcpServer = {
-      type: "url",
-      name: "Umbrava",
-      url: process.env.UMBRAVA_MCP_URL || "https://app.umbrava.com/api/mcp",
-    };
-    const mcpToken = process.env.UMBRAVA_MCP_TOKEN;
-    if (mcpToken) mcpServer.authorization_token = mcpToken;
 
     const payload = {
       model: model,
-      max_tokens: 2000,
+      max_tokens: 400,
       thinking: { type: "disabled" },
       system: SYSTEM_PROMPT,
       messages: [{ role: "user", content: userMsg }],
-      mcp_servers: [mcpServer],
-      tools: [{ type: "mcp_toolset", mcp_server_name: "Umbrava" }],
     };
 
-    const r = await anthropicAudit(apiKey, payload, 180000);
+    const r = await anthropicMessages(apiKey, payload, 60000);
     if (r.status !== 200 || !r.json) {
       context.log.error("wo-audit: Anthropic error", r.status, (r.raw || "").slice(0, 400));
-      context.res = {
-        status: 502,
-        headers: { "Content-Type": "application/json" },
-        body: { ok: false, error: "Anthropic API error (" + r.status + ")", detail: (r.raw || "").slice(0, 300) },
-      };
+      context.res = json(502, { ok: false, error: "Anthropic API error (" + r.status + ")", detail: (r.raw || "").slice(0, 300) });
       return;
     }
 
     const msg = r.json;
     const blocks = Array.isArray(msg.content) ? msg.content : [];
     const note = blocks.filter((b) => b && b.type === "text").map((b) => b.text).join("\n").trim();
-    // Surface which MCP tools ran, for the client log (best-effort; block type varies
-    // by connector version, so match leniently on "mcp_tool_use").
-    const mcpCalls = blocks
-      .filter((b) => b && typeof b.type === "string" && b.type.indexOf("mcp_tool_use") !== -1)
-      .map((b) => ({ name: b.name || "?", input: JSON.stringify(b.input || {}).slice(0, 120) }));
 
-    context.log("wo-audit", raw, model, "stop=" + msg.stop_reason, "mcp=" + mcpCalls.length, "noteLen=" + note.length);
-    context.res = {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-      body: { ok: true, note: note, mcpCalls: mcpCalls, stopReason: msg.stop_reason || null },
-    };
+    context.log("wo-audit", raw, model, "stop=" + msg.stop_reason, "usedNotes=" + noteLines.length, "noteLen=" + note.length);
+    context.res = json(200, { ok: true, note: note, usedNotes: noteLines.length, stopReason: msg.stop_reason || null });
   } catch (err) {
     const m = (err && err.message) ? err.message : String(err);
     context.log.error("wo-audit error:", m);
-    context.res = { status: 500, headers: { "Content-Type": "application/json" }, body: { ok: false, error: m } };
+    context.res = json(500, { ok: false, error: m });
   }
 };
