@@ -156,6 +156,6 @@ module.exports = async function (context, req) {
     context.res = { status: 405, body: "Method Not Allowed" };
   } catch (err) {
     context.log.error("activity-log error:", err);
-    context.res = { status: 500, headers: { "Content-Type": "application/json" }, body: { error: err.message || "activity-log error" } };
+    context.res = { status: 500, headers: { "Content-Type": "application/json" }, body: { error: "activity-log error" } };
   }
 };

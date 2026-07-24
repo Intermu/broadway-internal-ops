@@ -191,6 +191,6 @@ module.exports = async function (context, req) {
     context.res = json(200, { ok: true, count: urls.length, withEmail: hit, results: results });
   } catch (err) {
     context.log.error("scrape-contacts error:", err);
-    context.res = json(500, { error: (err && err.message) || "scrape-contacts error" });
+    context.res = json(500, { error: "scrape-contacts error" });
   }
 };

@@ -340,6 +340,6 @@ module.exports = async function (context, req) {
     context.res = { status: 405, body: "Method Not Allowed" };
   } catch (err) {
     context.log.error("data-store error:", err);
-    context.res = { status: 500, headers: { "Content-Type": "application/json" }, body: { error: err.message || "data-store error" } };
+    context.res = { status: 500, headers: { "Content-Type": "application/json" }, body: { error: "data-store error" } };
   }
 };

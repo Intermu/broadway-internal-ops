@@ -1494,7 +1494,7 @@ function ganttSegs(job){ return job.startDate ? computeSegs(job) : histSegs(job)
 function hasTimeline(job){ return !!job.startDate || histSegs(job).length>0; }
 
 function toast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2600); }
-function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 // Reveal hidden rows for a "+N more" footer (render all rows, mark overflow with
 // class "bn-row-hidden", footer cell calls bnExpandRows(this)).
 function bnExpandRows(cell){

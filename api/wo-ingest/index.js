@@ -468,6 +468,6 @@ module.exports = async function (context, req) {
     context.res = json(503, { error: "activity-log write contended; please retry" });
   } catch (err) {
     context.log.error("wo-ingest error:", err);
-    context.res = json(500, { error: err.message || "wo-ingest error" });
+    context.res = json(500, { error: "wo-ingest error" });
   }
 };

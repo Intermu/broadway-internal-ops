@@ -84,7 +84,7 @@ module.exports = async function (context, req) {
     context.res = {
       status: 500,
       headers: { "Content-Type": "application/json" },
-      body: { error: err.message },
+      body: { error: "generate error" },
     };
   }
 };
