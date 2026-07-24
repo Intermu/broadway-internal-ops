@@ -5,3 +5,4 @@ local.settings.json
 netlify-backup/
 *.log
 .DS_Store
+.triage/
