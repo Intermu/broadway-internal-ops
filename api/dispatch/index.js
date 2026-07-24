@@ -1,5 +1,6 @@
 const https = require("https");
 const { URL } = require("url");
+const AUTH = require("../shared/umbrava-auth.js");
 
 // WO Dispatch proxy for the BWN userscript connector (forms-to-userscripts pilot).
 //
@@ -120,7 +121,7 @@ module.exports = async function (context, req) {
     // 403, NOT 401: responseOverrides turns 401s into a 302 to the AAD login page, which a
     // redirect-following client would read as 200 HTML success. 403 passes through untouched.
     const key = req.headers && (req.headers["x-bwn-key"] || req.headers["X-BWN-KEY"]);
-    if (!key || key !== expected) { context.res = json(403, { error: "unauthorized" }); return; }
+    if (!AUTH.safeStrEqual(key, expected)) { context.res = json(403, { error: "unauthorized" }); return; }
 
     // -- Flow URL must be present (fail closed) ---------------------------------
     const flowUrl = process.env.DISPATCH_FLOW_URL;
