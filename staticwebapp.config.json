@@ -28,6 +28,10 @@
     "allowedRoles": ["anonymous"]
   },
   {
+    "route": "/api/dispatch",
+    "allowedRoles": ["anonymous"]
+  },
+  {
     "route": "/api/cc-receipt",
     "allowedRoles": ["anonymous"]
   },
