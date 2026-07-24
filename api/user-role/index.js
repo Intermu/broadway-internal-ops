@@ -40,7 +40,7 @@ module.exports = async function (context, req) {
     const expected = process.env.WO_INGEST_KEY;
     if (!expected) { context.res = json(503, { error: "not configured" }); return; }
     const key = req.headers && (req.headers["x-bwn-key"] || req.headers["X-BWN-KEY"]);
-    const keyed = !!key && key === expected;
+    const keyed = AUTH.safeStrEqual(key, expected);
 
     // The Umbrava access token - BODY FIRST (the SWA edge overwrites Authorization with its
     // own platform token when proxying /api/*; proven 2026-07-21). Header parse remains only

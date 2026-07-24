@@ -118,7 +118,7 @@ module.exports = async function (context, req) {
     const expected = process.env.WO_INGEST_KEY;
     if (!expected) { context.res = json(503, { error: "connector not configured" }); return; }
     const key = req.headers && (req.headers["x-bwn-key"] || req.headers["X-BWN-KEY"]);
-    if (!key || key !== expected) { context.res = json(403, { error: "unauthorized" }); return; }
+    if (!AUTH.safeStrEqual(key, expected)) { context.res = json(403, { error: "unauthorized" }); return; }
 
     // -- Identity + role gate (supervisor+, same boundary as cc-purchase) --------
     const auth = await AUTH.resolveUmbravaUser(req);

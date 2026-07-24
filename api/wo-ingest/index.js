@@ -1,4 +1,5 @@
 const { BlobServiceClient } = require("@azure/storage-blob");
+const AUTH = require("../shared/umbrava-auth.js");
 
 // WO-action ingest for the BWN userscript connector (Phase 2).
 //
@@ -135,7 +136,7 @@ module.exports = async function (context, req) {
     // redirect to the AAD login page - a client following it would see 200 HTML and could
     // misread the result. 403 passes through untouched.
     const key = req.headers && (req.headers["x-bwn-key"] || req.headers["X-BWN-KEY"]);
-    if (!key || key !== expected) { context.res = json(403, { error: "unauthorized" }); return; }
+    if (!AUTH.safeStrEqual(key, expected)) { context.res = json(403, { error: "unauthorized" }); return; }
 
     const params = req.query || {};
     const body = req.body || {};

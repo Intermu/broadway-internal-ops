@@ -1,4 +1,5 @@
 const { BlobServiceClient } = require("@azure/storage-blob");
+const AUTH = require("../shared/umbrava-auth.js");
 
 // Shared vendor-prospect PIPELINE for the BWN discovery tools (Bid-Out net-new, Find Techs,
 // Find Suppliers). Every paid discovery (Google Places search, website scrape, ZoomInfo
@@ -225,7 +226,7 @@ module.exports = async function (context, req) {
     const employee = isEmployee(req);
     const expected = process.env.WO_INGEST_KEY;
     const keyHdr = req.headers && (req.headers["x-bwn-key"] || req.headers["X-BWN-KEY"]);
-    const keyOk = !!(expected && keyHdr && keyHdr === expected);
+    const keyOk = AUTH.safeStrEqual(keyHdr, expected);
     if (!employee && !keyOk) {
       if (!expected) { context.res = json(503, { error: "prospects not configured" }); return; }
       context.res = json(403, { error: "unauthorized" }); return;

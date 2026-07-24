@@ -3,6 +3,7 @@ const http = require("http");
 const dns = require("dns");
 const net = require("net");
 const { URL } = require("url");
+const AUTH = require("../shared/umbrava-auth.js");
 
 // Contact-email scraper for the BWN Bid-Out userscript. Given a list of vendor website
 // URLs (discovered via Google Places), fetch each site server-side and extract any
@@ -156,7 +157,7 @@ module.exports = async function (context, req) {
     const expected = process.env.WO_INGEST_KEY;
     if (!expected) { context.res = json(503, { error: "scrape not configured" }); return; }
     const key = req.headers && (req.headers["x-bwn-key"] || req.headers["X-BWN-KEY"]);
-    if (!key || key !== expected) { context.res = json(403, { error: "unauthorized" }); return; }
+    if (!AUTH.safeStrEqual(key, expected)) { context.res = json(403, { error: "unauthorized" }); return; }
 
     const body = req.body || {};
     let urls = Array.isArray(body.urls) ? body.urls.map(String).filter(Boolean) : [];

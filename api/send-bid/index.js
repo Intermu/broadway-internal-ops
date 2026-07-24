@@ -276,7 +276,7 @@ module.exports = async function (context, req) {
     const expected = process.env.WO_INGEST_KEY;
     if (!expected) { context.res = json(503, { error: "ingest not configured" }); return; }
     const key = req.headers && (req.headers["x-bwn-key"] || req.headers["X-BWN-KEY"]);
-    if (!key || key !== expected) { context.res = json(403, { error: "unauthorized" }); return; }
+    if (!AUTH.safeStrEqual(key, expected)) { context.res = json(403, { error: "unauthorized" }); return; }
 
     // ── Graph config gate - the endpoint is deploy-dark until IT provides these ──
     // Graph app credentials. Falls back to the SWA's EXISTING Entra sign-in app

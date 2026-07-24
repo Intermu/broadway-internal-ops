@@ -1,6 +1,7 @@
 const https = require("https");
 const crypto = require("crypto");
 const { BlobServiceClient } = require("@azure/storage-blob");
+const AUTH = require("../shared/umbrava-auth.js");
 
 // ZoomInfo contact enrichment for the BWN Bid-Out userscript. Given companies discovered
 // via Google Places (name/website/city/state), look up named contacts (owner / ops / office)
@@ -244,7 +245,7 @@ module.exports = async function (context, req) {
     const expected = process.env.WO_INGEST_KEY;
     if (!expected) { context.res = json(503, { error: "enrich not configured" }); return; }
     const key = req.headers && (req.headers["x-bwn-key"] || req.headers["X-BWN-KEY"]);
-    if (!key || key !== expected) { context.res = json(403, { error: "unauthorized" }); return; }
+    if (!AUTH.safeStrEqual(key, expected)) { context.res = json(403, { error: "unauthorized" }); return; }
 
     // Deploy-dark gate: no ZoomInfo credentials yet -> tell the client cleanly.
     if (!ziConfigured()) {

@@ -104,15 +104,6 @@
     "allowedRoles": ["broadway_employee"]
   },
   {
-    "route": "/WO_Audit_Automation.html",
-    "allowedRoles": ["broadway_employee"]
-  },
-  {
-    "route": "/wo-audit",
-    "rewrite": "/WO_Audit_Automation.html",
-    "allowedRoles": ["broadway_employee"]
-  },
-  {
     "route": "/PIPRoadmap*",
     "allowedRoles": ["broadway_employee"]
   },

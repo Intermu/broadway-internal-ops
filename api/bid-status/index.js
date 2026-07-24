@@ -1,4 +1,5 @@
 const { BlobServiceClient } = require("@azure/storage-blob");
+const AUTH = require("../shared/umbrava-auth.js");
 
 // Read side of Bid-Out per-vendor read-receipts (Stage 3). The userscript runs on
 // app.umbrava.com (NOT federated to Broadway AAD), so - like wo-ingest/send-bid - this is
@@ -82,7 +83,7 @@ module.exports = async function (context, req) {
     const expected = process.env.WO_INGEST_KEY;
     if (!expected) { context.res = json(503, { error: "not configured" }); return; }
     const key = req.headers && (req.headers["x-bwn-key"] || req.headers["X-BWN-KEY"]);
-    if (!key || key !== expected) { context.res = json(403, { error: "unauthorized" }); return; }
+    if (!AUTH.safeStrEqual(key, expected)) { context.res = json(403, { error: "unauthorized" }); return; }
 
     const q = req.query || {};
     const sendId = String(q.sendId || "").trim();

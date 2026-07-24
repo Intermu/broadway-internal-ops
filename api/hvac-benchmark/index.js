@@ -60,7 +60,7 @@ async function resolveIdentity(req) {
   const expected = process.env.WO_INGEST_KEY;
   if (!expected) return { err: json(503, { error: "not configured" }) };
   const key = req.headers && (req.headers["x-bwn-key"] || req.headers["X-BWN-KEY"]);
-  if (!key || key !== expected) return { err: json(403, { error: "unauthorized" }) };
+  if (!AUTH.safeStrEqual(key, expected)) return { err: json(403, { error: "unauthorized" }) };
   const auth = await AUTH.resolveUmbravaUser(req);
   if (!auth.ok) return { err: json(auth.status, auth.body) };
   const u = auth.user;

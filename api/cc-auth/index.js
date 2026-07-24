@@ -133,7 +133,7 @@ module.exports = async function (context, req) {
     // 403, NOT 401: responseOverrides turns 401s into a 302 to the AAD login page, which a
     // redirect-following client would read as 200 HTML success. 403 passes through untouched.
     const key = req.headers && (req.headers["x-bwn-key"] || req.headers["X-BWN-KEY"]);
-    if (!key || key !== expected) { context.res = json(403, { error: "unauthorized" }); return; }
+    if (!AUTH.safeStrEqual(key, expected)) { context.res = json(403, { error: "unauthorized" }); return; }
 
     // -- Identity gate (the REAL boundary; the key above is coarse) --------------
     // Vouched with Umbrava via the shared module. ANY vouched Broadway user may request an
