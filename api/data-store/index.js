@@ -47,9 +47,26 @@ const VALID_CLIENTS = ["pilot"];
 // the broadway_employee gate. "revenue-gp" (GP lookup) is L4+ only and IS in
 // VALID_SLOTS so this gate is reachable (previously it named a slot resolveTarget
 // rejected with 400 first, making the boundary dead code).
-const FINANCIAL_SLOTS = ["revenue-gp"];
+// "om-bonus" holds Operations-Manager COMPENSATION inputs (bonus target, max payout,
+// GP/headcount, MBO/SSS, company multiplier) - financial, so it is L4+ for ALL access
+// like revenue-gp. Before 2026-07-23 it was missing from this list, so any
+// broadway_employee (L1 coordinator) could read/write/delete comp data via a direct
+// API call (the checkin page's client-side email check was bypassable). Security fix.
+const FINANCIAL_SLOTS = ["revenue-gp", "om-bonus"];
 const ROLE_LEVELS = ["ops_coordinator", "lead_ops_coordinator", "ops_supervisor", "ops_manager", "dir_ops", "vp_ops"];
 const MIN_FINANCIAL_LEVEL = 4; // ops_manager
+
+// Slots whose WRITE/DELETE require ops_supervisor (L3)+ (reads stay at the
+// broadway_employee gate). "knowledge" is injected verbatim into every AI copilot's
+// grounding context, so a low-rank author is a stored prompt-injection channel into
+// higher-rank staff; "config" drives the shared dashboard for everyone. Before
+// 2026-07-23 any broadway_employee could overwrite or delete both. Tunable via
+// DATA_STORE_WRITE_MIN_LEVEL (set 1 to restore the old any-employee behavior).
+const ELEVATED_WRITE_SLOTS = ["knowledge", "config"];
+const MIN_ELEVATED_WRITE_LEVEL = (function () {
+  const n = parseInt(process.env.DATA_STORE_WRITE_MIN_LEVEL, 10);
+  return (n >= 1 && n <= ROLE_LEVELS.length) ? n : 3; // default ops_supervisor
+})();
 
 function principalFromReq(req) {
   try {
@@ -224,6 +241,14 @@ module.exports = async function (context, req) {
     // write, and delete). Fail closed.
     if (FINANCIAL_SLOTS.includes(slot) && roleLevelFromReq(req) < MIN_FINANCIAL_LEVEL) {
       context.res = { status: 403, headers: { "Content-Type": "application/json" }, body: { error: "Insufficient role for financial data" } };
+      return;
+    }
+
+    // Elevated-write slots: destructive / injection-sensitive WRITES (POST/DELETE) need
+    // ops_supervisor (L3)+; reads stay at the broadway_employee gate. Fail closed.
+    if ((req.method === "POST" || req.method === "DELETE") &&
+        ELEVATED_WRITE_SLOTS.includes(slot) && roleLevelFromReq(req) < MIN_ELEVATED_WRITE_LEVEL) {
+      context.res = { status: 403, headers: { "Content-Type": "application/json" }, body: { error: "Insufficient role to modify '" + slot + "'" } };
       return;
     }
 

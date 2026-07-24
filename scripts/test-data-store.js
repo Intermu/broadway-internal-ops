@@ -137,4 +137,41 @@ describe("data-store handler", () => {
     let l = await call("GET", { key: null, client: "pilot", action: "list" });
     assert.ok(l.status === 200 && l.body["wo-dataset"] && l.body["wo-dataset"].exists === true, "list shows wo-dataset present");
   });
+
+  // ---- security fix authz-1: om-bonus is a financial slot (L4+ for ALL access) ----------
+  it("om-bonus financial gate: no role -> 403 on GET, POST, and DELETE", async () => {
+    let g = await call("GET", { key: "om-bonus", client: "pilot" });
+    let p = await call("POST", { key: "om-bonus", client: "pilot" }, { data: { bonusTarget: 1000 } });
+    let d = await call("DELETE", { key: "om-bonus", client: "pilot" });
+    assert.ok(g.status === 403 && p.status === 403 && d.status === 403, "om-bonus without L4 role: " + JSON.stringify([g.status, p.status, d.status]));
+  });
+
+  it("om-bonus financial gate: ops_manager (L4) -> allowed and round-trips", async () => {
+    let p = await call("POST", { key: "om-bonus", client: "pilot" }, { data: { bonusTarget: 1000 } }, principal(["ops_manager"]));
+    let g = await call("GET", { key: "om-bonus", client: "pilot" }, null, principal(["ops_manager"]));
+    assert.ok(p.status === 200 && g.status === 200 && g.body.data.bonusTarget === 1000, "om-bonus L4 access: " + JSON.stringify([p.status, g.status]));
+  });
+
+  // ---- security fix authz-2 / inj-2: knowledge + config writes need supervisor (L3)+ -----
+  it("knowledge write gate: broadway_employee (no elevated role) POST/DELETE -> 403", async () => {
+    let p = await call("POST", { key: "knowledge", client: "pilot" }, { data: { v: 1, md: "planted" } });
+    let d = await call("DELETE", { key: "knowledge", client: "pilot" });
+    assert.ok(p.status === 403 && d.status === 403, "knowledge write without L3: " + JSON.stringify([p.status, d.status]));
+  });
+
+  it("knowledge READ stays open at the broadway_employee gate (GET not elevated)", async () => {
+    let g = await call("GET", { key: "knowledge", client: "pilot" });
+    assert.strictEqual(g.status, 200);   // exists:false is fine; the point is it is NOT 403
+  });
+
+  it("knowledge write allowed at ops_supervisor (L3)+", async () => {
+    let p = await call("POST", { key: "knowledge", client: "pilot" }, { data: { v: 1, md: "team SOP" } }, principal(["ops_supervisor"]));
+    assert.ok(p.status === 200 && p.body.ok, "knowledge write at L3: " + JSON.stringify(p.body));
+  });
+
+  it("config write gate: no elevated role -> 403; ops_supervisor -> 200", async () => {
+    let denied = await call("POST", { key: "config", client: "pilot" }, { data: { targetGP: 40 } });
+    let ok = await call("POST", { key: "config", client: "pilot" }, { data: { targetGP: 40 } }, principal(["ops_supervisor"]));
+    assert.ok(denied.status === 403 && ok.status === 200, "config write gate: " + JSON.stringify([denied.status, ok.status]));
+  });
 });

@@ -219,7 +219,7 @@ module.exports = async function (context, req) {
     // 403, NOT 401: responseOverrides turns 401s into a 302 login redirect a client would
     // misread as 200 success. 403 passes through untouched.
     const key = req.headers && (req.headers["x-bwn-key"] || req.headers["X-BWN-KEY"]);
-    if (!key || key !== expected) { context.res = json(403, { ok: false, error: "unauthorized" }); return; }
+    if (!AUTH.safeStrEqual(key, expected)) { context.res = json(403, { ok: false, error: "unauthorized" }); return; }
 
     const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) { context.res = json(503, { ok: false, error: "ANTHROPIC_API_KEY is not set" }); return; }

@@ -28,6 +28,10 @@
     "allowedRoles": ["anonymous"]
   },
   {
+    "route": "/api/dispatch",
+    "allowedRoles": ["anonymous"]
+  },
+  {
     "route": "/api/cc-receipt",
     "allowedRoles": ["anonymous"]
   },
@@ -179,7 +183,9 @@
   "globalHeaders": {
     "X-Frame-Options": "SAMEORIGIN",
     "X-Content-Type-Options": "nosniff",
-    "Referrer-Policy": "strict-origin-when-cross-origin"
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+    "Content-Security-Policy": "frame-ancestors 'self'; object-src 'none'; base-uri 'self'"
   },
   "mimeTypes": {
     ".json": "application/json",
