@@ -54,7 +54,7 @@ function getContainerClient() {
     const container = service.getContainerClient(CONTAINER_NAME);
     await container.createIfNotExists();
     return container;
-  })();
+  })().catch((err) => { containerClientPromise = null; throw err; });   // never cache a rejection - a cold-start blip would brick the process
   return containerClientPromise;
 }
 

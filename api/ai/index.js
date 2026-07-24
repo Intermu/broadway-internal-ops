@@ -181,7 +181,7 @@ function getContainerClient() {
     if (!conn) throw new Error("AZURE_STORAGE_CONNECTION_STRING not set");
     const service = BlobServiceClient.fromConnectionString(conn);
     return service.getContainerClient("broadway-data");
-  })();
+  })().catch((err) => { containerClientPromise = null; throw err; });   // never cache a rejection - a cold-start blip would brick the process
   return containerClientPromise;
 }
 async function streamToString(readable) {
